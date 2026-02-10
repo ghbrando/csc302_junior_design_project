@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="consumerunicore/consumerunicore.csproj" />
+  <Project Path="providerunicore/providerunicore.csproj" />
+</Solution>
