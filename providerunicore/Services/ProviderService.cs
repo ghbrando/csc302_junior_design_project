@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 //Used For: Provider Service Interface
 public interface IProviderService
 {
@@ -8,18 +9,26 @@ public interface IProviderService
 //Used For: Provider Service Implementation
 public class ProviderService : IProviderService
 {
-    // In-memory store for providers (replace with database in production)
-    private readonly Dictionary<string, Provider> _providers = new();
+
+    private readonly CollectionReference _providers;
+    public ProviderService(FirestoreDb db)
+    {
+        _providers = db.Collection("providers");
+    }
 
     // Get provider by Firebase UID
-    public Task<Provider?> GetByFirebaseUidAsync(string firebaseUid)
+    public async Task<Provider?> GetByFirebaseUidAsync(string firebaseUid)
     {
-        _providers.TryGetValue(firebaseUid, out var provider);
-        return Task.FromResult(provider);
+        var doc = await _providers.Document(firebaseUid).GetSnapshotAsync();
+        if (doc.Exists)
+        {
+            return doc.ConvertTo<Provider>();
+        }
+        return null;
     }
 
     // Create a new provider
-    public Task<Provider> CreateProviderAsync(string name, string email, string firebaseUid)
+    public async Task<Provider> CreateProviderAsync(string name, string email, string firebaseUid)
     {
         var provider = new Provider
         {
@@ -29,18 +38,21 @@ public class ProviderService : IProviderService
             FirebaseUid = firebaseUid,
             CreatedAt = DateTime.UtcNow
         };
-        _providers[firebaseUid] = provider;
-        return Task.FromResult(provider);
+        await _providers.Document(firebaseUid).SetAsync(provider);
+        return provider;
     }
 
     // Update the last login time for a provider
-    public Task<Provider> UpdateLastLoginAsync(string firebaseUid)
+    public async Task<Provider> UpdateLastLoginAsync(string firebaseUid)
     {
-        if (_providers.TryGetValue(firebaseUid, out var provider))
+        var doc = await _providers.Document(firebaseUid).GetSnapshotAsync();
+        if (doc.Exists)
         {
+            var provider = doc.ConvertTo<Provider>();
             provider.LastLogin = DateTime.UtcNow;
-            return Task.FromResult(provider);
+            await _providers.Document(firebaseUid).SetAsync(provider);
+            return provider;
         }
-        throw new Exception("Provider not found");
+        throw new Exception($"Provider {firebaseUid} not found");
     }
 }

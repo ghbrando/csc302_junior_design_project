@@ -1,6 +1,7 @@
 using providerunicore.Components;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Google.Cloud.Firestore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -8,13 +9,15 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+var projectId = builder.Configuration["Firebase:ProjectId"];
+
 // Add Authentication Services
+builder.Services.AddSingleton(FirestoreDb.Create(projectId));
 builder.Services.AddSingleton<IFirebaseAuthService, FirebaseAuthService>();
 // Add Provider Service
 builder.Services.AddScoped<IProviderService, ProviderService>();
 builder.Services.AddControllers(); // Add API Controllers
 
-var projectId = builder.Configuration["Firebase:ProjectId"];
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {

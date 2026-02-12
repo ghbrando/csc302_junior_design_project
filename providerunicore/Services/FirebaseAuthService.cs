@@ -18,7 +18,7 @@ public class FirebaseAuthService : IFirebaseAuthService
         {
             FirebaseApp.Create(new AppOptions
             {
-                Credential = GoogleCredential.FromFile("unicore-junior-design-firebase-admin.json"),
+                Credential = CredentialFactory.FromFile<ServiceAccountCredential>("firebase-service-account.json").ToGoogleCredential()
             });
         }
 
