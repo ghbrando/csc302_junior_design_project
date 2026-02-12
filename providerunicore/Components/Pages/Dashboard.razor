@@ -3,20 +3,45 @@
 @using unicoreprovider.Services
 @using unicoreprovider.Components
 @using Microsoft.AspNetCore.Components.Web
+@using System.Threading
+@implements IDisposable
 @inject VmService VmService
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>UniCore Provider Dashboard</PageTitle>
 
+<style>
+    body {
+        background-color: #121212; /* Very dark background for the whole page */
+        color: #e0e0e0;
+    }
+    .dashboard-card {
+        background-color: #1a1a1a;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border: none;
+    }
+    .table-dark-custom {
+        color: #e0e0e0;
+        --bs-table-hover-bg: #2a2a2a;
+        --bs-table-bg: transparent;
+        --bs-table-border-color: #333;
+    }
+    .text-muted-light {
+        color: #a0a0a0 !important;
+    }
+    /* Custom Scrollbar for table if needed */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #1a1a1a; }
+    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+</style>
+
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="fw-bold">Provider Dashboard</h1>
-            <p class="text-muted">Real-time resource monitoring.</p>
+            <h1 class="fw-bold text-white">Provider Dashboard</h1>
+            <p class="text-muted-light">Real-time resource monitoring.</p>
         </div>
-        <button class="btn btn-primary" @onclick="RefreshData">
-            <i class="bi bi-arrow-clockwise"></i> Refresh Metrics
-        </button>
     </div>
 
     <div class="row mb-4 g-3">
@@ -26,8 +51,6 @@
             var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
             var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
             
-            // Flatten history from all active VMs for a "Global" view
-            // (Or just pick the first VM for this demo to look cool)
             var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
         }
 
@@ -37,14 +60,14 @@
                         Percent="@((double)avgCpu)"
                         Color="#3b82f6" 
                         DataPoints="@demoVm.CpuHistory" /> 
-                        </div>
+        </div>
         <div class="col-md-4">
             <MetricCard Title="GPU" 
                         Value="@avgGpu.ToString("0")" 
                         Percent="@((double)avgGpu)"
                         Color="#10b981" 
                         DataPoints="@demoVm.GpuHistory" />
-                        </div>
+        </div>
         <div class="col-md-4">
             <MetricCard Title="RAM" 
                         Value="@((activeVms.Sum(v => v.RamGB) * (avgRam/100)).ToString("0.0"))" 
@@ -52,18 +75,18 @@
                         Percent="@((double)avgRam)"
                         Color="#a855f7" 
                         DataPoints="@demoVm.RamHistory" />
-                        </div>
+        </div>
     </div>
 
-    <div class="card shadow-sm">
-        <div class="card-header bg-white py-3">
-            <h5 class="mb-0">My Machines</h5>
+    <div class="card dashboard-card">
+        <div class="card-header border-0 py-3" style="background-color: transparent;">
+            <h5 class="mb-0 fw-bold text-white">My Machines</h5>
         </div>
         <div class="card-body p-0">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="bg-light">
+            <table class="table table-dark-custom table-hover align-middle mb-0">
+                <thead style="background-color: #252525; border-bottom: 1px solid #333;">
                     <tr>
-                        <th class="ps-4" style="width: 20%;">Machine</th>
+                        <th class="ps-4 py-3" style="width: 20%;">Machine</th>
                         <th style="width: 10%;">Status</th>
                         <th style="width: 40%;">Live Resources</th>
                         <th style="width: 15%;">Earnings</th>
@@ -75,53 +98,50 @@
                     {
                         <tr>
                             <td class="ps-4">
-                                <div class="fw-bold">@vm.Name</div>
-                                <div class="small text-muted">@vm.CpuCores Cores / @vm.RamGB GB</div>
+                                <div class="fw-bold text-white">@vm.Name</div>
+                                <div class="small text-muted-light">@vm.CpuCores Cores / @vm.RamGB GB</div>
                             </td>
                             <td>
                                 @if (vm.Status == "Running")
                                 {
-                                    <span class="badge bg-success rounded-pill">Running</span>
+                                    <span class="badge bg-success bg-opacity-75 rounded-pill">Running</span>
                                 }
                                 else
                                 {
-                                    <span class="badge bg-secondary rounded-pill">Stopped</span>
+                                    <span class="badge bg-secondary bg-opacity-50 rounded-pill">Stopped</span>
                                 }
                             </td>
                             <td>
-                                <div class="d-flex align-items-center mb-1">
-                                    <span class="small text-muted me-2" style="width: 30px;">CPU</span>
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar bg-primary" role="progressbar" 
-                                             style="width: @vm.CurrentCpuUsage%"></div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="small text-muted-light me-2" style="width: 30px;">CPU</span>
+                                    <div class="progress flex-grow-1" style="height: 4px; background-color: #333;">
+                                        <div class="progress-bar bg-primary" style="width: @vm.CurrentCpuUsage%"></div>
                                     </div>
-                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentCpuUsage%</span>
+                                    <span class="small ms-2 text-white" style="width: 35px;">@vm.CurrentCpuUsage%</span>
                                 </div>
                                 
-                                <div class="d-flex align-items-center mb-1">
-                                    <span class="small text-muted me-2" style="width: 30px;">GPU</span>
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar bg-warning" role="progressbar" 
-                                             style="width: @vm.CurrentGpuUsage%"></div>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="small text-muted-light me-2" style="width: 30px;">GPU</span>
+                                    <div class="progress flex-grow-1" style="height: 4px; background-color: #333;">
+                                        <div class="progress-bar bg-success" style="width: @vm.CurrentGpuUsage%"></div>
                                     </div>
-                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentGpuUsage%</span>
+                                    <span class="small ms-2 text-white" style="width: 35px;">@vm.CurrentGpuUsage%</span>
                                 </div>
 
                                 <div class="d-flex align-items-center">
-                                    <span class="small text-muted me-2" style="width: 30px;">RAM</span>
-                                    <div class="progress flex-grow-1" style="height: 6px;">
-                                        <div class="progress-bar bg-info" role="progressbar" 
-                                             style="width: @vm.CurrentRamUsage%"></div>
+                                    <span class="small text-muted-light me-2" style="width: 30px;">RAM</span>
+                                    <div class="progress flex-grow-1" style="height: 4px; background-color: #333;">
+                                        <div class="progress-bar" style="width: @vm.CurrentRamUsage%; background-color: #a855f7;"></div>
                                     </div>
-                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentRamUsage%</span>
+                                    <span class="small ms-2 text-white" style="width: 35px;">@vm.CurrentRamUsage%</span>
                                 </div>
                             </td>
                             <td>
-                                <div class="fw-bold">@vm.CurrentSessionCost.ToString("C")</div>
-                                <div class="small text-muted">@vm.CostPerHour.ToString("C")/hr</div>
+                                <div class="fw-bold text-white">@vm.CurrentSessionCost.ToString("C")</div>
+                                <div class="small text-muted-light">@vm.CostPerHour.ToString("C")/hr</div>
                             </td>
                             <td class="text-end pe-4">
-                                <button class="btn btn-sm @(vm.Status == "Running" ? "btn-outline-danger" : "btn-success")" 
+                                <button class="btn btn-sm @(vm.Status == "Running" ? "btn-outline-danger" : "btn-outline-success")" 
                                         @onclick="() => ToggleVm(vm)">
                                     @(vm.Status == "Running" ? "Stop" : "Start")
                                 </button>
@@ -134,9 +154,6 @@
     </div>
 </div>
 
-@implements IDisposable 
-@using System.Threading 
-
 @code {
     private List<VirtualMachine> Vms { get; set; } = new();
     private PeriodicTimer? _timer;
@@ -144,32 +161,26 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Load initial data immediately
+        // 1. Load initial data
         await RefreshData();
-
-        // 2. Start the timer loop in the background
+        // 2. Start background timer
         _ = StartTimerAsync(); 
     }
 
     private async Task StartTimerAsync()
     {
-        // Create a timer that ticks every 1 second
-        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
+        // Ticks every 100ms for smooth updates
+        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
 
         try
         {
-            // This loop runs forever until the page closes
             while (await _timer.WaitForNextTickAsync(_cts.Token))
             {
                 await RefreshData();
-                
                 await InvokeAsync(StateHasChanged);
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Timer was stopped normally.
-        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task RefreshData()
@@ -194,7 +205,6 @@
         }
     }
 
-    // 3. Cleanup: Stop the timer when the user leaves this page
     public void Dispose()
     {
         _cts.Cancel();
