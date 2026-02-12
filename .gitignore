@@ -13,7 +13,7 @@ appsettings.Development.json
 *.user
 *.userosscache
 *.sln.docstates
-
+providerunicore/unicore-junior-design-firebase-admin.json
 ## Package Manager files
 .nuget/
 # Restored NuGet packages are usually stored in a global cache, 
