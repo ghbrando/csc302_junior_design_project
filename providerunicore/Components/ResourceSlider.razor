@@ -1,0 +1,102 @@
+@namespace unicoreprovider.Components
+
+<div class="card dashboard-card h-100 p-4 d-flex flex-column justify-content-between"
+     style="background: #1a1a1a; color: white; border-radius: 12px; border: 1px solid #333;">
+
+    <div class="d-flex justify-content-between align-items-start mb-2">
+        <div class="d-flex align-items-center">
+            <div class="icon-box me-3 d-flex align-items-center justify-content-center" 
+                 style="border-color: @Color; color: @Color;">
+                <i class="@IconClass fs-5"></i>
+            </div>
+            <span class="text-uppercase fw-bold" style="letter-spacing: 1px; font-size: 0.9rem; color: #888;">@Title</span>
+        </div>
+        <div class="text-end">
+            <h2 class="fw-bold mb-0 display-6">@Value</h2>
+            <span class="small" style="color: #666;">@Unit</span>
+        </div>
+    </div>
+
+    <div class="range-container mt-3">
+        <input type="range" 
+               class="form-range custom-range" 
+               min="@Min" 
+               max="@Max" 
+               step="@Step"
+               value="@Value"
+               @oninput="HandleInput" 
+               style="--thumb-color: @Color; --track-percent: @GetPercent()%;" />
+        
+        <div class="d-flex justify-content-between mt-2" style="font-size: 0.75rem; font-family: monospace; color: #666;">
+            <span>@Min</span>
+            <span>@(Max * 0.5)</span>
+            <span>@Max</span>
+        </div>
+    </div>
+</div>
+
+<style>
+    .icon-box {
+        width: 40px; height: 40px; border: 1px solid; border-radius: 8px;
+        background: rgba(255, 255, 255, 0.03); box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    .custom-range {
+        -webkit-appearance: none; width: 100%; height: 4px; background: #333;
+        border-radius: 2px; outline: none;
+        background-image: linear-gradient(var(--thumb-color), var(--thumb-color));
+        background-size: var(--track-percent) 100%;
+        background-repeat: no-repeat;
+    }
+    .custom-range::-webkit-slider-thumb {
+        -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+        background: var(--thumb-color); cursor: pointer; border: 3px solid #1a1a1a;
+        box-shadow: 0 0 10px var(--thumb-color); transition: transform 0.1s, box-shadow 0.1s; margin-top: -7px;
+    }
+    .custom-range::-webkit-slider-thumb:hover {
+        transform: scale(1.2); box-shadow: 0 0 15px var(--thumb-color);
+    }
+    .custom-range::-webkit-slider-runnable-track {
+        -webkit-appearance: none; background: transparent;
+    }
+</style>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Limit";
+    [Parameter] public string Unit { get; set; } = "percent";
+    [Parameter] public double Min { get; set; } = 0;
+    [Parameter] public double Max { get; set; } = 100;
+    [Parameter] public double Step { get; set; } = 1;
+    [Parameter] public string Color { get; set; } = "#00e5ff"; 
+    [Parameter] public string IconClass { get; set; } = "bi bi-cpu";
+    [Parameter] public double MinLimit { get; set; } = 0;
+    [Parameter] public double Value { get; set; }
+    [Parameter] public EventCallback<double> ValueChanged { get; set; }
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out double newValue))
+        {
+            if (newValue < MinLimit) 
+            {
+                // TRICK: Briefly accept the "illegal" value to notify Blazor of a change
+                Value = newValue;
+                // Wait 1ms. This gives the render engine time to acknowledge the change from 20 -> 15
+                await Task.Delay(1); 
+                // Now snap it back to 20. Blazor sees 15 -> 20 (a change!) and updates the browser thumb.
+                Value = MinLimit;
+            }
+            else 
+            {
+                Value = newValue;
+            }
+            
+            await ValueChanged.InvokeAsync(Value);
+        }
+    }
+
+    private double GetPercent()
+    {
+        if (Max == Min) return 0;
+        return ((Value - Min) / (Max - Min)) * 100;
+    }
+}
