@@ -1,0 +1,30 @@
+## .NET / Visual Studio Build Artifacts
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.pdb
+*.nupkg
+
+## User-specific / Sensitive files
+.vs/
+.vscode/
+appsettings.Development.json
+*.user
+*.userosscache
+*.sln.docstates
+
+## Package Manager files
+.nuget/
+# Restored NuGet packages are usually stored in a global cache, 
+# so we don't commit the local project cache
+project.lock.json
+project.assets.json
+
+## OS-specific files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+## Environment/Secrets
+.env
