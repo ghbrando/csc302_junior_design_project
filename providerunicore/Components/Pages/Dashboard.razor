@@ -1,0 +1,204 @@
+@page "/dashboard/"
+@using unicoreprovider.Models 
+@using unicoreprovider.Services
+@using unicoreprovider.Components
+@using Microsoft.AspNetCore.Components.Web
+@inject VmService VmService
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>UniCore Provider Dashboard</PageTitle>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="fw-bold">Provider Dashboard</h1>
+            <p class="text-muted">Real-time resource monitoring.</p>
+        </div>
+        <button class="btn btn-primary" @onclick="RefreshData">
+            <i class="bi bi-arrow-clockwise"></i> Refresh Metrics
+        </button>
+    </div>
+
+    <div class="row mb-4 g-3">
+        @{
+            var activeVms = Vms.Where(v => v.Status == "Running").ToList();
+            var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
+            var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
+            var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
+            
+            // Flatten history from all active VMs for a "Global" view
+            // (Or just pick the first VM for this demo to look cool)
+            var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
+        }
+
+        <div class="col-md-4">
+            <MetricCard Title="CPU" 
+                        Value="@avgCpu.ToString("0")" 
+                        Percent="@((double)avgCpu)"
+                        Color="#3b82f6" 
+                        DataPoints="@demoVm.CpuHistory" /> 
+                        </div>
+        <div class="col-md-4">
+            <MetricCard Title="GPU" 
+                        Value="@avgGpu.ToString("0")" 
+                        Percent="@((double)avgGpu)"
+                        Color="#10b981" 
+                        DataPoints="@demoVm.GpuHistory" />
+                        </div>
+        <div class="col-md-4">
+            <MetricCard Title="RAM" 
+                        Value="@((activeVms.Sum(v => v.RamGB) * (avgRam/100)).ToString("0.0"))" 
+                        Unit="GB"
+                        Percent="@((double)avgRam)"
+                        Color="#a855f7" 
+                        DataPoints="@demoVm.RamHistory" />
+                        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">My Machines</h5>
+        </div>
+        <div class="card-body p-0">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4" style="width: 20%;">Machine</th>
+                        <th style="width: 10%;">Status</th>
+                        <th style="width: 40%;">Live Resources</th>
+                        <th style="width: 15%;">Earnings</th>
+                        <th class="text-end pe-4">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var vm in Vms)
+                    {
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-bold">@vm.Name</div>
+                                <div class="small text-muted">@vm.CpuCores Cores / @vm.RamGB GB</div>
+                            </td>
+                            <td>
+                                @if (vm.Status == "Running")
+                                {
+                                    <span class="badge bg-success rounded-pill">Running</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary rounded-pill">Stopped</span>
+                                }
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="small text-muted me-2" style="width: 30px;">CPU</span>
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar bg-primary" role="progressbar" 
+                                             style="width: @vm.CurrentCpuUsage%"></div>
+                                    </div>
+                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentCpuUsage%</span>
+                                </div>
+                                
+                                <div class="d-flex align-items-center mb-1">
+                                    <span class="small text-muted me-2" style="width: 30px;">GPU</span>
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar bg-warning" role="progressbar" 
+                                             style="width: @vm.CurrentGpuUsage%"></div>
+                                    </div>
+                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentGpuUsage%</span>
+                                </div>
+
+                                <div class="d-flex align-items-center">
+                                    <span class="small text-muted me-2" style="width: 30px;">RAM</span>
+                                    <div class="progress flex-grow-1" style="height: 6px;">
+                                        <div class="progress-bar bg-info" role="progressbar" 
+                                             style="width: @vm.CurrentRamUsage%"></div>
+                                    </div>
+                                    <span class="small ms-2" style="width: 35px;">@vm.CurrentRamUsage%</span>
+                                </div>
+                            </td>
+                            <td>
+                                <div class="fw-bold">@vm.CurrentSessionCost.ToString("C")</div>
+                                <div class="small text-muted">@vm.CostPerHour.ToString("C")/hr</div>
+                            </td>
+                            <td class="text-end pe-4">
+                                <button class="btn btn-sm @(vm.Status == "Running" ? "btn-outline-danger" : "btn-success")" 
+                                        @onclick="() => ToggleVm(vm)">
+                                    @(vm.Status == "Running" ? "Stop" : "Start")
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@implements IDisposable 
+@using System.Threading 
+
+@code {
+    private List<VirtualMachine> Vms { get; set; } = new();
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource _cts = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Load initial data immediately
+        await RefreshData();
+
+        // 2. Start the timer loop in the background
+        _ = StartTimerAsync(); 
+    }
+
+    private async Task StartTimerAsync()
+    {
+        // Create a timer that ticks every 1 second
+        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
+
+        try
+        {
+            // This loop runs forever until the page closes
+            while (await _timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await RefreshData();
+                
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Timer was stopped normally.
+        }
+    }
+
+    private async Task RefreshData()
+    {
+        Vms = await VmService.GetMyVmsAsync();
+    }
+
+    private void ToggleVm(VirtualMachine vm)
+    {
+        if (vm.Status == "Running")
+        {
+            vm.Status = "Stopped";
+            vm.CurrentCpuUsage = 0;
+            vm.CurrentGpuUsage = 0;
+            vm.CurrentRamUsage = 0;
+        }
+        else
+        {
+            vm.Status = "Running";
+            vm.CurrentCpuUsage = 10;
+            vm.CurrentRamUsage = 20;
+        }
+    }
+
+    // 3. Cleanup: Stop the timer when the user leaves this page
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

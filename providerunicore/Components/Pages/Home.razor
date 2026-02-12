@@ -1,0 +1,23 @@
+@page "/"
+@using Microsoft.AspNetCore.Components.Web 
+@rendermode RenderMode.InteractiveServer
+
+<div class="container mt-5">
+    <h1>UniCore Dashboard</h1>
+    <p>Current Server Time: <strong>@DateTime.Now</strong></p>
+    
+    <button class="btn btn-primary" @onclick="IncrementCount">
+        Click me (Active Check)
+    </button>
+    
+    <p class="mt-3">Current Count: @currentCount</p>
+</div>
+
+@code {
+    private int currentCount = 0;
+
+    private void IncrementCount()
+    {
+        currentCount++;
+    }
+}
