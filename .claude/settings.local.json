@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C \"c:\\\\CBU\\\\Spring 2026\\\\JrDsn\\\\csc302_junior_design_project\" log --name-status --oneline -20 --diff-filter=A)"
+    ]
+  }
+}

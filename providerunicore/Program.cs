@@ -16,6 +16,7 @@ builder.Services.AddSingleton(FirestoreDb.Create(projectId));
 builder.Services.AddSingleton<IFirebaseAuthService, FirebaseAuthService>();
 // Add Provider Service
 builder.Services.AddScoped<IProviderService, ProviderService>();
+builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
 

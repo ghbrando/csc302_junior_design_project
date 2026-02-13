@@ -1,0 +1,318 @@
+@page "/provider-login"
+@layout BlankLayout
+@rendermode RenderMode.InteractiveServer
+@inject NavigationManager Nav
+@inject IFirebaseAuthService FirebaseAuth
+@inject IProviderService ProviderService
+
+<!-- Back link -->
+<a href="/" class="back-link">
+    <i class="bi bi-arrow-left"></i> BACK TO SELECTION
+</a>
+
+<!-- Login / Register Card -->
+<div class="auth-card mt-4">
+
+    <!-- Card header -->
+    <div class="auth-card-header">
+        <div class="auth-icon">
+            <i class="bi bi-hdd-stack"></i>
+        </div>
+        <div>
+            <div class="auth-title">@(isRegister ? "PROVIDER REGISTER" : "PROVIDER LOGIN")</div>
+            <div class="auth-subtitle">Enter your credentials</div>
+        </div>
+    </div>
+
+    <!-- Error banner -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-error">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+        </div>
+    }
+
+    <!-- Form -->
+    <div class="auth-form">
+
+        @if (isRegister)
+        {
+            <div class="field-group">
+                <label class="field-label">FULL NAME</label>
+                <input class="field-input" type="text" placeholder="John Doe"
+                       @bind="name" @bind:event="oninput" />
+            </div>
+        }
+
+        <div class="field-group">
+            <label class="field-label">EMAIL ADDRESS</label>
+            <input class="field-input" type="email" placeholder="john@example.com"
+                   @bind="email" @bind:event="oninput" />
+        </div>
+
+        <div class="field-group">
+            <label class="field-label">PASSWORD</label>
+            <input class="field-input" type="password" placeholder="••••••••"
+                   @bind="password" @bind:event="oninput" />
+        </div>
+
+        <button class="auth-submit" @onclick="HandleSubmit" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            }
+            @(isRegister ? "CREATE ACCOUNT" : "CONTINUE AS PROVIDER")
+        </button>
+
+        <div class="auth-toggle">
+            @if (isRegister)
+            {
+                <span>Already have an account?</span>
+                <button class="toggle-btn" @onclick="() => { isRegister = false; errorMessage = string.Empty; }">
+                    Sign In
+                </button>
+            }
+            else
+            {
+                <span>Don't have an account?</span>
+                <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
+                    Register
+                </button>
+            }
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private string name     = string.Empty;
+    private string email    = string.Empty;
+    private string password = string.Empty;
+
+    private bool   isRegister    = false;
+    private bool   isLoading     = false;
+    private string errorMessage  = string.Empty;
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            errorMessage = "Email and password are required.";
+            return;
+        }
+
+        if (isRegister && string.IsNullOrWhiteSpace(name))
+        {
+            errorMessage = "Full name is required.";
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            if (isRegister)
+            {
+                // Create Firebase user, then save provider in Firestore
+                var idToken      = await FirebaseAuth.SignUpAsync(email, password);
+                var decoded      = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+                var existing     = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
+
+                if (existing != null)
+                {
+                    errorMessage = "An account with this email already exists.";
+                    return;
+                }
+
+                await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
+            }
+            else
+            {
+                // Verify credentials and update last login
+                var idToken  = await FirebaseAuth.SignInAsync(email, password);
+                var decoded  = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+                var provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
+
+                if (provider == null)
+                {
+                    errorMessage = "No provider account found. Please register first.";
+                    return;
+                }
+
+                await ProviderService.UpdateLastLoginAsync(decoded.Uid);
+            }
+
+            Nav.NavigateTo("/dashboard/");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+
+<style>
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.65rem;
+        letter-spacing: 2px;
+        color: var(--uc-text-dim);
+        text-decoration: none;
+        margin-bottom: 0.5rem;
+        transition: color 0.2s;
+    }
+
+    .back-link:hover {
+        color: var(--uc-text-secondary);
+        text-decoration: none;
+    }
+
+    .auth-card {
+        background-color: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 2rem;
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .auth-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+
+    .auth-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--uc-radius);
+        background: rgba(0, 230, 118, 0.08);
+        border: 1px solid rgba(0, 230, 118, 0.2);
+        color: var(--uc-green);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .auth-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        letter-spacing: 1px;
+    }
+
+    .auth-subtitle {
+        font-size: 0.65rem;
+        letter-spacing: 1.5px;
+        color: var(--uc-text-dim);
+        margin-top: 3px;
+        font-family: var(--uc-font-mono);
+    }
+
+    .auth-error {
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.25);
+        border-radius: var(--uc-radius);
+        color: var(--uc-red);
+        font-size: 0.78rem;
+        padding: 0.6rem 0.85rem;
+    }
+
+    .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+    }
+
+    .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .field-label {
+        font-size: 0.6rem;
+        letter-spacing: 2px;
+        color: var(--uc-text-dim);
+        font-weight: 600;
+    }
+
+    .field-input {
+        background-color: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-primary);
+        font-size: 0.85rem;
+        padding: 0.6rem 0.85rem;
+        width: 100%;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .field-input::placeholder {
+        color: var(--uc-text-dim);
+    }
+
+    .field-input:focus {
+        border-color: var(--uc-green);
+    }
+
+    .auth-submit {
+        background-color: var(--uc-green);
+        color: #000;
+        border: none;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 0.75rem;
+        width: 100%;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .auth-submit:hover:not(:disabled) {
+        opacity: 0.88;
+    }
+
+    .auth-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .auth-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        color: var(--uc-text-dim);
+    }
+
+    .toggle-btn {
+        background: none;
+        border: none;
+        color: var(--uc-green);
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+    }
+</style>
