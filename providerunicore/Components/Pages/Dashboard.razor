@@ -8,44 +8,101 @@
 @inject VmService VmService
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>UniCore Provider Dashboard</PageTitle>
+<PageTitle>Provider Node</PageTitle>
 
 <style>
+    /* 1. Global Dark Theme & Font */
     body {
-        background-color: #121212; /* Very dark background for the whole page */
+        background-color: #0b0b0b; /* Darker background */
         color: #e0e0e0;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+
+    /* 2. Make Cards Smaller & Tighter */
     .dashboard-card {
-        background-color: #1a1a1a;
-        border-radius: 12px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        border: none;
+        background-color: #121212 !important; /* Slightly lighter than body */
+        border: 1px solid #222 !important;
+        border-radius: 8px !important; /* Sharper corners */
+        padding: 1rem !important; /* Shrink padding from p-4 to p-3 */
+        height: 100%;
     }
+    
+    /* 3. Force Internal Component Text to be Smaller */
+    .dashboard-card h2, 
+    .dashboard-card .display-5, 
+    .dashboard-card .display-6 {
+        font-size: 1.75rem !important; /* Shrink big numbers */
+        font-weight: 600 !important;
+        font-family: 'Consolas', 'Monaco', monospace; /* Tech font for numbers */
+        margin-bottom: 0 !important;
+    }
+
+    .dashboard-card .text-uppercase {
+        font-size: 0.65rem !important; /* Smaller titles */
+        letter-spacing: 1.2px !important;
+        color: #666 !important;
+    }
+
+    .dashboard-card .small {
+        font-size: 0.75rem !important;
+    }
+
+    /* 4. Tweak the Table */
     .table-dark-custom {
-        color: #e0e0e0;
-        --bs-table-hover-bg: #2a2a2a;
         --bs-table-bg: transparent;
-        --bs-table-border-color: #333;
+        --bs-table-border-color: #222;
+        font-size: 0.85rem; /* Smaller table text */
     }
-    .text-muted-light {
-        color: #a0a0a0 !important;
+    .table-dark-custom th {
+        font-size: 0.7rem;
+        color: #555;
+        text-transform: uppercase;
+        letter-spacing: 1px;
     }
-    /* Custom Scrollbar for table if needed */
-    ::-webkit-scrollbar { width: 8px; }
-    ::-webkit-scrollbar-track { background: #1a1a1a; }
-    ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+    
+    /* 5. Custom "Online" Badge */
+    .badge-online {
+        background-color: rgba(0, 230, 118, 0.1);
+        color: #00e676;
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        font-size: 0.65rem;
+        padding: 0.35em 0.8em;
+        letter-spacing: 1px;
+    }
+
+    /* 6. Emergency Button */
+    .btn-emergency {
+        border: 1px solid #d32f2f;
+        color: #ff5252;
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+    .btn-emergency:hover {
+        background-color: #d32f2f;
+        color: white;
+    }
 </style>
 
-<div class="container mt-4">
+<div class="container-fluid px-4 py-3">
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h1 class="fw-bold text-white">Provider Dashboard</h1>
-            <p class="text-muted-light">Real-time resource monitoring.</p>
+            <div class="d-flex align-items-center gap-3">
+                <h5 class="fw-bold text-white mb-0" style="letter-spacing: 0.5px;">Provider Node</h5>
+                <span class="badge rounded-pill badge-online">ONLINE</span>
+            </div>
+            <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Real-time resource monitoring & control</p>
         </div>
+        
+        <button class="btn btn-emergency rounded-1">
+            <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
+        </button>
     </div>
-    
-    <!-- Info Cards -->
-    <div class="row mb-4 g-3">
+
+    <div class="row mb-3 g-3">
         @{
             var runningCount = Vms.Count(v => v.Status == "Running");
             var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
@@ -82,13 +139,11 @@
         </div>
     </div>
 
-    <!-- Resource Sliders -->
-    <div class="row mb-4 g-3">
+    <div class="row mb-3 g-3">
         <div class="col-md-6">
             <ResourceSlider Title="CPU CORE LIMIT" 
                             Unit="percent" 
-                            Max="100"
-                            MinLimit="20" 
+                            Max="100" MinLimit="20"
                             Color="#00E5FF" 
                             IconClass="bi bi-cpu"
                             @bind-Value="CpuLimit" />
@@ -96,53 +151,39 @@
         <div class="col-md-6">
             <ResourceSlider Title="RAM ALLOCATION" 
                             Unit="gigabytes" 
-                            Max="128"
-                            MinLimit="20" 
+                            Max="128" MinLimit="20"
                             Color="#D500F9" 
                             IconClass="bi bi-hdd-rack"
                             @bind-Value="RamLimit" />
         </div>
     </div>
 
-    <!-- Real Time Usage -->
-    <div class="row mb-4 g-3">
+    <div class="row mb-3 g-3">
+        <div class="col-12">
+            <h6 class="text-uppercase text-muted" style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px;">Real-Time Monitoring</h6>
+        </div>
         @{
             var activeVms = Vms.Where(v => v.Status == "Running").ToList();
             var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
             var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
             var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
-            
             var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
         }
 
         <div class="col-md-4">
-            <MetricCard Title="CPU" 
-                        Value="@avgCpu.ToString("0")" 
-                        Percent="@((double)avgCpu)"
-                        Color="#3b82f6" 
-                        DataPoints="@demoVm.CpuHistory" /> 
+            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6" DataPoints="@demoVm.CpuHistory" /> 
         </div>
         <div class="col-md-4">
-            <MetricCard Title="GPU" 
-                        Value="@avgGpu.ToString("0")" 
-                        Percent="@((double)avgGpu)"
-                        Color="#10b981" 
-                        DataPoints="@demoVm.GpuHistory" />
+            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981" DataPoints="@demoVm.GpuHistory" />
         </div>
         <div class="col-md-4">
-            <MetricCard Title="RAM" 
-                        Value="@((activeVms.Sum(v => v.RamGB) * (avgRam/100)).ToString("0.0"))" 
-                        Unit="GB"
-                        Percent="@((double)avgRam)"
-                        Color="#a855f7" 
-                        DataPoints="@demoVm.RamHistory" />
+            <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam/100)).ToString("0.0"))" Unit="GB" Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
         </div>
     </div>
 
-    <!-- VM Table -->
-    <div class="row">
+    <div class="row g-3">
         <div class="col-12">
-            <VmList Vms="@Vms" />
+             <VmList Vms="@Vms" />
         </div>
     </div>
 </div>
@@ -151,55 +192,24 @@
     private List<VirtualMachine> Vms { get; set; } = new();
     private PeriodicTimer? _timer;
     private CancellationTokenSource _cts = new();
-
-    // New Fields for Slider Binding
     private double CpuLimit { get; set; } = 55;
     private double RamLimit { get; set; } = 80;
 
     protected override async Task OnInitializedAsync()
     {
-        // 1. Load initial data
         await RefreshData();
-        // 2. Start background timer
         _ = StartTimerAsync(); 
     }
 
     private async Task StartTimerAsync()
     {
-        // Ticks every 100ms for smooth updates
-        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500)); // Changed to 500ms for reasonable load
-
-        try
-        {
-            while (await _timer.WaitForNextTickAsync(_cts.Token))
-            {
-                await RefreshData();
-                await InvokeAsync(StateHasChanged);
-            }
-        }
-        catch (OperationCanceledException) { }
+        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        try { while (await _timer.WaitForNextTickAsync(_cts.Token)) { await RefreshData(); await InvokeAsync(StateHasChanged); } } catch (OperationCanceledException) { }
     }
 
     private async Task RefreshData()
     {
         Vms = await VmService.GetMyVmsAsync();
-    }
-
-    private void ToggleVm(VirtualMachine vm)
-    {
-        if (vm.Status == "Running")
-        {
-            vm.Status = "Stopped";
-            vm.CurrentCpuUsage = 0;
-            vm.CurrentGpuUsage = 0;
-            vm.CurrentRamUsage = 0;
-        }
-        else
-        {
-            vm.Status = "Running";
-            vm.CurrentCpuUsage = 10;
-            vm.CurrentRamUsage = 20;
-        }
     }
 
     public void Dispose()
