@@ -1,0 +1,97 @@
+@page "/revenue/"
+@using unicoreprovider.Models
+@using unicoreprovider.Services
+@using unicoreprovider.Components
+@using Microsoft.AspNetCore.Components.Web
+@using static unicoreprovider.Components.RevenueChart
+
+<PageTitle>Revenue Tracker</PageTitle>
+
+<div class="container-fluid px-4 py-3">
+
+    @* Header *@
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold text-white mb-0" style="letter-spacing: 0.5px;">Revenue Tracker</h5>
+            <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Monitor earnings and request payouts</p>
+        </div>
+        <button class="btn btn-payout rounded-1">
+            <i class="bi bi-wallet2 me-2"></i> REQUEST PAYOUT
+        </button>
+    </div>
+
+    @* Balance Cards *@
+    <div class="row mb-3 g-3">
+        <div class="col-12 col-md-4">
+            <BalanceCard Title="Total Balance"
+                         Value="$583.50"
+                         IconClass="bi bi-currency-dollar"
+                         IconBgColor="#1a5c3a"
+                         ValueColor="#00e676" />
+        </div>
+        <div class="col-12 col-md-4">
+            <BalanceCard Title="Available"
+                         Value="$464.90"
+                         IconClass="bi bi-graph-up-arrow"
+                         IconBgColor="#0e4a5c"
+                         ValueColor="#00bcd4" />
+        </div>
+        <div class="col-12 col-md-4">
+            <BalanceCard Title="Pending"
+                         Value="$118.60"
+                         IconClass="bi bi-clock-history"
+                         IconBgColor="#5c4a1a"
+                         ValueColor="#ffab00" />
+        </div>
+    </div>
+
+    @* Revenue Chart *@
+    <div class="row mb-3 g-3">
+        <div class="col-12">
+            <RevenueChart DataPoints="@RevenueData" />
+        </div>
+    </div>
+
+    @* Payout History *@
+    <div class="row g-3">
+        <div class="col-12">
+            <PayoutHistory Payouts="@Payouts" />
+        </div>
+    </div>
+</div>
+
+<style>
+    .btn-payout {
+        border: 1px solid var(--uc-green);
+        color: var(--uc-green);
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+    .btn-payout:hover {
+        background-color: var(--uc-green);
+        color: var(--uc-bg-body);
+    }
+</style>
+
+@code {
+    private List<RevenueDataPoint> RevenueData { get; set; } = new()
+    {
+        new() { Date = new DateTime(2024, 1, 28), Amount = 45.00m },
+        new() { Date = new DateTime(2024, 1, 29), Amount = 72.50m },
+        new() { Date = new DateTime(2024, 1, 30), Amount = 58.00m },
+        new() { Date = new DateTime(2024, 1, 31), Amount = 110.00m },
+        new() { Date = new DateTime(2024, 2, 1), Amount = 95.00m },
+        new() { Date = new DateTime(2024, 2, 2), Amount = 88.50m },
+        new() { Date = new DateTime(2024, 2, 3), Amount = 114.50m },
+    };
+
+    private List<Payout> Payouts { get; set; } = new()
+    {
+        new() { Id = "PAY-2024-089", Date = new DateTime(2024, 2, 1), Amount = 245.00m, Method = "Bank Transfer", Status = "Completed" },
+        new() { Id = "PAY-2024-088", Date = new DateTime(2024, 1, 28), Amount = 189.50m, Method = "Bank Transfer", Status = "Completed" },
+        new() { Id = "PAY-2024-087", Date = new DateTime(2024, 1, 21), Amount = 312.00m, Method = "Crypto", Status = "Completed" },
+    };
+}

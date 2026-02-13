@@ -1,18 +1,18 @@
 @namespace unicoreprovider.Components
 
-<div class="card dashboard-card h-100 p-4 d-flex flex-column justify-content-between" 
-     style="background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px;">
-    
+<div class="card h-100 p-3 d-flex flex-column justify-content-between"
+     style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+
     <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="text-uppercase fw-bold" style="font-size: 0.75rem; letter-spacing: 1.5px; color: #666;">
+        <span class="text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
             @Title
         </span>
         <i class="@IconClass" style="color: @Color; font-size: 1.1rem;"></i>
     </div>
 
     <div class="d-flex align-items-baseline mt-2">
-        <h2 class="fw-bold mb-0 display-5" style="color: @ValueColor;">@Value</h2>
-        <span class="ms-2" style="color: #666; font-size: 0.9rem;">@Unit</span>
+        <h2 class="fw-bold mb-0" style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @ValueColor;">@Value</h2>
+        <span class="ms-2" style="color: var(--uc-text-muted); font-size: 0.9rem;">@Unit</span>
     </div>
 </div>
 
@@ -21,10 +21,6 @@
     [Parameter] public string Value { get; set; } = "0";
     [Parameter] public string Unit { get; set; } = "";
     [Parameter] public string IconClass { get; set; } = "bi bi-activity";
-    
-    // The color of the Icon (e.g. Blue, Green, Yellow)
-    [Parameter] public string Color { get; set; } = "#fff"; 
-    
-    // The color of the Value text (defaults to white, but can be Green for money)
+    [Parameter] public string Color { get; set; } = "#fff";
     [Parameter] public string ValueColor { get; set; } = "#ffffff";
 }

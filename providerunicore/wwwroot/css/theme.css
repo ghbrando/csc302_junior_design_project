@@ -1,0 +1,51 @@
+/* UniCore Theme - CSS Custom Properties */
+:root {
+    /* Surface colors */
+    --uc-bg-body: #0b0b0b;
+    --uc-bg-card: #121212;
+    --uc-bg-elevated: #1a1a1a;
+    --uc-bg-sidebar: #080808;
+
+    /* Border colors */
+    --uc-border: #222;
+    --uc-border-light: #333;
+
+    /* Border radius */
+    --uc-radius: 8px;
+
+    /* Text colors */
+    --uc-text-primary: #e0e0e0;
+    --uc-text-white: #ffffff;
+    --uc-text-muted: #666;
+    --uc-text-dim: #555;
+    --uc-text-secondary: #888;
+    --uc-text-table: #a0a0a0;
+
+    /* Accent colors */
+    --uc-green: #00e676;
+    --uc-blue: #3b82f6;
+    --uc-red: #ff5252;
+    --uc-red-dark: #d32f2f;
+    --uc-yellow: #ffeb3b;
+    --uc-amber: #ffab00;
+    --uc-cyan: #00bcd4;
+    --uc-purple: #a855f7;
+    --uc-teal: #10b981;
+    --uc-sky: #00E5FF;
+    --uc-magenta: #D500F9;
+
+    /* Fonts */
+    --uc-font-base: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --uc-font-mono: 'Consolas', 'Monaco', monospace;
+}
+
+/* Global base styles */
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background-color: var(--uc-bg-body);
+    color: var(--uc-text-primary);
+    font-family: var(--uc-font-base);
+    overflow-x: hidden;
+}

@@ -1,13 +1,13 @@
 @namespace unicoreprovider.Components
 
-<div class="card dashboard-card h-100 p-4 d-flex flex-column justify-content-between" 
-     style="background-color: #1a1a1a; border: 1px solid #333; border-radius: 12px;">
-    
+<div class="card h-100 p-3 d-flex flex-column justify-content-between"
+     style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+
     <div class="d-flex justify-content-between align-items-start mb-2">
-        <span class="text-uppercase fw-bold" style="font-size: 0.75rem; letter-spacing: 1.5px; color: #666;">
+        <span class="text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
             NODE STATUS
         </span>
-        
+
         <label class="toggle-switch">
             <input type="checkbox" @bind="IsAccepting" />
             <span class="slider"></span>
@@ -15,15 +15,14 @@
     </div>
 
     <div class="mt-2">
-        <h2 class="fw-bold mb-0 display-6" 
-            style="color: @(IsAccepting ? "#00e676" : "#666"); text-shadow: @(IsAccepting ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
+        <h2 class="fw-bold mb-0"
+            style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @(IsAccepting ? "var(--uc-green)" : "var(--uc-text-muted)"); text-shadow: @(IsAccepting ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
             @(IsAccepting ? "ACCEPTING" : "OFFLINE")
         </h2>
     </div>
 </div>
 
 <style>
-    /* The Switch Container */
     .toggle-switch {
         position: relative;
         display: inline-block;
@@ -31,25 +30,22 @@
         height: 24px;
     }
 
-    /* Hide default HTML checkbox */
     .toggle-switch input {
         opacity: 0;
         width: 0;
         height: 0;
     }
 
-    /* The Slider */
     .slider {
         position: absolute;
         cursor: pointer;
         top: 0; left: 0; right: 0; bottom: 0;
-        background-color: #333; /* Dark gray when off */
+        background-color: var(--uc-border-light);
         transition: .4s;
         border-radius: 34px;
         border: 1px solid #444;
     }
 
-    /* The Circle (Thumb) */
     .slider:before {
         position: absolute;
         content: "";
@@ -57,25 +53,23 @@
         width: 16px;
         left: 4px;
         bottom: 3px;
-        background-color: #888;
+        background-color: var(--uc-text-secondary);
         transition: .4s;
         border-radius: 50%;
     }
 
-    /* Checked State (ON) */
     input:checked + .slider {
-        background-color: rgba(0, 230, 118, 0.2); /* Faint green track */
-        border-color: #00e676;
+        background-color: rgba(0, 230, 118, 0.2);
+        border-color: var(--uc-green);
     }
 
     input:checked + .slider:before {
         transform: translateX(24px);
-        background-color: #00e676; /* Bright Green Thumb */
-        box-shadow: 0 0 10px #00e676; /* The Glow Effect */
+        background-color: var(--uc-green);
+        box-shadow: 0 0 10px var(--uc-green);
     }
 </style>
 
 @code {
-    // Default to true to match image
     private bool IsAccepting { get; set; } = true;
 }

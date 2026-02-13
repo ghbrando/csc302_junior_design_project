@@ -1,0 +1,37 @@
+@namespace unicoreprovider.Components
+
+<div class="card h-100 p-3" style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+    <div class="d-flex align-items-center gap-3">
+        <div class="balance-icon-box" style="background-color: @IconBgColor;">
+            <i class="@IconClass" style="color: var(--uc-text-white); font-size: 1.1rem;"></i>
+        </div>
+        <div>
+            <span class="text-uppercase fw-bold d-block" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
+                @Title
+            </span>
+            <h3 class="fw-bold mb-0 mt-1" style="color: @ValueColor; font-family: var(--uc-font-mono);">
+                @Value
+            </h3>
+        </div>
+    </div>
+</div>
+
+<style>
+    .balance-icon-box {
+        width: 42px;
+        height: 42px;
+        border-radius: var(--uc-radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+</style>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Balance";
+    [Parameter] public string Value { get; set; } = "$0.00";
+    [Parameter] public string IconClass { get; set; } = "bi bi-currency-dollar";
+    [Parameter] public string IconBgColor { get; set; } = "#1a5c3a";
+    [Parameter] public string ValueColor { get; set; } = "#00e676";
+}

@@ -38,8 +38,8 @@
     .sidebar {
         width: 220px;
         min-height: 100vh;
-        background-color: #080808;
-        border-right: 1px solid #1a1a1a;
+        background-color: var(--uc-bg-sidebar);
+        border-right: 1px solid var(--uc-border);
         padding: 0;
         position: fixed;
         top: 0;
@@ -57,13 +57,13 @@
 
     .brand-icon {
         font-size: 1.5rem;
-        color: #00e676;
+        color: var(--uc-green);
     }
 
     .brand-text {
         font-size: 1.25rem;
         font-weight: 700;
-        color: #ffffff;
+        color: var(--uc-text-white);
         letter-spacing: 1px;
     }
 
@@ -77,8 +77,8 @@
         align-items: center;
         gap: 12px;
         padding: 0.7rem 1rem;
-        border-radius: 8px;
-        color: #666 !important;
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted) !important;
         font-size: 0.7rem;
         font-weight: 600;
         letter-spacing: 1.5px;
@@ -96,11 +96,11 @@
     }
 
     .sidebar-link.active {
-        color: #00e676 !important;
+        color: var(--uc-green) !important;
         background-color: rgba(0, 230, 118, 0.08);
     }
 
     .sidebar-link.active i {
-        color: #00e676;
+        color: var(--uc-green);
     }
 </style>

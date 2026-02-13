@@ -11,62 +11,20 @@
 <PageTitle>Provider Node</PageTitle>
 
 <style>
-    /* Make Cards Smaller & Tighter */
-    .dashboard-card {
-        background-color: #121212 !important; /* Slightly lighter than body */
-        border: 1px solid #222 !important;
-        border-radius: 8px !important; /* Sharper corners */
-        padding: 1rem !important; /* Shrink padding from p-4 to p-3 */
-        height: 100%;
-    }
-    
-    /* 3. Force Internal Component Text to be Smaller */
-    .dashboard-card h2, 
-    .dashboard-card .display-5, 
-    .dashboard-card .display-6 {
-        font-size: 1.75rem !important; /* Shrink big numbers */
-        font-weight: 600 !important;
-        font-family: 'Consolas', 'Monaco', monospace; /* Tech font for numbers */
-        margin-bottom: 0 !important;
-    }
-
-    .dashboard-card .text-uppercase {
-        font-size: 0.65rem !important; /* Smaller titles */
-        letter-spacing: 1.2px !important;
-        color: #666 !important;
-    }
-
-    .dashboard-card .small {
-        font-size: 0.75rem !important;
-    }
-
-    /* 4. Tweak the Table */
-    .table-dark-custom {
-        --bs-table-bg: transparent;
-        --bs-table-border-color: #222;
-        font-size: 0.85rem; /* Smaller table text */
-    }
-    .table-dark-custom th {
-        font-size: 0.7rem;
-        color: #555;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
-    
-    /* 5. Custom "Online" Badge */
+    /* Custom "Online" Badge */
     .badge-online {
         background-color: rgba(0, 230, 118, 0.1);
-        color: #00e676;
+        color: var(--uc-green);
         border: 1px solid rgba(0, 230, 118, 0.3);
         font-size: 0.65rem;
         padding: 0.35em 0.8em;
         letter-spacing: 1px;
     }
 
-    /* 6. Emergency Button */
+    /* Emergency Button */
     .btn-emergency {
-        border: 1px solid #d32f2f;
-        color: #ff5252;
+        border: 1px solid var(--uc-red-dark);
+        color: var(--uc-red);
         font-size: 0.7rem;
         font-weight: bold;
         letter-spacing: 1px;
@@ -74,7 +32,7 @@
         transition: all 0.2s;
     }
     .btn-emergency:hover {
-        background-color: #d32f2f;
+        background-color: var(--uc-red-dark);
         color: white;
     }
 </style>

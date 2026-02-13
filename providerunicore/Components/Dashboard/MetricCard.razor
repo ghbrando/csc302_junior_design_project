@@ -1,17 +1,17 @@
 @using System.Text
 @namespace unicoreprovider.Components
 
-<div class="card dashboard-card h-100 p-4 d-flex flex-column justify-content-between"
-     style="background: #1a1a1a; color: white; border-radius: 12px; border: 1px solid #333;">
-    
+<div class="card h-100 p-3 d-flex flex-column justify-content-between"
+     style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+
     <div class="d-flex justify-content-between align-items-start mb-3">
         <div class="d-flex align-items-center">
             <span class="dot me-2" style="background-color: @Color; box-shadow: 0 0 8px @Color;"></span>
-            <span class="text-uppercase fw-bold" style="font-size: 0.8rem; letter-spacing: 1px; color: #888;">@Title</span>
+            <span class="text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">@Title</span>
         </div>
         <div class="d-flex align-items-baseline">
-            <h2 class="fw-bold mb-0 display-6">@Value</h2>
-            <span class="fs-6 ms-1" style="color: #666;">@Unit</span>
+            <h2 class="fw-bold mb-0" style="font-size: 1.75rem; font-family: var(--uc-font-mono);">@Value</h2>
+            <span class="fs-6 ms-1" style="color: var(--uc-text-muted);">@Unit</span>
         </div>
     </div>
 
@@ -23,14 +23,14 @@
                     <stop offset="100%" stop-color="@Color" stop-opacity="0.0"/>
                 </linearGradient>
             </defs>
-            
+
             <path d="@GenerateAreaPath()" fill="url(#gradient-@Title)" stroke="none" />
             <path d="@GenerateLinePath()" fill="none" stroke="@Color" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
     </div>
 
-    <div class="mt-3 w-100" style="height: 6px; background-color: #333; border-radius: 3px; overflow: hidden;">
-        <div class="h-100" 
+    <div class="mt-3 w-100" style="height: 6px; background-color: var(--uc-border-light); border-radius: 3px; overflow: hidden;">
+        <div class="h-100"
              style="width: @Percent%; background-color: @Color; box-shadow: 0 0 10px @Color; transition: width 0.3s ease-out;">
         </div>
     </div>
@@ -50,36 +50,33 @@
     [Parameter] public string Value { get; set; } = "0";
     [Parameter] public string Unit { get; set; } = "%";
     [Parameter] public double Percent { get; set; } = 0;
-    [Parameter] public string Color { get; set; } = "#3b82f6"; // Default Blue
+    [Parameter] public string Color { get; set; } = "#3b82f6";
     [Parameter] public List<double> DataPoints { get; set; } = new();
 
-    // Helper to generate SVG Path for the Line
     private string GenerateLinePath()
     {
         if (DataPoints == null || DataPoints.Count < 2) return "";
-        
+
         var sb = new StringBuilder();
-        double max = 100; // Assuming 0-100 scale
+        double max = 100;
         double stepX = 100.0 / (DataPoints.Count - 1);
 
         for (int i = 0; i < DataPoints.Count; i++)
         {
             double x = i * stepX;
-            double y = 25 - (DataPoints[i] / max * 25); // Flip Y (SVG coords top-left is 0,0)
-            
+            double y = 25 - (DataPoints[i] / max * 25);
+
             if (i == 0) sb.Append($"M {x} {y}");
             else sb.Append($" L {x} {y}");
         }
         return sb.ToString();
     }
 
-    // Helper to generate SVG Path for the Gradient Fill
     private string GenerateAreaPath()
     {
         if (DataPoints == null || DataPoints.Count < 2) return "";
-        
+
         string linePath = GenerateLinePath();
-        // Close the shape: go down to bottom-right (100, 25) then bottom-left (0, 25)
         return $"{linePath} L 100 25 L 0 25 Z";
     }
 }

@@ -1,0 +1,104 @@
+@using System.Text
+@namespace unicoreprovider.Components
+
+<div class="card p-4" style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+    <h6 class="text-uppercase fw-bold mb-4" style="font-size: 0.7rem; letter-spacing: 1.5px; color: var(--uc-text-muted);">
+        7-Day Revenue History
+    </h6>
+
+    <div style="position: relative; height: 220px;">
+        @* Y-axis labels *@
+        <div style="position: absolute; left: 0; top: 0; bottom: 30px; width: 40px; display: flex; flex-direction: column; justify-content: space-between;">
+            @foreach (var label in YAxisLabels)
+            {
+                <span style="font-size: 0.65rem; color: var(--uc-text-dim); text-align: right; width: 100%;">@label</span>
+            }
+        </div>
+
+        @* Chart area *@
+        <div style="position: absolute; left: 48px; right: 0; top: 0; bottom: 30px;">
+            <svg viewBox="0 0 @ChartWidth @ChartHeight" preserveAspectRatio="none" style="width: 100%; height: 100%; overflow: visible;">
+                <defs>
+                    <linearGradient id="revenue-gradient" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stop-color="#00e676" stop-opacity="0.25"/>
+                        <stop offset="100%" stop-color="#00e676" stop-opacity="0.02"/>
+                    </linearGradient>
+                </defs>
+
+                @* Horizontal grid lines *@
+                @for (int i = 0; i <= GridLines; i++)
+                {
+                    var y = i * (ChartHeight / (double)GridLines);
+                    <line x1="0" y1="@y" x2="@ChartWidth" y2="@y"
+                          stroke="#222" stroke-width="0.5" stroke-dasharray="4,4" />
+                }
+
+                @* Area fill *@
+                <path d="@GenerateAreaPath()" fill="url(#revenue-gradient)" stroke="none" />
+                @* Line *@
+                <path d="@GenerateLinePath()" fill="none" stroke="#00e676" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+        </div>
+
+        @* X-axis labels *@
+        <div style="position: absolute; left: 48px; right: 0; bottom: 0; height: 24px; display: flex; justify-content: space-between;">
+            @foreach (var point in DataPoints)
+            {
+                <span style="font-size: 0.6rem; color: var(--uc-text-dim);">@point.Date.ToString("MMM d")</span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<RevenueDataPoint> DataPoints { get; set; } = new();
+
+    private const int ChartWidth = 300;
+    private const int ChartHeight = 100;
+    private const int GridLines = 4;
+
+    private IEnumerable<string> YAxisLabels
+    {
+        get
+        {
+            if (!DataPoints.Any()) return Enumerable.Empty<string>();
+            double max = (double)DataPoints.Max(d => d.Amount);
+            double step = max / GridLines;
+            return Enumerable.Range(0, GridLines + 1)
+                .Select(i => $"${(max - i * step):0}")
+                .ToList();
+        }
+    }
+
+    private string GenerateLinePath()
+    {
+        if (DataPoints == null || DataPoints.Count < 2) return "";
+
+        var sb = new StringBuilder();
+        double max = (double)DataPoints.Max(d => d.Amount) * 1.1;
+        double stepX = (double)ChartWidth / (DataPoints.Count - 1);
+
+        for (int i = 0; i < DataPoints.Count; i++)
+        {
+            double x = i * stepX;
+            double y = ChartHeight - ((double)DataPoints[i].Amount / max * ChartHeight);
+
+            if (i == 0) sb.Append($"M {x:F1} {y:F1}");
+            else sb.Append($" L {x:F1} {y:F1}");
+        }
+        return sb.ToString();
+    }
+
+    private string GenerateAreaPath()
+    {
+        if (DataPoints == null || DataPoints.Count < 2) return "";
+        string linePath = GenerateLinePath();
+        return $"{linePath} L {ChartWidth} {ChartHeight} L 0 {ChartHeight} Z";
+    }
+
+    public class RevenueDataPoint
+    {
+        public DateTime Date { get; set; }
+        public decimal Amount { get; set; }
+    }
+}
