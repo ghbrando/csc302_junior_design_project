@@ -14,7 +14,9 @@ public class VmService
             { 
                 VmId = "1", 
                 Name = "Deep Learning Rig", 
-                Status = "Running", 
+                Client = "john@example.com",
+                Status = "Running",
+                Uptime = TimeSpan.FromHours(2).Add(TimeSpan.FromMinutes(34)), 
                 CpuCores = 8, 
                 RamGB = 16, 
                 CostPerHour = 0.35m, 
@@ -26,8 +28,10 @@ public class VmService
             new VirtualMachine 
             { 
                 VmId = "2", 
-                Name = "Web Server", 
-                Status = "Running", 
+                Name = "Web Server",
+                Client = "sarah@example.com",  
+                Status = "Running",
+                Uptime = TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(15)),
                 CpuCores = 2, 
                 RamGB = 4, 
                 CostPerHour = 0.05m, 
@@ -40,7 +44,9 @@ public class VmService
             { 
                 VmId = "3", 
                 Name = "Render Node", 
-                Status = "Stopped", 
+                Client = "paul@example.com",  
+                Status = "Running",
+                Uptime = TimeSpan.FromHours(1).Add(TimeSpan.FromMinutes(5)), 
                 CpuCores = 12, 
                 RamGB = 32, 
                 CostPerHour = 0.50m, 

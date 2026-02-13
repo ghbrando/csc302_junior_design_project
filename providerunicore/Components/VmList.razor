@@ -1,0 +1,90 @@
+@using unicoreprovider.Models
+@namespace unicoreprovider.Components
+
+<style>
+    /* 1. FORCE overrides for Bootstrap Table variables */
+    .table-dark-override {
+        --bs-table-bg: transparent !important;
+        --bs-table-striped-bg: transparent !important;
+        --bs-table-hover-bg: #222 !important;
+        --bs-table-color: #a0a0a0 !important;
+        --bs-table-border-color: #333 !important;
+        background-color: transparent !important; 
+        color: #a0a0a0 !important;
+    }
+
+    /* 2. Remove any lingering white backgrounds on cells */
+    .table-dark-override th, 
+    .table-dark-override td {
+        background-color: transparent !important;
+        border-bottom: 1px solid #333;
+    }
+
+    /* 3. Container Card Styling */
+    .vm-list-card {
+        background-color: #1a1a1a; 
+        border: 1px solid #333; 
+        border-radius: 12px;
+    }
+</style>
+
+<div class="card vm-list-card h-100 p-4">
+    <div class="d-flex align-items-center mb-3">
+        <h6 class="text-uppercase fw-bold mb-0" style="letter-spacing: 1px; font-size: 0.8rem; color: #888;">
+            Active VMs — Docker Sandbox
+        </h6>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-dark-override align-middle mb-0">
+            <thead>
+                <tr class="text-uppercase" style="font-size: 0.75rem; color: #666; border-bottom: 1px solid #333;">
+                    <th class="pb-3 ps-0" style="width: 10%;">VM ID</th>
+                    <th class="pb-3" style="width: 25%;">Name</th>
+                    <th class="pb-3" style="width: 20%;">Client</th>
+                    <th class="pb-3" style="width: 20%;">CPU</th>
+                    <th class="pb-3" style="width: 10%;">RAM</th>
+                    <th class="pb-3" style="width: 10%;">Duration</th>
+                    <th class="pb-3 text-end pe-0" style="width: 5%;">Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var vm in Vms)
+                {
+                    <tr>
+                        <td class="py-4 ps-0" style="font-family: monospace; color: #666;">@vm.VmId</td>
+                        
+                        <td class="py-4 fw-bold text-white" style="font-size: 0.95rem;">@vm.Name</td>
+                        
+                        <td class="py-4" style="color: #888;">@vm.Client</td>
+                        
+                        <td class="py-4">
+                            <div class="d-flex align-items-center">
+                                <div class="progress me-3" style="height: 6px; width: 80px; background-color: #333; border-radius: 3px;">
+                                    <div class="progress-bar" 
+                                         style="width: @vm.CurrentCpuUsage%; background-color: #3b82f6; border-radius: 3px;">
+                                    </div>
+                                </div>
+                                <span class="small" style="color: #888;">@vm.CurrentCpuUsage.ToString("0")%</span>
+                            </div>
+                        </td>
+                        
+                        <td class="py-4" style="color: #aaa;">@vm.RamGB GB</td>
+                        
+                        <td class="py-4" style="color: #aaa;">
+                            @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
+                        </td>
+                        
+                        <td class="py-4 text-end pe-0 fw-bold" style="color: #10b981; font-family: monospace; font-size: 1rem;">
+                            @vm.CurrentSessionCost.ToString("C")
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
+}
