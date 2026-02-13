@@ -1,0 +1,17 @@
+@inherits LayoutComponentBase
+
+<div class="blank-page">
+    @Body
+</div>
+
+<style>
+    .blank-page {
+        min-height: 100vh;
+        background-color: var(--uc-bg-body);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem 1rem;
+    }
+</style>

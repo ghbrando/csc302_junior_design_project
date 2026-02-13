@@ -13,50 +13,51 @@ public class AuthController : ControllerBase
     public AuthController(IFirebaseAuthService firebaseAuthService, IProviderService providerService)
     {
         _firebaseAuthService = firebaseAuthService;
-        _providerService = providerService;
+        _providerService     = providerService;
     }
 
+    // Register a new provider with email + password + name
     [HttpPost("register")]
-    public async Task<IActionResult> Register([FromBody] SignInRequest request)
+    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
             return BadRequest(new { error = "Name is required." });
 
         try
         {
-            var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(request.IdToken);
-            var uid = decodedToken.Uid;
-            var email = decodedToken.Claims["email"]?.ToString() ?? string.Empty;
+            var idToken      = await _firebaseAuthService.SignUpAsync(request.Email, request.Password);
+            var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(idToken);
+            var uid          = decodedToken.Uid;
 
             var existing = await _providerService.GetByFirebaseUidAsync(uid);
             if (existing != null)
                 return Conflict(new { error = "A provider with this account already exists." });
 
-            // Use the name from the request body instead of Firebase
-            var provider = await _providerService.CreateProviderAsync(uid, email, request.Name);
+            var provider = await _providerService.CreateProviderAsync(request.Name, request.Email, uid);
 
             return CreatedAtAction(nameof(GetCurrentProvider), new AuthResponse
             {
                 FirebaseUid = uid,
-                Email = provider.Email,
-                Name = provider.Name,
-                LastLogin = provider.LastLogin
+                Email       = provider.Email,
+                Name        = provider.Name,
+                LastLogin   = provider.LastLogin
             });
         }
-        catch (FirebaseAuthException ex)
+        catch (Exception ex)
         {
-            return Unauthorized(new { error = "Invalid or expired token.", detail = ex.Message });
+            return BadRequest(new { error = ex.Message });
         }
     }
 
-    // Login endpoint - just verifies the token and updates last login time
+    // Log in an existing provider with email + password
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         try
         {
-            var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(request.IdToken);
-            var uid = decodedToken.Uid;
+            var idToken      = await _firebaseAuthService.SignInAsync(request.Email, request.Password);
+            var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(idToken);
+            var uid          = decodedToken.Uid;
 
             var provider = await _providerService.GetByFirebaseUidAsync(uid);
             if (provider == null)
@@ -67,18 +68,18 @@ public class AuthController : ControllerBase
             return Ok(new AuthResponse
             {
                 FirebaseUid = uid,
-                Email = provider.Email,
-                Name = provider.Name,
-                LastLogin = provider.LastLogin
+                Email       = provider.Email,
+                Name        = provider.Name,
+                LastLogin   = provider.LastLogin
             });
         }
-        catch (FirebaseAuthException ex)
+        catch (Exception ex)
         {
-            return Unauthorized(new { error = "Invalid or expired token.", detail = ex.Message });
+            return BadRequest(new { error = ex.Message });
         }
     }
 
-    //Logout endpoint
+    // Logout — revokes Firebase refresh tokens
     [HttpPost("logout")]
     [Authorize]
     public async Task<IActionResult> Logout()
@@ -102,5 +103,4 @@ public class AuthController : ControllerBase
         var provider = await _providerService.GetByFirebaseUidAsync(uid);
         return provider == null ? NotFound() : Ok(provider);
     }
-
 }
