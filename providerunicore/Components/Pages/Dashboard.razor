@@ -43,7 +43,68 @@
             <p class="text-muted-light">Real-time resource monitoring.</p>
         </div>
     </div>
+    
+    <!-- Info Cards -->
+    <div class="row mb-4 g-3">
+        @{
+            var runningCount = Vms.Count(v => v.Status == "Running");
+            var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
+            var uptime = "99.2"; 
+        }
 
+        <div class="col-12 col-md-6 col-lg-3">
+            <NodeStatusCard />
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-3">
+            <InfoCard Title="Active VMs" 
+                      Value="@runningCount.ToString()" 
+                      Unit="running"
+                      IconClass="bi bi-activity"
+                      Color="#3b82f6" /> 
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-3">
+            <InfoCard Title="Hourly Rate" 
+                      Value="@totalHourlyRate.ToString("C")" 
+                      Unit="/hr"
+                      IconClass="bi bi-graph-up-arrow"
+                      Color="#00e676"
+                      ValueColor="#00e676" />
+        </div>
+
+        <div class="col-12 col-md-6 col-lg-3">
+            <InfoCard Title="Uptime" 
+                      Value="@uptime" 
+                      Unit="%"
+                      IconClass="bi bi-lightning-charge-fill"
+                      Color="#ffeb3b" />
+        </div>
+    </div>
+
+    <!-- Resource Sliders -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-6">
+            <ResourceSlider Title="CPU CORE LIMIT" 
+                            Unit="percent" 
+                            Max="100"
+                            MinLimit="20" 
+                            Color="#00E5FF" 
+                            IconClass="bi bi-cpu"
+                            @bind-Value="CpuLimit" />
+        </div>
+        <div class="col-md-6">
+            <ResourceSlider Title="RAM ALLOCATION" 
+                            Unit="gigabytes" 
+                            Max="128"
+                            MinLimit="20" 
+                            Color="#D500F9" 
+                            IconClass="bi bi-hdd-rack"
+                            @bind-Value="RamLimit" />
+        </div>
+    </div>
+
+    <!-- Real Time Usage -->
     <div class="row mb-4 g-3">
         @{
             var activeVms = Vms.Where(v => v.Status == "Running").ToList();
@@ -78,27 +139,7 @@
         </div>
     </div>
 
-    <div class="row mb-4 g-3">
-        <div class="col-md-6">
-            <ResourceSlider Title="CPU CORE LIMIT" 
-                            Unit="percent" 
-                            Max="100"
-                            MinLimit="20" 
-                            Color="#00E5FF" 
-                            IconClass="bi bi-cpu"
-                            @bind-Value="CpuLimit" />
-        </div>
-        <div class="col-md-6">
-            <ResourceSlider Title="RAM ALLOCATION" 
-                            Unit="gigabytes" 
-                            Max="128"
-                            MinLimit="20" 
-                            Color="#D500F9" 
-                            IconClass="bi bi-hdd-rack"
-                            @bind-Value="RamLimit" />
-        </div>
-    </div>
-
+    <!-- VM Table -->
     <div class="row">
         <div class="col-12">
             <VmList Vms="@Vms" />
