@@ -1,0 +1,106 @@
+@using Microsoft.AspNetCore.Components.Routing
+
+<nav class="sidebar d-flex flex-column">
+    <div class="sidebar-brand">
+        <i class="bi bi-gpu-card brand-icon"></i>
+        <span class="brand-text">UniCore</span>
+    </div>
+
+    <ul class="nav flex-column sidebar-nav">
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-display"></i>
+                <span>PROVIDER NODE</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="revenue" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-currency-dollar"></i>
+                <span>REVENUE</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="scheduling" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-calendar3"></i>
+                <span>SCHEDULING</span>
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="settings" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-gear"></i>
+                <span>SETTINGS</span>
+            </NavLink>
+        </li>
+    </ul>
+</nav>
+
+<style>
+    .sidebar {
+        width: 220px;
+        min-height: 100vh;
+        background-color: #080808;
+        border-right: 1px solid #1a1a1a;
+        padding: 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+    }
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 1.5rem 1.25rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .brand-icon {
+        font-size: 1.5rem;
+        color: #00e676;
+    }
+
+    .brand-text {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 1px;
+    }
+
+    .sidebar-nav {
+        padding: 0 0.75rem;
+        gap: 2px;
+    }
+
+    .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0.7rem 1rem;
+        border-radius: 8px;
+        color: #666 !important;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-link i {
+        font-size: 1.05rem;
+    }
+
+    .sidebar-link:hover {
+        color: #aaa !important;
+        background-color: #111;
+    }
+
+    .sidebar-link.active {
+        color: #00e676 !important;
+        background-color: rgba(0, 230, 118, 0.08);
+    }
+
+    .sidebar-link.active i {
+        color: #00e676;
+    }
+</style>

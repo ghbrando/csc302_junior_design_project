@@ -1,0 +1,32 @@
+@inherits LayoutComponentBase
+
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: #0b0b0b;
+        color: #e0e0e0;
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        overflow-x: hidden;
+    }
+
+    .layout-wrapper {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    .main-content {
+        margin-left: 220px;
+        flex: 1;
+        min-height: 100vh;
+        background-color: #0b0b0b;
+    }
+</style>
+
+<div class="layout-wrapper">
+    <NavMenu />
+    <main class="main-content">
+        @Body
+    </main>
+</div>
