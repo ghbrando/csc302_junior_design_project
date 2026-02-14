@@ -2,6 +2,9 @@ using providerunicore.Components;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Google.Cloud.Firestore;
+using providerunicore.Repositories;
+using unicoreprovider.Models;
+using unicoreprovider.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,8 +17,23 @@ var projectId = builder.Configuration["Firebase:ProjectId"];
 // Add Authentication Services
 builder.Services.AddSingleton(FirestoreDb.Create(projectId));
 builder.Services.AddSingleton<IFirebaseAuthService, FirebaseAuthService>();
-// Add Provider Service
+
+// Register Repositories
+builder.Services.AddFirestoreRepository<Provider>(
+    collectionName: "providers",
+    documentIdSelector: p => p.FirebaseUid);
+
+builder.Services.AddFirestoreRepository<VirtualMachine>(
+    collectionName: "virtual_machines",
+    documentIdSelector: vm => vm.VmId);
+
+builder.Services.AddFirestoreRepository<Payout>(
+    collectionName: "payouts");
+
+// Add Services
 builder.Services.AddScoped<IProviderService, ProviderService>();
+builder.Services.AddScoped<IVmService, VirtualMachineService>();
+builder.Services.AddScoped<IPayoutService, PayoutService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
@@ -34,9 +52,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 
 builder.Services.AddAuthorization();
-
-// VM Service
-builder.Services.AddSingleton<unicoreprovider.Services.VmService>();
 
 var app = builder.Build();
 
