@@ -1,11 +1,11 @@
 @page "/dashboard/"
-@using unicoreprovider.Models 
+@using unicoreprovider.Models
 @using unicoreprovider.Services
 @using unicoreprovider.Components
 @using Microsoft.AspNetCore.Components.Web
 @using System.Threading
 @implements IDisposable
-@inject VmService VmService
+@inject IVmService VmService
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Provider Node</PageTitle>
@@ -160,7 +160,7 @@
 
     private async Task RefreshData()
     {
-        Vms = await VmService.GetMyVmsAsync();
+        Vms = (await VmService.GetAllVmsAsync()).ToList();
     }
 
     public void Dispose()
