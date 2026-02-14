@@ -1,11 +1,11 @@
 @using Microsoft.AspNetCore.Components.Routing
+@using providerunicore.Components.Dashboard
 
 <nav class="sidebar d-flex flex-column">
     <div class="sidebar-brand">
         <i class="bi bi-gpu-card brand-icon"></i>
         <span class="brand-text">UniCore</span>
     </div>
-
     <ul class="nav flex-column sidebar-nav">
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
@@ -32,7 +32,45 @@
             </NavLink>
         </li>
     </ul>
+
+    <div class="sidebar-user" @onclick="OpenModal">
+        <div class="user-info">
+            <div class="user-avatar">@UserName[0]</div>
+            <div class="user-details">
+                <span class="user-name">@UserName</span>
+                <span class="user-email">@UserEmail</span>
+            </div>
+        </div>
+        <button class="logout-btn" @onclick="HandleLogout" @onclick:stopPropagation="true">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>LOGOUT</span>
+        </button>
+    </div>
 </nav>
+
+<EditProfileModal    IsVisible="showModal"    InitialName="@UserName" InitialEmail="@UserEmail" OnClose="CloseModal"
+                     OnSave="SaveChanges" />
+
+@code {
+    private string UserName = "User";
+    private string UserEmail = "user@example.com";
+    private bool showModal = false;
+
+    private void OpenModal() => showModal = true;
+    private void CloseModal() => showModal = false;
+
+    private void SaveChanges((string Name, string Email) updated)
+    {
+        UserName = updated.Name;
+        UserEmail = updated.Email;
+        showModal = false;
+    }
+
+    private void HandleLogout()
+    {
+        // Add your logout logic here
+    }
+}
 
 <style>
     .sidebar {
@@ -70,6 +108,7 @@
     .sidebar-nav {
         padding: 0 0.75rem;
         gap: 2px;
+        flex: 1;
     }
 
     .sidebar-link {
@@ -102,5 +141,95 @@
 
     .sidebar-link.active i {
         color: var(--uc-green);
+    }
+
+    .sidebar-user {
+        margin: 0.75rem;
+        padding: 0.75rem;
+        background-color: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-user:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: #444;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--uc-radius);
+        background-color: var(--uc-green);
+        color: #000;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .user-name {
+        color: var(--uc-text-white);
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-email {
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .logout-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .logout-btn:hover {
+        background-color: rgba(255, 255, 255, 0.09);
+        color: #aaa;
+        border-color: #444;
+    }
+
+    .logout-btn i {
+        font-size: 0.85rem;
     }
 </style>

@@ -14,6 +14,7 @@ appsettings.Development.json
 *.userosscache
 *.sln.docstates
 unicore-junior-design-firebase-admin.json
+firebase-service-account.json
 
 ## Package Manager files
 .nuget/
