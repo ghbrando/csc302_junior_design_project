@@ -48,8 +48,8 @@
     </div>
 </nav>
 
-<EditProfileModal    IsVisible="showModal"    InitialName="@UserName" InitialEmail="@UserEmail" OnClose="CloseModal"
-                     OnSave="SaveChanges" />
+<EditProfileModal IsVisible="showModal" InitialName="@UserName" InitialEmail="@UserEmail" OnClose="CloseModal"
+                  OnSave="SaveChanges" />
 
 @code {
     private string UserName = "User";
@@ -66,9 +66,21 @@
         showModal = false;
     }
 
-    private void HandleLogout()
+    private async Task HandleLogout()
     {
         // Add your logout logic here
+        try
+        {
+            // Example: Clear user session, tokens, etc.
+            // For demonstration, we'll just reset the user info
+            UserName = "User";
+            UserEmail = "user@example.com";
+        }
+        catch (Exception ex)
+        {
+            // Log the exception if needed
+            Console.WriteLine($"Error during logout: {ex.Message}");
+        }
     }
 }
 
