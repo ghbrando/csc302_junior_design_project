@@ -6,6 +6,8 @@
 @using System.Threading
 @implements IDisposable
 @inject IVmService VmService
+@inject IProviderService ProviderService
+@inject IAuthStateService AuthState
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Provider Node</PageTitle>
@@ -61,7 +63,9 @@
         }
 
         <div class="col-12 col-md-6 col-lg-3">
-            <NodeStatusCard />
+            <NodeStatusCard
+                NodeStatus="@CurrentNodeStatus"
+                OnNodeStatusChanged="HandleNodeStatusChanged" />
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
@@ -145,11 +149,20 @@
     private CancellationTokenSource _cts = new();
     private double CpuLimit { get; set; } = 55;
     private double RamLimit { get; set; } = 80;
+    private Provider? CurrentProvider { get; set; }
+    private string CurrentNodeStatus { get; set; } = "Offline";
 
     protected override async Task OnInitializedAsync()
     {
+        // Load provider data
+        if (AuthState.FirebaseUid != null)
+        {
+            CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
+            CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
+        }
+
         await RefreshData();
-        _ = StartTimerAsync(); 
+        _ = StartTimerAsync();
     }
 
     private async Task StartTimerAsync()
@@ -161,6 +174,30 @@
     private async Task RefreshData()
     {
         Vms = (await VmService.GetAllVmsAsync()).ToList();
+
+        if (AuthState.FirebaseUid != null)
+        {
+            CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
+            CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
+        }
+    }
+
+    private async Task HandleNodeStatusChanged(string newStatus)
+    {
+        try
+        {
+            if (AuthState.FirebaseUid != null)
+            {
+                await ProviderService.UpdateNodeStatusAsync(newStatus, AuthState.FirebaseUid);
+                CurrentNodeStatus = newStatus;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error - in production, show user-friendly error message
+            Console.WriteLine($"Failed to update node status: {ex.Message}");
+        }
     }
 
     public void Dispose()

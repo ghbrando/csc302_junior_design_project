@@ -9,15 +9,15 @@
         </span>
 
         <label class="toggle-switch">
-            <input type="checkbox" @bind="IsAccepting" />
+            <input type="checkbox" checked="@IsOnline" @onchange="HandleToggle" />
             <span class="slider"></span>
         </label>
     </div>
 
     <div class="mt-2">
         <h2 class="fw-bold mb-0"
-            style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @(IsAccepting ? "var(--uc-green)" : "var(--uc-text-muted)"); text-shadow: @(IsAccepting ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
-            @(IsAccepting ? "ACCEPTING" : "OFFLINE")
+            style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @(IsOnline ? "var(--uc-green)" : "var(--uc-text-muted)"); text-shadow: @(IsOnline ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
+            @(IsOnline ? "ONLINE" : "OFFLINE")
         </h2>
     </div>
 </div>
@@ -71,5 +71,18 @@
 </style>
 
 @code {
-    private bool IsAccepting { get; set; } = true;
+    [Parameter]
+    public string NodeStatus { get; set; } = "Offline";
+
+    [Parameter]
+    public EventCallback<string> OnNodeStatusChanged { get; set; }
+
+    private bool IsOnline => NodeStatus == "Online";
+
+    private async Task HandleToggle(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        var newStatus = isChecked ? "Online" : "Offline";
+        await OnNodeStatusChanged.InvokeAsync(newStatus);
+    }
 }

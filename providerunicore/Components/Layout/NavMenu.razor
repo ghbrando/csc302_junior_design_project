@@ -1,12 +1,18 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using providerunicore.Components.Dashboard
+@inject IAuthStateService AuthState
+@inject NavigationManager Nav
+@rendermode RenderMode.InteractiveServer
+@inject IJSRuntime JS
 
 <nav class="sidebar d-flex flex-column">
-    <div class="sidebar-brand">
-        <i class="bi bi-gpu-card brand-icon"></i>
-        <span class="brand-text">UniCore</span>
+    <!-- Removed default bottom margin from logo container -->
+    <div class="sidebar-brand mb-0 pb-0">
+        <img src="/unicore-logo.png" alt="Unicore Logo" width="204" height="136" />
     </div>
-    <ul class="nav flex-column sidebar-nav">
+
+    <!-- Removed default top margin and padding from the list -->
+    <ul class="nav flex-column sidebar-nav mt-0 pt-0">
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
                 <i class="bi bi-display"></i>
@@ -33,7 +39,7 @@
         </li>
     </ul>
 
-    <div class="sidebar-user" @onclick="OpenModal">
+    <div class="sidebar-user">
         <div class="user-info">
             <div class="user-avatar">@UserName[0]</div>
             <div class="user-details">
@@ -48,39 +54,34 @@
     </div>
 </nav>
 
-<EditProfileModal IsVisible="showModal" InitialName="@UserName" InitialEmail="@UserEmail" OnClose="CloseModal"
-                  OnSave="SaveChanges" />
 
 @code {
-    private string UserName = "User";
-    private string UserEmail = "user@example.com";
-    private bool showModal = false;
-
-    private void OpenModal() => showModal = true;
-    private void CloseModal() => showModal = false;
-
-    private void SaveChanges((string Name, string Email) updated)
-    {
-        UserName = updated.Name;
-        UserEmail = updated.Email;
-        showModal = false;
-    }
+    private string UserName => AuthState.Name ?? "Provider";
+    private string UserEmail => AuthState.Email ?? "";
 
     private async Task HandleLogout()
     {
-        // Add your logout logic here
-        try
+        AuthState.ClearAuthState();
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AuthState.FirebaseUid == null)
         {
-            // Example: Clear user session, tokens, etc.
-            // For demonstration, we'll just reset the user info
-            UserName = "User";
-            UserEmail = "user@example.com";
+            var stored = await JS.InvokeAsync<StoredAuth>("authStorage.load");
+            if (stored?.Uid != null)
+            {
+                AuthState.SetAuthState(stored.Uid, stored.Email ?? "", stored.Name ?? "Provider");
+                StateHasChanged();
+            }
         }
-        catch (Exception ex)
-        {
-            // Log the exception if needed
-            Console.WriteLine($"Error during logout: {ex.Message}");
-        }
+    }
+    private class StoredAuth
+    {
+        public string? Uid { get; set; }
+        public string? Email { get; set; }
+        public string? Name { get; set; }
     }
 }
 

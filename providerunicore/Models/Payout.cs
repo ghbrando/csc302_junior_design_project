@@ -12,7 +12,7 @@ public class Payout
     public DateTime Date { get; set; }
 
     [FirestoreProperty("amount")]
-    public decimal Amount { get; set; }
+    public double Amount { get; set; }
 
     [FirestoreProperty("method")]
     public string Method { get; set; } = string.Empty;

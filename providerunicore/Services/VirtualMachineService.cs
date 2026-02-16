@@ -37,7 +37,7 @@ public class VirtualMachineService : IVmService
         return vm;
     }
 
-    public async Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, decimal cpu, decimal gpu, decimal ram)
+    public async Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram)
     {
         var vm = await _repository.GetByIdAsync(vmId);
 

@@ -27,7 +27,7 @@ public class PayoutService : IPayoutService
         return await _repository.WhereAsync("status", status);
     }
 
-    public async Task<Payout> CreatePayoutAsync(decimal amount, string method)
+    public async Task<Payout> CreatePayoutAsync(double amount, string method)
     {
         var payout = new Payout
         {

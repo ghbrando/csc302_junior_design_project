@@ -15,4 +15,6 @@ public class Provider
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     [FirestoreProperty("last_login")]
     public DateTime LastLogin { get; set; } = DateTime.UtcNow;
+    [FirestoreProperty("node_status")]
+    public string NodeStatus {get; set; } = "Offline";
 }

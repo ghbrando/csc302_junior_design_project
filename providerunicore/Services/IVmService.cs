@@ -8,6 +8,6 @@ public interface IVmService
     Task<IEnumerable<VirtualMachine>> GetAllVmsAsync();
     Task<IEnumerable<VirtualMachine>> GetVmsByStatusAsync(string status);
     Task<VirtualMachine> CreateVmAsync(VirtualMachine vm);
-    Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, decimal cpu, decimal gpu, decimal ram);
+    Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram);
     Task DeleteVmAsync(string vmId);
 }

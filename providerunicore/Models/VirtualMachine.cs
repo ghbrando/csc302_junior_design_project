@@ -18,7 +18,19 @@ public class VirtualMachine
     public string Status { get; set; } = "Stopped";
 
     [FirestoreProperty("uptime")]
-    public TimeSpan Uptime { get; set; }
+    public string UptimeString { get; set; } = "00:00:00";
+
+    // Computed property to get uptime as TimeSpan
+    [FirestoreProperty]
+    public TimeSpan Uptime
+    {
+        get
+        {
+            if (TimeSpan.TryParse(UptimeString, out var timeSpan))
+                return timeSpan;
+            return TimeSpan.Zero;
+        }
+    }
 
     // Hardware Specs
     [FirestoreProperty("cpu_cores")]
@@ -29,20 +41,20 @@ public class VirtualMachine
 
     // Financials
     [FirestoreProperty("cost_per_hour")]
-    public decimal CostPerHour { get; set; }
+    public double CostPerHour { get; set; }
 
     [FirestoreProperty("current_session_cost")]
-    public decimal CurrentSessionCost { get; set; }
+    public double CurrentSessionCost { get; set; }
 
     // Live Metrics
     [FirestoreProperty("current_cpu_usage")]
-    public decimal CurrentCpuUsage { get; set; }
+    public double CurrentCpuUsage { get; set; }
 
     [FirestoreProperty("current_gpu_usage")]
-    public decimal CurrentGpuUsage { get; set; }
+    public double CurrentGpuUsage { get; set; }
 
     [FirestoreProperty("current_ram_usage")]
-    public decimal CurrentRamUsage { get; set; }
+    public double CurrentRamUsage { get; set; }
 
     // History
     [FirestoreProperty("cpu_history")]
