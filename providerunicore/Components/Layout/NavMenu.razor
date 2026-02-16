@@ -1,12 +1,18 @@
 @using Microsoft.AspNetCore.Components.Routing
+@using providerunicore.Components.Dashboard
+@inject IAuthStateService AuthState
+@inject NavigationManager Nav
+@rendermode RenderMode.InteractiveServer
+@inject IJSRuntime JS
 
 <nav class="sidebar d-flex flex-column">
-    <div class="sidebar-brand">
-        <i class="bi bi-gpu-card brand-icon"></i>
-        <span class="brand-text">UniCore</span>
+    <!-- Removed default bottom margin from logo container -->
+    <div class="sidebar-brand mb-0 pb-0">
+        <img src="/unicore-logo.png" alt="Unicore Logo" width="204" height="136" />
     </div>
 
-    <ul class="nav flex-column sidebar-nav">
+    <!-- Removed default top margin and padding from the list -->
+    <ul class="nav flex-column sidebar-nav mt-0 pt-0">
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
                 <i class="bi bi-display"></i>
@@ -32,7 +38,52 @@
             </NavLink>
         </li>
     </ul>
+
+    <div class="sidebar-user">
+        <div class="user-info">
+            <div class="user-avatar">@UserName[0]</div>
+            <div class="user-details">
+                <span class="user-name">@UserName</span>
+                <span class="user-email">@UserEmail</span>
+            </div>
+        </div>
+        <button class="logout-btn" @onclick="HandleLogout" @onclick:stopPropagation="true">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>LOGOUT</span>
+        </button>
+    </div>
 </nav>
+
+
+@code {
+    private string UserName => AuthState.Name ?? "Provider";
+    private string UserEmail => AuthState.Email ?? "";
+
+    private async Task HandleLogout()
+    {
+        AuthState.ClearAuthState();
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AuthState.FirebaseUid == null)
+        {
+            var stored = await JS.InvokeAsync<StoredAuth>("authStorage.load");
+            if (stored?.Uid != null)
+            {
+                AuthState.SetAuthState(stored.Uid, stored.Email ?? "", stored.Name ?? "Provider");
+                StateHasChanged();
+            }
+        }
+    }
+    private class StoredAuth
+    {
+        public string? Uid { get; set; }
+        public string? Email { get; set; }
+        public string? Name { get; set; }
+    }
+}
 
 <style>
     .sidebar {
@@ -70,6 +121,7 @@
     .sidebar-nav {
         padding: 0 0.75rem;
         gap: 2px;
+        flex: 1;
     }
 
     .sidebar-link {
@@ -102,5 +154,95 @@
 
     .sidebar-link.active i {
         color: var(--uc-green);
+    }
+
+    .sidebar-user {
+        margin: 0.75rem;
+        padding: 0.75rem;
+        background-color: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-user:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: #444;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--uc-radius);
+        background-color: var(--uc-green);
+        color: #000;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .user-name {
+        color: var(--uc-text-white);
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-email {
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .logout-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .logout-btn:hover {
+        background-color: rgba(255, 255, 255, 0.09);
+        color: #aaa;
+        border-color: #444;
+    }
+
+    .logout-btn i {
+        font-size: 0.85rem;
     }
 </style>

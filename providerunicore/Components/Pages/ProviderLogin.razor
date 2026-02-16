@@ -5,6 +5,7 @@
 @inject IFirebaseAuthService FirebaseAuth
 @inject IProviderService ProviderService
 @inject IAuthStateService AuthState
+@inject IJSRuntime JS
 
 <!-- Back link -->
 <a href="/" class="back-link">
@@ -40,21 +41,19 @@
         {
             <div class="field-group">
                 <label class="field-label">FULL NAME</label>
-                <input class="field-input" type="text" placeholder="John Doe"
-                       @bind="name" @bind:event="oninput" />
+                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" />
             </div>
         }
 
         <div class="field-group">
             <label class="field-label">EMAIL ADDRESS</label>
-            <input class="field-input" type="email" placeholder="john@example.com"
-                   @bind="email" @bind:event="oninput" />
+            <input class="field-input" type="email" placeholder="john@example.com" @bind="email"
+                   @bind:event="oninput" />
         </div>
 
         <div class="field-group">
             <label class="field-label">PASSWORD</label>
-            <input class="field-input" type="password" placeholder="••••••••"
-                   @bind="password" @bind:event="oninput" />
+            <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" />
         </div>
 
         <button class="auth-submit" @onclick="HandleSubmit" disabled="@isLoading">
@@ -86,13 +85,13 @@
 </div>
 
 @code {
-    private string name     = string.Empty;
-    private string email    = string.Empty;
+    private string name = string.Empty;
+    private string email = string.Empty;
     private string password = string.Empty;
 
-    private bool   isRegister    = false;
-    private bool   isLoading     = false;
-    private string errorMessage  = string.Empty;
+    private bool isRegister = false;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
 
     private async Task HandleSubmit()
     {
@@ -117,9 +116,9 @@
             if (isRegister)
             {
                 // Create Firebase user, then save provider in Firestore
-                var idToken      = await FirebaseAuth.SignUpAsync(email, password);
-                var decoded      = await FirebaseAuth.VerifyIDTokenAsync(idToken);
-                var existing     = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
+                var idToken = await FirebaseAuth.SignUpAsync(email, password);
+                var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+                var existing = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
 
                 if (existing != null)
                 {
@@ -128,13 +127,14 @@
                 }
 
                 await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
-                AuthState.SetAuthState(decoded.Uid, email);
+                AuthState.SetAuthState(decoded.Uid, email, name);
+                await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
             }
             else
             {
                 // Verify credentials and update last login
-                var idToken  = await FirebaseAuth.SignInAsync(email, password);
-                var decoded  = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+                var idToken = await FirebaseAuth.SignInAsync(email, password);
+                var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
                 var provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
 
                 if (provider == null)
@@ -144,7 +144,8 @@
                 }
 
                 await ProviderService.UpdateLastLoginAsync(decoded.Uid);
-                AuthState.SetAuthState(decoded.Uid, email);
+                AuthState.SetAuthState(decoded.Uid, email, provider.Name);
+                await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, provider.Name);
             }
 
             Nav.NavigateTo("/dashboard/");

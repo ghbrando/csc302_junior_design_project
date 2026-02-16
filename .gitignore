@@ -17,6 +17,7 @@ providerunicore/unicore-junior-design-firebase-admin.json
 providerunicore/unicore-junior-design-firebase-adminsdk-fbsvc-984c3317cd.json
 providerunicore/*firebase-service-account*.json
 providerunicore/*firebase-adminsdk*.json
+providerunicore/appsettings.json
 ## Package Manager files
 .nuget/
 # Restored NuGet packages are usually stored in a global cache, 
