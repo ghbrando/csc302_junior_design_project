@@ -17,4 +17,8 @@ public class Provider
     public DateTime LastLogin { get; set; } = DateTime.UtcNow;
     [FirestoreProperty("node_status")]
     public string NodeStatus {get; set; } = "Offline";
+    [FirestoreProperty("cpu_limit_percent")]
+    public double CpuLimitPercent { get; set; } = 55;
+    [FirestoreProperty("ram_limit_gb")]
+    public double RamLimitGB { get; set; } = 4;
 }

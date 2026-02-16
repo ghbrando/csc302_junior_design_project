@@ -84,7 +84,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> Logout()
     {
-        var uid = User.FindFirst("user_id")?.Value;
+        var uid = User.FindFirst("sub")?.Value;
         if (uid == null) return Unauthorized();
 
         await FirebaseAuth.DefaultInstance.RevokeRefreshTokensAsync(uid);
@@ -97,7 +97,7 @@ public class AuthController : ControllerBase
     [Authorize]
     public async Task<IActionResult> GetCurrentProvider()
     {
-        var uid = User.FindFirst("user_id")?.Value;
+        var uid = User.FindFirst("sub")?.Value;
         if (uid == null) return Unauthorized();
 
         var provider = await _providerService.GetByFirebaseUidAsync(uid);

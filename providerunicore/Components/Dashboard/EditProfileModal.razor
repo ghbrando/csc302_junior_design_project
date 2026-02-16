@@ -3,7 +3,7 @@
     <div class="modal-backdrop" @onclick="HandleBackdropClick">
         <div class="profile-modal" @onclick:stopPropagation="true">
             <div class="modal-header">
-                <div class="modal-avatar">@EditName[0]</div>
+                <div class="modal-avatar">@(EditName.Length > 0 ? EditName[0] : '?')</div>
                 <div>
                     <h2 class="modal-title">Edit Profile</h2>
                     <p class="modal-subtitle">Update your account details</p>
@@ -92,7 +92,8 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(EditEmail) || !EditEmail.Contains("@"))
+        if (string.IsNullOrWhiteSpace(EditEmail) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(EditEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
         {
             errorMessage = "Please enter a valid email address.";
             return;

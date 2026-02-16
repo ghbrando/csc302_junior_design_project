@@ -46,7 +46,7 @@ public class FirebaseAuthService : IFirebaseAuthService
         var payload  = new { email, password, returnSecureToken = true };
         var response = await http.PostAsJsonAsync(SignInUrl + _webApiKey, payload);
         var result   = await response.Content.ReadFromJsonAsync<FirebaseRestResponse>()
-                       ?? throw new Exception("Empty response from Firebase.");
+                       ?? throw new Exception("Invalid response format from Firebase.");
 
         if (!string.IsNullOrEmpty(result.Error?.Message))
             throw new Exception(result.Error.Message);
@@ -61,7 +61,7 @@ public class FirebaseAuthService : IFirebaseAuthService
         var payload  = new { email, password, returnSecureToken = true };
         var response = await http.PostAsJsonAsync(SignUpUrl + _webApiKey, payload);
         var result   = await response.Content.ReadFromJsonAsync<FirebaseRestResponse>()
-                       ?? throw new Exception("Empty response from Firebase.");
+                       ?? throw new Exception("Invalid response format from Firebase.");
 
         if (!string.IsNullOrEmpty(result.Error?.Message))
             throw new Exception(result.Error.Message);

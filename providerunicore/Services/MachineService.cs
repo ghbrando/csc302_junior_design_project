@@ -64,12 +64,14 @@ public class MachineService : IMachineService
         foreach (ManagementObject obj in searcher.Get())
         {
             specs.CpuName = obj["Name"]?.ToString()?.Trim() ?? string.Empty;
-            specs.CpuCores = Convert.ToInt32(obj["NumberOfCores"] ?? 0);
-            specs.CpuThreads = Convert.ToInt32(obj["NumberOfLogicalProcessors"] ?? 0);
+            if (int.TryParse(obj["NumberOfCores"]?.ToString() ?? "0", out int cores))
+                specs.CpuCores = cores;
+            if (int.TryParse(obj["NumberOfLogicalProcessors"]?.ToString() ?? "0", out int threads))
+                specs.CpuThreads = threads;
 
             // MaxClockSpeed is in MHz
-            double mhz = Convert.ToDouble(obj["MaxClockSpeed"] ?? 0);
-            specs.CpuClockSpeedGHz = Math.Round(mhz / 1000.0, 2);
+            if (double.TryParse(obj["MaxClockSpeed"]?.ToString() ?? "0", out double mhz))
+                specs.CpuClockSpeedGHz = Math.Round(mhz / 1000.0, 2);
             break; // Use first CPU
         }
     }
@@ -83,7 +85,7 @@ public class MachineService : IMachineService
         {
             totalBytes += Convert.ToInt64(obj["Capacity"] ?? 0);
         }
-        specs.RamGB = (int)(totalBytes / (1024L * 1024 * 1024));
+        specs.RamGB = (int)Math.Min(totalBytes / (1024L * 1024 * 1024), int.MaxValue);
     }
 
     [SupportedOSPlatform("windows")]
@@ -113,7 +115,7 @@ public class MachineService : IMachineService
         {
             totalBytes += Convert.ToInt64(obj["Size"] ?? 0);
         }
-        specs.DiskGB = (int)(totalBytes / (1024L * 1024 * 1024));
+        specs.DiskGB = (int)Math.Min(totalBytes / (1024L * 1024 * 1024), int.MaxValue);
     }
 
     [SupportedOSPlatform("windows")]
@@ -138,9 +140,9 @@ public class MachineService : IMachineService
             OsName = RuntimeInformation.OSDescription
         };
 
-        try { DetectCpuLinux(specs); } catch { /* best-effort */ }
-        try { DetectRamLinux(specs); } catch { /* best-effort */ }
-        try { DetectDiskLinux(specs); } catch { /* best-effort */ }
+        try { DetectCpuLinux(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CPU detection failed: {ex.Message}"); }
+        try { DetectRamLinux(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RAM detection failed: {ex.Message}"); }
+        try { DetectDiskLinux(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Disk detection failed: {ex.Message}"); }
 
         return specs;
     }
@@ -195,6 +197,6 @@ public class MachineService : IMachineService
             .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
             .Sum(d => d.TotalSize);
 
-        specs.DiskGB = (int)(totalBytes / (1024L * 1024 * 1024));
+        specs.DiskGB = (int)Math.Min(totalBytes / (1024L * 1024 * 1024), int.MaxValue);
     }
 }
