@@ -3,11 +3,11 @@
 @using unicoreprovider.Services
 @using unicoreprovider.Components
 @using Microsoft.AspNetCore.Components.Web
+@inherits AuthorizedPageBase
 @using System.Threading
 @implements IDisposable
 @inject IVmService VmService
 @inject IProviderService ProviderService
-@inject IAuthStateService AuthState
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Provider Node</PageTitle>
@@ -33,6 +33,7 @@
         padding: 0.5rem 1rem;
         transition: all 0.2s;
     }
+
     .btn-emergency:hover {
         background-color: var(--uc-red-dark);
         color: white;
@@ -40,7 +41,7 @@
 </style>
 
 <div class="container-fluid px-4 py-3">
-    
+
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <div class="d-flex align-items-center gap-3">
@@ -49,7 +50,7 @@
             </div>
             <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Real-time resource monitoring & control</p>
         </div>
-        
+
         <button class="btn btn-emergency rounded-1">
             <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
         </button>
@@ -59,89 +60,73 @@
         @{
             var runningCount = Vms.Count(v => v.Status == "Running");
             var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
-            var uptime = "99.2"; 
+            var uptime = "99.2";
         }
 
         <div class="col-12 col-md-6 col-lg-3">
-            <NodeStatusCard
-                NodeStatus="@CurrentNodeStatus"
-                OnNodeStatusChanged="HandleNodeStatusChanged" />
+            <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Active VMs" 
-                      Value="@runningCount.ToString()" 
-                      Unit="running"
-                      IconClass="bi bi-activity"
-                      Color="#3b82f6" /> 
+            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
+                      Color="#3b82f6" />
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Hourly Rate" 
-                      Value="@totalHourlyRate.ToString("C")" 
-                      Unit="/hr"
-                      IconClass="bi bi-graph-up-arrow"
-                      Color="#00e676"
-                      ValueColor="#00e676" />
+            <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
+                      IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Uptime" 
-                      Value="@uptime" 
-                      Unit="%"
-                      IconClass="bi bi-lightning-charge-fill"
-                      Color="#ffeb3b" />
+            <InfoCard Title="Uptime" Value="@uptime" Unit="%" IconClass="bi bi-lightning-charge-fill" Color="#ffeb3b" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-md-6">
-            <ResourceSlider Title="CPU CORE LIMIT" 
-                            Unit="percent" 
-                            Max="100" MinLimit="20"
-                            Color="#00E5FF" 
-                            IconClass="bi bi-cpu"
-                            @bind-Value="CpuLimit" />
+            <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
+                            IconClass="bi bi-cpu" @bind-Value="CpuLimit" />
         </div>
         <div class="col-md-6">
-            <ResourceSlider Title="RAM ALLOCATION" 
-                            Unit="gigabytes" 
-                            Max="128" MinLimit="20"
-                            Color="#D500F9" 
-                            IconClass="bi bi-hdd-rack"
-                            @bind-Value="RamLimit" />
+            <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes" Max="128" MinLimit="20" Color="#D500F9"
+                            IconClass="bi bi-hdd-rack" @bind-Value="RamLimit" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-12">
-            <h6 class="text-uppercase text-muted" style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px;">Real-Time Monitoring</h6>
-        </div>
-        @{
-            var activeVms = Vms.Where(v => v.Status == "Running").ToList();
-            var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
-            var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
-            var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
-            var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
-        }
+            <h6 class="text-uppercase text-muted"
+                style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px;">Real-Time
+                Monitoring</h6>
+            </div>
+            @{
+                var activeVms = Vms.Where(v => v.Status == "Running").ToList();
+                var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
+                var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
+                var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
+                var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
+            }
 
-        <div class="col-md-4">
-            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6" DataPoints="@demoVm.CpuHistory" /> 
+            <div class="col-md-4">
+                <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6"
+                            DataPoints="@demoVm.CpuHistory" />
+            </div>
+            <div class="col-md-4">
+                <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981"
+                            DataPoints="@demoVm.GpuHistory" />
+            </div>
+            <div class="col-md-4">
+                <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
+                            Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
+            </div>
         </div>
-        <div class="col-md-4">
-            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981" DataPoints="@demoVm.GpuHistory" />
-        </div>
-        <div class="col-md-4">
-            <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam/100)).ToString("0.0"))" Unit="GB" Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
+
+        <div class="row g-3">
+            <div class="col-12">
+                <VmList Vms="@Vms" />
+            </div>
         </div>
     </div>
-
-    <div class="row g-3">
-        <div class="col-12">
-             <VmList Vms="@Vms" />
-        </div>
-    </div>
-</div>
 
 @code {
     private List<VirtualMachine> Vms { get; set; } = new();
@@ -168,7 +153,11 @@
     private async Task StartTimerAsync()
     {
         _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
-        try { while (await _timer.WaitForNextTickAsync(_cts.Token)) { await RefreshData(); await InvokeAsync(StateHasChanged); } } catch (OperationCanceledException) { }
+        try
+        {
+            while (await _timer.WaitForNextTickAsync(_cts.Token)) { await RefreshData(); await InvokeAsync(StateHasChanged); }
+        }
+        catch (OperationCanceledException) { }
     }
 
     private async Task RefreshData()

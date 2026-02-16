@@ -2,8 +2,10 @@
 @using unicoreprovider.Models
 @using unicoreprovider.Services
 @using unicoreprovider.Components
+@inherits AuthorizedPageBase
 @using Microsoft.AspNetCore.Components.Web
 @using static unicoreprovider.Components.RevenueChart
+
 
 <PageTitle>Revenue Tracker</PageTitle>
 
@@ -23,24 +25,15 @@
     @* Balance Cards *@
     <div class="row mb-3 g-3">
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Total Balance"
-                         Value="$583.50"
-                         IconClass="bi bi-currency-dollar"
-                         IconBgColor="#1a5c3a"
+            <BalanceCard Title="Total Balance" Value="$583.50" IconClass="bi bi-currency-dollar" IconBgColor="#1a5c3a"
                          ValueColor="#00e676" />
         </div>
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Available"
-                         Value="$464.90"
-                         IconClass="bi bi-graph-up-arrow"
-                         IconBgColor="#0e4a5c"
+            <BalanceCard Title="Available" Value="$464.90" IconClass="bi bi-graph-up-arrow" IconBgColor="#0e4a5c"
                          ValueColor="#00bcd4" />
         </div>
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Pending"
-                         Value="$118.60"
-                         IconClass="bi bi-clock-history"
-                         IconBgColor="#5c4a1a"
+            <BalanceCard Title="Pending" Value="$118.60" IconClass="bi bi-clock-history" IconBgColor="#5c4a1a"
                          ValueColor="#ffab00" />
         </div>
     </div>
@@ -70,6 +63,7 @@
         padding: 0.5rem 1rem;
         transition: all 0.2s;
     }
+
     .btn-payout:hover {
         background-color: var(--uc-green);
         color: var(--uc-bg-body);
@@ -90,8 +84,10 @@
 
     private List<Payout> Payouts { get; set; } = new()
     {
-        new() { Id = "PAY-2024-089", Date = new DateTime(2024, 2, 1), Amount = 245.00, Method = "Bank Transfer", Status = "Completed" },
-        new() { Id = "PAY-2024-088", Date = new DateTime(2024, 1, 28), Amount = 189.50, Method = "Bank Transfer", Status = "Completed" },
+        new() { Id = "PAY-2024-089", Date = new DateTime(2024, 2, 1), Amount = 245.00, Method = "Bank Transfer", Status =
+"Completed" },
+        new() { Id = "PAY-2024-088", Date = new DateTime(2024, 1, 28), Amount = 189.50, Method = "Bank Transfer", Status =
+"Completed" },
         new() { Id = "PAY-2024-087", Date = new DateTime(2024, 1, 21), Amount = 312.00, Method = "Crypto", Status = "Completed" },
     };
 }
