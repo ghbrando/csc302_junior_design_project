@@ -30,11 +30,16 @@ builder.Services.AddFirestoreRepository<VirtualMachine>(
 builder.Services.AddFirestoreRepository<Payout>(
     collectionName: "payouts");
 
+builder.Services.AddFirestoreRepository<MachineSpecs>(
+    collectionName: "machine_specs",
+    documentIdSelector: ms => ms.ProviderId);
+
 // Add Services
 builder.Services.AddScoped<IProviderService, ProviderService>();
 builder.Services.AddScoped<IVmService, VirtualMachineService>();
 builder.Services.AddScoped<IPayoutService, PayoutService>();
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();
+builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 

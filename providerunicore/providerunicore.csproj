@@ -10,6 +10,7 @@
     <PackageReference Include="FirebaseAdmin" Version="3.*" />
     <PackageReference Include="Google.Cloud.Firestore" Version="4.1.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <PackageReference Include="System.Management" Version="10.0.3" />
   </ItemGroup>
 
 </Project>
