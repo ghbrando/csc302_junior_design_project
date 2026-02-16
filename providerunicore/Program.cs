@@ -34,6 +34,7 @@ builder.Services.AddFirestoreRepository<Payout>(
 builder.Services.AddScoped<IProviderService, ProviderService>();
 builder.Services.AddScoped<IVmService, VirtualMachineService>();
 builder.Services.AddScoped<IPayoutService, PayoutService>();
+builder.Services.AddScoped<IAuthStateService, AuthStateService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
