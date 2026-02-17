@@ -1,0 +1,24 @@
+namespace unicoreprovider.Services;
+
+public interface IDockerService
+{
+    /// <summary>
+    /// Returns true if a Docker daemon is reachable on any known endpoint
+    /// (Windows named pipe or TCP localhost:2375).
+    /// </summary>
+    Task<bool> IsReachableAsync();
+
+    /// <summary>
+    /// Pulls <paramref name="image"/> if not present locally, creates a container,
+    /// starts it, and returns the Docker container ID.
+    /// </summary>
+    Task<string> StartContainerAsync(string name, string image);
+
+    /// <summary>Stops and removes a container by its Docker container ID.</summary>
+    Task StopContainerAsync(string containerId);
+
+    /// <summary>
+    /// Returns a one-shot CPU% and RAM% snapshot for a running container.
+    /// </summary>
+    Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId);
+}

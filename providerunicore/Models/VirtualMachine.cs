@@ -20,8 +20,7 @@ public class VirtualMachine
     [FirestoreProperty("uptime")]
     public string UptimeString { get; set; } = "00:00:00";
 
-    // Computed property to get uptime as TimeSpan
-    [FirestoreProperty]
+    // Computed property to get uptime as TimeSpan — not stored in Firestore, derived from UptimeString
     public TimeSpan Uptime
     {
         get
@@ -65,4 +64,14 @@ public class VirtualMachine
 
     [FirestoreProperty("ram_history")]
     public List<double> RamHistory { get; set; } = new();
+
+    // Docker container info
+    [FirestoreProperty("container_id")]
+    public string ContainerId { get; set; } = string.Empty;
+
+    [FirestoreProperty("started_at")]
+    public DateTime? StartedAt { get; set; }
+
+    [FirestoreProperty("image")]
+    public string Image { get; set; } = string.Empty;
 }

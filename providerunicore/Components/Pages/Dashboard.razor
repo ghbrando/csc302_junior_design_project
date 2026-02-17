@@ -9,13 +9,14 @@
 @inject IVmService VmService
 @inject IProviderService ProviderService
 @inject IMachineService MachineService
+@inject IDockerService DockerService
+@inject ContainerMonitorService MonitorService
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreprovider.Services.AuthorizedPageBase
 
 <PageTitle>Provider Node</PageTitle>
 
 <style>
-    /* Custom "Online" Badge */
     .badge-online {
         background-color: rgba(0, 230, 118, 0.1);
         color: var(--uc-green);
@@ -25,7 +26,6 @@
         letter-spacing: 1px;
     }
 
-    /* Emergency Button */
     .btn-emergency {
         border: 1px solid var(--uc-red-dark);
         color: var(--uc-red);
@@ -40,6 +40,77 @@
         background-color: var(--uc-red-dark);
         color: white;
     }
+
+    .btn-launch-vm {
+        border: 1px solid rgba(0, 230, 118, 0.4);
+        color: var(--uc-green);
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+
+    .btn-launch-vm:hover:not(:disabled) {
+        background-color: rgba(0, 230, 118, 0.15);
+        color: var(--uc-green);
+    }
+
+    .btn-launch-vm:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    /* CSS-driven modal — no JS interop needed */
+    .uc-modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 1050;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .uc-modal {
+        background: var(--uc-dark-2);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 1.75rem;
+        width: 100%;
+        max-width: 420px;
+    }
+
+    .uc-modal-title {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #e2e8f0;
+        margin-bottom: 1.25rem;
+    }
+
+    .uc-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.8px;
+        color: #64748b;
+        text-transform: uppercase;
+        margin-bottom: 0.4rem;
+    }
+
+    .uc-select {
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #e2e8f0;
+        font-size: 0.83rem;
+        border-radius: 4px;
+        padding: 0.45rem 0.7rem;
+        width: 100%;
+    }
+
+    .uc-select:focus {
+        outline: none;
+        border-color: rgba(0, 230, 118, 0.5);
+    }
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -53,9 +124,14 @@
             <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Real-time resource monitoring & control</p>
         </div>
 
-        <button class="btn btn-emergency rounded-1">
-            <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
-        </button>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-launch-vm rounded-1" @onclick="OpenLaunchModal">
+                <i class="bi bi-play-circle me-2"></i> LAUNCH VM
+            </button>
+            <button class="btn btn-emergency rounded-1">
+                <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
+            </button>
+        </div>
     </div>
 
     <div class="row mb-3 g-3">
@@ -73,71 +149,138 @@
         <div class="col-12 col-md-6 col-lg-3">
             <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
         </div>
-
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
-                      Color="#3b82f6" />
+            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running"
+                      IconClass="bi bi-activity" Color="#3b82f6" />
         </div>
-
         <div class="col-12 col-md-6 col-lg-3">
             <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
                       IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
         </div>
-
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
-                      Color="#ffeb3b" />
+            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit=""
+                      IconClass="bi bi-lightning-charge-fill" Color="#ffeb3b" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-md-6">
             <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
-                            IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
+                            IconClass="bi bi-cpu" Value="@CpuLimit"
+                            ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
         </div>
         <div class="col-md-6">
             <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
                             Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
-                            IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
+                            IconClass="bi bi-hdd-rack" Value="@RamLimit"
+                            ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-12">
             <h6 class="text-uppercase text-muted"
-                style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px;">Real-Time
-                Monitoring</h6>
-            </div>
-            @{
-                var activeVms = Vms.Where(v => v.Status == "Running").ToList();
-                var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
-                var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
-                var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
-                var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
-            }
-
-            <div class="col-md-4">
-                <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6"
-                            DataPoints="@demoVm.CpuHistory" />
-            </div>
-            <div class="col-md-4">
-                <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981"
-                            DataPoints="@demoVm.GpuHistory" />
-            </div>
-            <div class="col-md-4">
-                <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
-                            Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
-            </div>
+                style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px;">
+                Real-Time Monitoring
+            </h6>
         </div>
-
-        <div class="row g-3">
-            <div class="col-12">
-                <VmList Vms="@Vms" />
-            </div>
+        @{
+            var activeVms = Vms.Where(v => v.Status == "Running").ToList();
+            var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
+            var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
+            var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
+            var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
+        }
+        <div class="col-md-4">
+            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)"
+                        Color="#3b82f6" DataPoints="@demoVm.CpuHistory" />
+        </div>
+        <div class="col-md-4">
+            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)"
+                        Color="#10b981" DataPoints="@demoVm.GpuHistory" />
+        </div>
+        <div class="col-md-4">
+            <MetricCard Title="RAM"
+                        Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
+                        Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
         </div>
     </div>
 
+    <div class="row g-3">
+        <div class="col-12">
+            <VmList Vms="@Vms" />
+        </div>
+    </div>
+
+</div>
+
+<!-- Launch VM modal -->
+@if (_showLaunchModal)
+{
+    <div class="uc-modal-backdrop" @onclick="CloseLaunchModal">
+        <div class="uc-modal" @onclick:stopPropagation="true">
+            <div class="uc-modal-title">
+                <i class="bi bi-play-circle me-2" style="color: var(--uc-green);"></i>
+                Launch Virtual Machine
+            </div>
+
+            <div class="mb-3">
+                <div class="uc-label">Container Image</div>
+                <select class="uc-select" @bind="_selectedImage">
+                    @foreach (var img in AvailableImages)
+                    {
+                        <option value="@img.Value">@img.Label</option>
+                    }
+                </select>
+            </div>
+
+            @if (_launchError != null)
+            {
+                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                    <i class="bi bi-exclamation-circle me-1"></i>@_launchError
+                </div>
+            }
+
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button class="btn btn-sm btn-outline-secondary rounded-1"
+                        @onclick="CloseLaunchModal"
+                        disabled="@_isLaunching">
+                    Cancel
+                </button>
+                <button class="btn btn-sm btn-launch-vm rounded-1"
+                        @onclick="LaunchVmAsync"
+                        disabled="@_isLaunching">
+                    @if (_isLaunching)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Launching...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-play-circle me-1"></i>
+                        <span>Launch</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
+    // ── Available images ──────────────────────────────────────────────────────
+
+    private record ImageOption(string Label, string Value);
+
+    private static readonly ImageOption[] AvailableImages =
+    [
+        new("Debian 12 (Bookworm Slim)",  "debian:bookworm-slim"),
+        new("Ubuntu 22.04 LTS",           "ubuntu:22.04"),
+        new("Ubuntu 24.04 LTS",           "ubuntu:24.04"),
+        new("Alpine 3.19 (Minimal)",      "alpine:3.19"),
+    ];
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
     private List<VirtualMachine> Vms { get; set; } = new();
     private double _cpuLimit = 55;
     private double _ramLimit = 4;
@@ -149,14 +292,19 @@
     private CancellationTokenSource _saveCts = new();
     private bool _limitsLoaded = false;
 
+    private bool _showLaunchModal = false;
+    private bool _isLaunching = false;
+    private string? _launchError = null;
+    private string _selectedImage = "debian:bookworm-slim";
+
     private FirestoreChangeListener? _vmListener;
     private FirestoreChangeListener? _providerListener;
 
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
     protected override async Task OnInitializedAsync()
     {
-        // Subscribe to auth state changes so hard-refresh restores data
         AuthState.OnChange += OnAuthStateChanged;
-
         await LoadProviderDataAsync();
         StartListeners();
     }
@@ -165,6 +313,13 @@
     {
         if (AuthState.FirebaseUid == null) return;
 
+        // Redirect to setup wizard if Docker is not reachable.
+        if (!await DockerService.IsReachableAsync())
+        {
+            Nav.NavigateTo("/setup");
+            return;
+        }
+
         CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
         CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
         _cpuLimit = CurrentProvider?.CpuLimitPercent > 0 ? CurrentProvider.CpuLimitPercent : 55;
@@ -172,7 +327,6 @@
         _limitsLoaded = true;
         _specs = await MachineService.GetCachedSpecsAsync();
 
-        // Clamp _ramLimit to actual machine RAM so a stale saved value never exceeds the real max
         if (_specs != null && _specs.RamGB > 0 && _ramLimit > _specs.RamGB)
         {
             _ramLimit = _specs.RamGB;
@@ -182,14 +336,12 @@
 
     private void StartListeners()
     {
-        // Listen for real-time changes to all VMs
         _vmListener = VmService.ListenAllVms(vms =>
         {
             Vms = vms.ToList();
             _ = InvokeAsync(StateHasChanged);
         });
 
-        // Listen for real-time changes to the current provider's document
         if (AuthState.FirebaseUid != null)
         {
             _providerListener = ProviderService.ListenByFirebaseUid(AuthState.FirebaseUid, provider =>
@@ -197,7 +349,6 @@
                 CurrentProvider = provider;
                 CurrentNodeStatus = provider?.NodeStatus ?? "Offline";
 
-                // Only update slider values from DB if the user isn't actively changing them
                 if (_limitsLoaded)
                 {
                     if (provider?.CpuLimitPercent > 0) _cpuLimit = provider.CpuLimitPercent;
@@ -211,7 +362,6 @@
 
     private void OnAuthStateChanged()
     {
-        // Re-run data load on the render thread when auth is restored from localStorage
         _ = InvokeAsync(async () =>
         {
             await LoadProviderDataAsync();
@@ -219,6 +369,62 @@
             StateHasChanged();
         });
     }
+
+    // ── Launch modal ──────────────────────────────────────────────────────────
+
+    private void OpenLaunchModal()
+    {
+        _launchError = null;
+        _showLaunchModal = true;
+    }
+
+    private void CloseLaunchModal()
+    {
+        if (!_isLaunching)
+            _showLaunchModal = false;
+    }
+
+    private async Task LaunchVmAsync()
+    {
+        _isLaunching = true;
+        _launchError = null;
+        StateHasChanged();
+
+        try
+        {
+            var vmId = Guid.NewGuid().ToString();
+            var name = $"vm-{vmId[..8]}";
+            var startedAt = DateTime.UtcNow;
+
+            var containerId = await DockerService.StartContainerAsync(name, _selectedImage);
+
+            var vm = new VirtualMachine
+            {
+                VmId = vmId,
+                Name = name,
+                ContainerId = containerId,
+                StartedAt = startedAt,
+                Status = "Running",
+                Image = _selectedImage,
+            };
+
+            await VmService.CreateVmAsync(vm);
+            MonitorService.StartMonitoring(vmId, containerId, startedAt);
+
+            _showLaunchModal = false;
+        }
+        catch (Exception ex)
+        {
+            _launchError = ex.Message;
+        }
+        finally
+        {
+            _isLaunching = false;
+            StateHasChanged();
+        }
+    }
+
+    // ── Resource sliders ──────────────────────────────────────────────────────
 
     private readonly object _saveLock = new();
 
@@ -251,6 +457,8 @@
         catch (OperationCanceledException) { }
     }
 
+    // ── Node status ───────────────────────────────────────────────────────────
+
     private async Task HandleNodeStatusChanged(string newStatus)
     {
         try
@@ -267,6 +475,8 @@
             Console.WriteLine($"Failed to update node status: {ex.Message}");
         }
     }
+
+    // ── Dispose ───────────────────────────────────────────────────────────────
 
     public void Dispose()
     {

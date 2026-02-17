@@ -31,3 +31,10 @@ Desktop.ini
 
 ## Environment/Secrets
 .env
+
+## Python virtual environment
+venv/
+.venv/
+
+# Vs Code
+providerunicore.sln

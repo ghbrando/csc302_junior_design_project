@@ -38,7 +38,7 @@ public class VirtualMachineService : IVmService
         return vm;
     }
 
-    public async Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram)
+    public async Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram, string? uptimeString = null)
     {
         var vm = await _repository.GetByIdAsync(vmId);
 
@@ -49,6 +49,9 @@ public class VirtualMachineService : IVmService
         vm.CurrentCpuUsage = cpu;
         vm.CurrentGpuUsage = gpu;
         vm.CurrentRamUsage = ram;
+
+        if (uptimeString != null)
+            vm.UptimeString = uptimeString;
 
         // Update history (keep last 20 data points)
         const int maxHistory = 20;

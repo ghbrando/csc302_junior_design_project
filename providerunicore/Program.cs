@@ -43,6 +43,12 @@ builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
+// Docker services — registered as Singleton so the monitor can receive
+// StartMonitoring() calls from the Dashboard and persist across requests.
+builder.Services.AddSingleton<IDockerService, DockerService>();
+builder.Services.AddSingleton<ContainerMonitorService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
+
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {
