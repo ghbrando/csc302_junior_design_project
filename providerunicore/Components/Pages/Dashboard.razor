@@ -3,14 +3,14 @@
 @using unicoreprovider.Services
 @using unicoreprovider.Components
 @using Microsoft.AspNetCore.Components.Web
-@inherits AuthorizedPageBase
 @using System.Threading
 @using Google.Cloud.Firestore
 @implements IDisposable
 @inject IVmService VmService
 @inject IProviderService ProviderService
 @inject IMachineService MachineService
-@rendermode RenderMode.InteractiveServer
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreprovider.Services.AuthorizedPageBase
 
 <PageTitle>Provider Node</PageTitle>
 
@@ -85,32 +85,20 @@
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Longest VM Uptime"
-                      Value="@uptime"
-                      Unit=""
-                      IconClass="bi bi-lightning-charge-fill"
+            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
                       Color="#ffeb3b" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-md-6">
-            <ResourceSlider Title="CPU CORE LIMIT"
-                            Unit="percent"
-                            Max="100" MinLimit="20"
-                            Color="#00E5FF"
-                            IconClass="bi bi-cpu"
-                            Value="@CpuLimit"
-                            ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
+            <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
+                            IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
         </div>
         <div class="col-md-6">
-            <ResourceSlider Title="RAM ALLOCATION"
-                            Unit="gigabytes"
-                            Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1"
-                            Color="#D500F9"
-                            IconClass="bi bi-hdd-rack"
-                            Value="@RamLimit"
-                            ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
+            <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
+                            Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
+                            IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
         </div>
     </div>
 

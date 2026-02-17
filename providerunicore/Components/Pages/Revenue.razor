@@ -2,9 +2,10 @@
 @using unicoreprovider.Models
 @using unicoreprovider.Services
 @using unicoreprovider.Components
-@inherits AuthorizedPageBase
+@inherits unicoreprovider.Services.AuthorizedPageBase
 @using Microsoft.AspNetCore.Components.Web
 @using static unicoreprovider.Components.RevenueChart
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
 
 
 <PageTitle>Revenue Tracker</PageTitle>
