@@ -62,26 +62,8 @@
     private async Task HandleLogout()
     {
         AuthState.ClearAuthState();
+        await JS.InvokeVoidAsync("authStorage.clear");
         Nav.NavigateTo("/", forceLoad: true);
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender && AuthState.FirebaseUid == null)
-        {
-            var stored = await JS.InvokeAsync<StoredAuth>("authStorage.load");
-            if (stored?.Uid != null)
-            {
-                AuthState.SetAuthState(stored.Uid, stored.Email ?? "", stored.Name ?? "Provider");
-                StateHasChanged();
-            }
-        }
-    }
-    private class StoredAuth
-    {
-        public string? Uid { get; set; }
-        public string? Email { get; set; }
-        public string? Name { get; set; }
     }
 }
 
