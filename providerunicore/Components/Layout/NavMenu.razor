@@ -41,7 +41,7 @@
 
     <div class="sidebar-user">
         <div class="user-info">
-            <div class="user-avatar">@UserName[0]</div>
+            <div class="user-avatar">@(UserName.Length > 0 ? UserName[0] : '?')</div>
             <div class="user-details">
                 <span class="user-name">@UserName</span>
                 <span class="user-email">@UserEmail</span>

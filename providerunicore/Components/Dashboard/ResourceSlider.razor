@@ -72,15 +72,32 @@
     [Parameter] public double Value { get; set; }
     [Parameter] public EventCallback<double> ValueChanged { get; set; }
 
+    protected override async Task OnParametersSetAsync()
+    {
+        // Re-clamp Value whenever Max changes and propagate back to parent
+        var effectiveMin = Math.Min(MinLimit, Max);
+        if (Value > Max && Max > Min)
+        {
+            Value = Max;
+            await ValueChanged.InvokeAsync(Value);
+        }
+        else if (Value < effectiveMin && effectiveMin > Min)
+        {
+            Value = effectiveMin;
+            await ValueChanged.InvokeAsync(Value);
+        }
+    }
+
     private async Task HandleInput(ChangeEventArgs e)
     {
         if (double.TryParse(e.Value?.ToString(), out double newValue))
         {
-            if (newValue < MinLimit)
+            var effectiveMin = Math.Min(MinLimit, Max);
+            if (newValue < effectiveMin)
             {
                 Value = newValue;
                 await Task.Delay(1);
-                Value = MinLimit;
+                Value = effectiveMin;
             }
             else
             {
@@ -94,6 +111,6 @@
     private double GetPercent()
     {
         if (Max == Min) return 0;
-        return ((Value - Min) / (Max - Min)) * 100;
+        return Math.Clamp(((Value - Min) / (Max - Min)) * 100, 0, 100);
     }
 }

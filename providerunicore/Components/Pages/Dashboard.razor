@@ -8,6 +8,8 @@
 @implements IDisposable
 @inject IVmService VmService
 @inject IProviderService ProviderService
+@inject IAuthStateService AuthState
+@inject IMachineService MachineService
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Provider Node</PageTitle>
@@ -60,7 +62,12 @@
         @{
             var runningCount = Vms.Count(v => v.Status == "Running");
             var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
-            var uptime = "99.2";
+            var longestUptime = Vms
+                .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
+                .OrderByDescending(v => v.Uptime)
+                .Select(v => v.UptimeString)
+                .FirstOrDefault();
+            var uptime = longestUptime ?? "N/A";
         }
 
         <div class="col-12 col-md-6 col-lg-3">
@@ -78,18 +85,32 @@
         </div>
 
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Uptime" Value="@uptime" Unit="%" IconClass="bi bi-lightning-charge-fill" Color="#ffeb3b" />
+            <InfoCard Title="Longest VM Uptime"
+                      Value="@uptime"
+                      Unit=""
+                      IconClass="bi bi-lightning-charge-fill"
+                      Color="#ffeb3b" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-md-6">
-            <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
-                            IconClass="bi bi-cpu" @bind-Value="CpuLimit" />
+            <ResourceSlider Title="CPU CORE LIMIT"
+                            Unit="percent"
+                            Max="100" MinLimit="20"
+                            Color="#00E5FF"
+                            IconClass="bi bi-cpu"
+                            Value="@CpuLimit"
+                            ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
         </div>
         <div class="col-md-6">
-            <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes" Max="128" MinLimit="20" Color="#D500F9"
-                            IconClass="bi bi-hdd-rack" @bind-Value="RamLimit" />
+            <ResourceSlider Title="RAM ALLOCATION"
+                            Unit="gigabytes"
+                            Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1"
+                            Color="#D500F9"
+                            IconClass="bi bi-hdd-rack"
+                            Value="@RamLimit"
+                            ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
         </div>
     </div>
 
@@ -132,32 +153,97 @@
     private List<VirtualMachine> Vms { get; set; } = new();
     private PeriodicTimer? _timer;
     private CancellationTokenSource _cts = new();
-    private double CpuLimit { get; set; } = 55;
-    private double RamLimit { get; set; } = 80;
+    private double _cpuLimit = 55;
+    private double _ramLimit = 4;
+    private double CpuLimit => _cpuLimit;
+    private double RamLimit => _ramLimit;
     private Provider? CurrentProvider { get; set; }
     private string CurrentNodeStatus { get; set; } = "Offline";
+    private MachineSpecs? _specs;
+    private CancellationTokenSource _saveCts = new();
+    private bool _limitsLoaded = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // Load provider data
-        if (AuthState.FirebaseUid != null)
-        {
-            CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
-            CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
-        }
+        // Subscribe to auth state changes so hard-refresh restores data
+        // when NavMenu sets auth from localStorage after first render
+        AuthState.OnChange += OnAuthStateChanged;
+
+        await LoadProviderDataAsync();
 
         await RefreshData();
-        _ = StartTimerAsync();
+        var token = _cts.Token;
+        _ = StartTimerAsync(token).ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+                Console.WriteLine($"Timer error: {t.Exception?.GetBaseException().Message}");
+        }, TaskContinuationOptions.OnlyOnFaulted);
     }
 
-    private async Task StartTimerAsync()
+    private async Task LoadProviderDataAsync()
     {
-        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        if (AuthState.FirebaseUid == null) return;
+
+        CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
+        CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
+        _cpuLimit = CurrentProvider?.CpuLimitPercent > 0 ? CurrentProvider.CpuLimitPercent : 55;
+        _ramLimit = CurrentProvider?.RamLimitGB > 0 ? CurrentProvider.RamLimitGB : 1;
+        _limitsLoaded = true;
+        _specs = await MachineService.GetCachedSpecsAsync();
+
+        // Clamp _ramLimit to actual machine RAM so a stale saved value never exceeds the real max
+        if (_specs != null && _specs.RamGB > 0 && _ramLimit > _specs.RamGB)
+        {
+            _ramLimit = _specs.RamGB;
+            await ProviderService.UpdateResourceLimitsAsync(_cpuLimit, _ramLimit, AuthState.FirebaseUid);
+        }
+    }
+
+    private void OnAuthStateChanged()
+    {
+        // Re-run data load on the render thread when auth is restored from localStorage
+        _ = InvokeAsync(async () =>
+        {
+            await LoadProviderDataAsync();
+            StateHasChanged();
+        });
+    }
+
+    private readonly object _saveLock = new();
+
+    private void OnSliderChanged(ref double field, double value)
+    {
+        field = value;
+        _ = DebouncedSaveAsync().ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+                Console.WriteLine($"Save error: {t.Exception?.GetBaseException().Message}");
+        }, TaskContinuationOptions.OnlyOnFaulted);
+    }
+
+    private async Task DebouncedSaveAsync()
+    {
+        CancellationTokenSource cts;
+        lock (_saveLock)
+        {
+            _saveCts.Cancel();
+            _saveCts.Dispose();
+            _saveCts = new CancellationTokenSource();
+            cts = _saveCts;
+        }
         try
         {
-            while (await _timer.WaitForNextTickAsync(_cts.Token)) { await RefreshData(); await InvokeAsync(StateHasChanged); }
+            await Task.Delay(800, cts.Token);
+            if (AuthState.FirebaseUid != null)
+                await ProviderService.UpdateResourceLimitsAsync(_cpuLimit, _ramLimit, AuthState.FirebaseUid);
         }
         catch (OperationCanceledException) { }
+    }
+
+    private async Task StartTimerAsync(CancellationToken token)
+    {
+        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        try { while (await _timer.WaitForNextTickAsync(token)) { await RefreshData(); await InvokeAsync(StateHasChanged); } } catch (OperationCanceledException) { }
     }
 
     private async Task RefreshData()
@@ -184,15 +270,20 @@
         }
         catch (Exception ex)
         {
-            // Log error - in production, show user-friendly error message
             Console.WriteLine($"Failed to update node status: {ex.Message}");
         }
     }
 
     public void Dispose()
     {
+        AuthState.OnChange -= OnAuthStateChanged;
         _cts.Cancel();
         _timer?.Dispose();
         _cts.Dispose();
+        lock (_saveLock)
+        {
+            _saveCts.Cancel();
+            _saveCts.Dispose();
+        }
     }
 }
