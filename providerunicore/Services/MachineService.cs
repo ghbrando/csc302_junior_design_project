@@ -1,6 +1,7 @@
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+using Google.Cloud.Firestore;
 using providerunicore.Repositories;
 using unicoreprovider.Models;
 
@@ -205,5 +206,11 @@ public class MachineService : IMachineService
             .Sum(d => d.TotalSize);
 
         specs.DiskGB = (int)Math.Min(totalBytes / (1024L * 1024 * 1024), int.MaxValue);
+    }
+
+    // Listen for real-time changes to a provider's machine specs
+    public FirestoreChangeListener ListenSpecs(string providerId, Action<MachineSpecs?> onChanged)
+    {
+        return _repository.Listen(providerId, onChanged);
     }
 }

@@ -1,9 +1,11 @@
 @page "/settings"
 @using unicoreprovider.Models
 @using unicoreprovider.Services
+@using Google.Cloud.Firestore
+@inherits AuthorizedPageBase
+@implements IDisposable
 @rendermode RenderMode.InteractiveServer
 @inject IMachineService MachineService
-@inject IAuthStateService AuthState
 
 <PageTitle>Settings</PageTitle>
 
@@ -218,11 +220,41 @@
 @code {
     private MachineSpecs? _specs;
     private bool _detecting = false;
+    private FirestoreChangeListener? _specsListener;
 
     protected override async Task OnInitializedAsync()
     {
+        AuthState.OnChange += OnAuthStateChanged;
+
         if (AuthState.FirebaseUid != null)
+        {
             _specs = await MachineService.GetCachedSpecsAsync();
+            StartListener();
+        }
+    }
+
+    private void StartListener()
+    {
+        if (AuthState.FirebaseUid == null) return;
+
+        _specsListener = MachineService.ListenSpecs(AuthState.FirebaseUid, specs =>
+        {
+            _specs = specs;
+            _ = InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void OnAuthStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (AuthState.FirebaseUid != null)
+            {
+                _specs = await MachineService.GetCachedSpecsAsync();
+                StartListener();
+            }
+            StateHasChanged();
+        });
     }
 
     private async Task ReDetect()
@@ -242,5 +274,11 @@
         {
             _detecting = false;
         }
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        _ = _specsListener?.StopAsync();
     }
 }

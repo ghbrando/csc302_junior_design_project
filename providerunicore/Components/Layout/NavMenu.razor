@@ -59,11 +59,32 @@
     private string UserName => AuthState.Name ?? "Provider";
     private string UserEmail => AuthState.Email ?? "";
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && string.IsNullOrEmpty(AuthState.FirebaseUid))
+        {
+            var authData = await JS.InvokeAsync<AuthData>("authStorage.load");
+            if (!string.IsNullOrEmpty(authData?.uid))
+            {
+                AuthState.SetAuthState(authData.uid, authData.email ?? "", authData.name ?? "");
+                StateHasChanged();
+            }
+        }
+    }
+
     private async Task HandleLogout()
     {
         AuthState.ClearAuthState();
         await JS.InvokeVoidAsync("authStorage.clear");
         Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    // Lowercase property names to match the JS object from authStorage.load()
+    private class AuthData
+    {
+        public string? uid { get; set; }
+        public string? email { get; set; }
+        public string? name { get; set; }
     }
 }
 

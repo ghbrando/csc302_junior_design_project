@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 using unicoreprovider.Models;
 
 namespace unicoreprovider.Services;
@@ -10,4 +11,5 @@ public interface IVmService
     Task<VirtualMachine> CreateVmAsync(VirtualMachine vm);
     Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram);
     Task DeleteVmAsync(string vmId);
+    FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged);
 }

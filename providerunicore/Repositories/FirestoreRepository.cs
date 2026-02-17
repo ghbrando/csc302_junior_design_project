@@ -140,5 +140,27 @@ namespace providerunicore.Repositories
             // A CollectionReference inherits from Query, so we can just return it directly.
             return _collection;
         }
+
+        // ==========================================
+        // 5. Real-Time Listeners
+        // ==========================================
+
+        public FirestoreChangeListener Listen(string id, Action<T?> onSnapshot)
+        {
+            return _collection.Document(id).Listen(snapshot =>
+            {
+                var entity = snapshot.Exists ? snapshot.ConvertTo<T>() : null;
+                onSnapshot(entity);
+            });
+        }
+
+        public FirestoreChangeListener ListenAll(Action<IEnumerable<T>> onSnapshot)
+        {
+            return _collection.Listen(snapshot =>
+            {
+                var entities = snapshot.Documents.Select(doc => doc.ConvertTo<T>());
+                onSnapshot(entities);
+            });
+        }
     }
 }

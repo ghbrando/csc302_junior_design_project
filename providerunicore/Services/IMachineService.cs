@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 using unicoreprovider.Models;
 
 namespace unicoreprovider.Services;
@@ -14,4 +15,9 @@ public interface IMachineService
     /// Returns null if no specs have been detected yet.
     /// </summary>
     Task<MachineSpecs?> GetCachedSpecsAsync();
+
+    /// <summary>
+    /// Listens for real-time changes to a provider's machine specs document.
+    /// </summary>
+    FirestoreChangeListener ListenSpecs(string providerId, Action<MachineSpecs?> onChanged);
 }

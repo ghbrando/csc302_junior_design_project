@@ -64,5 +64,21 @@ namespace providerunicore.Repositories
         /// advanced chaining (e.g., multiple Where, OrderBy, Limit) at the service level.
         /// </summary>
         Query CreateQuery();
+
+        // ==========================================
+        // 5. Real-Time Listeners
+        // ==========================================
+
+        /// <summary>
+        /// Listens for real-time changes to a single document by ID.
+        /// Returns a FirestoreChangeListener that must be stopped when no longer needed.
+        /// </summary>
+        FirestoreChangeListener Listen(string id, Action<T?> onSnapshot);
+
+        /// <summary>
+        /// Listens for real-time changes to the entire collection.
+        /// Returns a FirestoreChangeListener that must be stopped when no longer needed.
+        /// </summary>
+        FirestoreChangeListener ListenAll(Action<IEnumerable<T>> onSnapshot);
     }
 }

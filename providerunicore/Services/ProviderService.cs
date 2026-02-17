@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 using providerunicore.Repositories;
 
 //Used For: Provider Service Interface
@@ -8,6 +9,7 @@ public interface IProviderService
     Task<Provider> UpdateLastLoginAsync(string firebaseUid);
     Task<Provider> UpdateNodeStatusAsync(string status, string firebaseUid);
     Task<Provider> UpdateResourceLimitsAsync(double cpuLimitPercent, double ramLimitGB, string firebaseUid);
+    FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged);
 }
 
 //Used For: Provider Service Implementation
@@ -91,5 +93,11 @@ public class ProviderService : IProviderService
         provider.RamLimitGB = ramLimitGB;
         await _repository.UpdateAsync(firebaseUid, provider);
         return provider;
+    }
+
+    // Listen for real-time changes to a provider document
+    public FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged)
+    {
+        return _repository.Listen(firebaseUid, onChanged);
     }
 }

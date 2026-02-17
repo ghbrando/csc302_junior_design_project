@@ -1,3 +1,4 @@
+using Google.Cloud.Firestore;
 using unicoreprovider.Models;
 using providerunicore.Repositories;
 
@@ -67,5 +68,11 @@ public class VirtualMachineService : IVmService
     public async Task DeleteVmAsync(string vmId)
     {
         await _repository.DeleteAsync(vmId);
+    }
+
+    // Listen for real-time changes to all VMs
+    public FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged)
+    {
+        return _repository.ListenAll(onChanged);
     }
 }

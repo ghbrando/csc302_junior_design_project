@@ -5,10 +5,10 @@
 @using Microsoft.AspNetCore.Components.Web
 @inherits AuthorizedPageBase
 @using System.Threading
+@using Google.Cloud.Firestore
 @implements IDisposable
 @inject IVmService VmService
 @inject IProviderService ProviderService
-@inject IAuthStateService AuthState
 @inject IMachineService MachineService
 @rendermode RenderMode.InteractiveServer
 
@@ -151,8 +151,6 @@
 
 @code {
     private List<VirtualMachine> Vms { get; set; } = new();
-    private PeriodicTimer? _timer;
-    private CancellationTokenSource _cts = new();
     private double _cpuLimit = 55;
     private double _ramLimit = 4;
     private double CpuLimit => _cpuLimit;
@@ -163,21 +161,16 @@
     private CancellationTokenSource _saveCts = new();
     private bool _limitsLoaded = false;
 
+    private FirestoreChangeListener? _vmListener;
+    private FirestoreChangeListener? _providerListener;
+
     protected override async Task OnInitializedAsync()
     {
         // Subscribe to auth state changes so hard-refresh restores data
-        // when NavMenu sets auth from localStorage after first render
         AuthState.OnChange += OnAuthStateChanged;
 
         await LoadProviderDataAsync();
-
-        await RefreshData();
-        var token = _cts.Token;
-        _ = StartTimerAsync(token).ContinueWith(t =>
-        {
-            if (t.IsFaulted)
-                Console.WriteLine($"Timer error: {t.Exception?.GetBaseException().Message}");
-        }, TaskContinuationOptions.OnlyOnFaulted);
+        StartListeners();
     }
 
     private async Task LoadProviderDataAsync()
@@ -199,12 +192,42 @@
         }
     }
 
+    private void StartListeners()
+    {
+        // Listen for real-time changes to all VMs
+        _vmListener = VmService.ListenAllVms(vms =>
+        {
+            Vms = vms.ToList();
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        // Listen for real-time changes to the current provider's document
+        if (AuthState.FirebaseUid != null)
+        {
+            _providerListener = ProviderService.ListenByFirebaseUid(AuthState.FirebaseUid, provider =>
+            {
+                CurrentProvider = provider;
+                CurrentNodeStatus = provider?.NodeStatus ?? "Offline";
+
+                // Only update slider values from DB if the user isn't actively changing them
+                if (_limitsLoaded)
+                {
+                    if (provider?.CpuLimitPercent > 0) _cpuLimit = provider.CpuLimitPercent;
+                    if (provider?.RamLimitGB > 0) _ramLimit = provider.RamLimitGB;
+                }
+
+                _ = InvokeAsync(StateHasChanged);
+            });
+        }
+    }
+
     private void OnAuthStateChanged()
     {
         // Re-run data load on the render thread when auth is restored from localStorage
         _ = InvokeAsync(async () =>
         {
             await LoadProviderDataAsync();
+            StartListeners();
             StateHasChanged();
         });
     }
@@ -240,23 +263,6 @@
         catch (OperationCanceledException) { }
     }
 
-    private async Task StartTimerAsync(CancellationToken token)
-    {
-        _timer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
-        try { while (await _timer.WaitForNextTickAsync(token)) { await RefreshData(); await InvokeAsync(StateHasChanged); } } catch (OperationCanceledException) { }
-    }
-
-    private async Task RefreshData()
-    {
-        Vms = (await VmService.GetAllVmsAsync()).ToList();
-
-        if (AuthState.FirebaseUid != null)
-        {
-            CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
-            CurrentNodeStatus = CurrentProvider?.NodeStatus ?? "Offline";
-        }
-    }
-
     private async Task HandleNodeStatusChanged(string newStatus)
     {
         try
@@ -277,9 +283,8 @@
     public void Dispose()
     {
         AuthState.OnChange -= OnAuthStateChanged;
-        _cts.Cancel();
-        _timer?.Dispose();
-        _cts.Dispose();
+        _ = _vmListener?.StopAsync();
+        _ = _providerListener?.StopAsync();
         lock (_saveLock)
         {
             _saveCts.Cancel();
