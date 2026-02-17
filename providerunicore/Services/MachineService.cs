@@ -91,19 +91,26 @@ public class MachineService : IMachineService
     [SupportedOSPlatform("windows")]
     private static void DetectGpuWindows(MachineSpecs specs)
     {
+        // Iterate all adapters and pick the one with the most VRAM so that a
+        // dedicated GPU is always preferred over integrated graphics.
+        long bestVram = -1;
         using var searcher = new ManagementObjectSearcher("SELECT * FROM Win32_VideoController");
         foreach (ManagementObject obj in searcher.Get())
         {
-            specs.GpuName = obj["Name"]?.ToString()?.Trim() ?? string.Empty;
-
             // AdapterRAM is in bytes (WMI caps at ~4GB for legacy 32-bit field)
-            long vramBytes = Convert.ToInt64(obj["AdapterRAM"] ?? 0);
-            specs.VramGB = (int)(vramBytes / (1024L * 1024 * 1024));
+            if (!long.TryParse(obj["AdapterRAM"]?.ToString(), out long vramBytes))
+                vramBytes = 0;
 
-            // GpuCores are not exposed by WMI — left at 0
-            specs.GpuCores = 0;
-            break; // Use primary GPU
+            if (vramBytes > bestVram)
+            {
+                bestVram = vramBytes;
+                specs.GpuName = obj["Name"]?.ToString()?.Trim() ?? string.Empty;
+                specs.VramGB = (int)Math.Min(vramBytes / (1024L * 1024 * 1024), int.MaxValue);
+            }
         }
+
+        // GpuCores are not exposed by WMI — left at 0
+        specs.GpuCores = 0;
     }
 
     [SupportedOSPlatform("windows")]
