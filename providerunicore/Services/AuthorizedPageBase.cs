@@ -10,22 +10,29 @@ public class AuthorizedPageBase : ComponentBase
     [Inject] protected NavigationManager Nav { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
 
+    private bool _redirecting;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && string.IsNullOrEmpty(AuthState.FirebaseUid))
+        if (_redirecting) return;
+
+        if (string.IsNullOrEmpty(AuthState.FirebaseUid))
         {
             var authData = await JS.InvokeAsync<AuthData>("authStorage.load");
+
             if (!string.IsNullOrEmpty(authData?.uid))
             {
                 AuthState.SetAuthState(authData.uid, authData.email ?? "", authData.name ?? "");
-                StateHasChanged();
+                // No need to StateHasChanged(); setting state should cause it anyway, but it's okay if you keep it.
             }
             else
             {
-                Nav.NavigateTo("/", forceLoad: false);
+                _redirecting = true;
+                Nav.NavigateTo("/", replace: true);
             }
         }
     }
+
 
     // Lowercase property names to match the JS object from authStorage.load()
     private class AuthData
