@@ -48,6 +48,12 @@ When prompted about the host key (first time only), type `yes`.
 ```bash
 $ whoami
 consumer
+$ hostname
+(container id)
+$ uname -a 
+(kernel and arch info)
+$ cat /etc/os-release
+(distribution/version)
 $ exit
 ```
 
