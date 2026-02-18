@@ -26,6 +26,8 @@ public class MachineService : IMachineService
 
         var specs = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? DetectWindows()
+            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+            ? DetectMac()
             : DetectLinux();
 
         specs.ProviderId = uid;
@@ -134,6 +136,155 @@ public class MachineService : IMachineService
         {
             specs.OsName = obj["Caption"]?.ToString()?.Trim() ?? RuntimeInformation.OSDescription;
             break;
+        }
+    }
+
+    // ==========================================
+    // macOS Detection (sysctl & system_profiler)
+    // ==========================================
+
+    private static MachineSpecs DetectMac()
+    {
+        var specs = new MachineSpecs
+        {
+            OsName = RuntimeInformation.OSDescription
+        };
+
+        try { DetectCpuMac(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"CPU detection failed: {ex.Message}"); }
+        try { DetectRamMac(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"RAM detection failed: {ex.Message}"); }
+        try { DetectGpuMac(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"GPU detection failed: {ex.Message}"); }
+        try { DetectDiskMac(specs); } catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Disk detection failed: {ex.Message}"); }
+
+        return specs;
+    }
+
+    private static string ExecuteCommand(string command, string arguments)
+    {
+        using var process = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            }
+        };
+
+        process.Start();
+        string output = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+        return output;
+    }
+
+    private static void DetectCpuMac(MachineSpecs specs)
+    {
+        try
+        {
+            // Get machine model name (e.g., "MacBookPro18,2")
+            specs.CpuName = ExecuteCommand("sysctl", "-n hw.model").Trim();
+
+            // Get CPU core count
+            string coreOutput = ExecuteCommand("sysctl", "-n hw.ncpu").Trim();
+            if (int.TryParse(coreOutput, out int cores))
+            {
+                specs.CpuCores = cores;
+                specs.CpuThreads = cores;
+            }
+
+            // Get CPU frequency in Hz, convert to GHz
+            string freqOutput = ExecuteCommand("sysctl", "-n hw.cpufrequency").Trim();
+            if (long.TryParse(freqOutput, out long freq))
+            {
+                specs.CpuClockSpeedGHz = Math.Round(freq / 1_000_000_000.0, 2);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error detecting Mac CPU: {ex.Message}");
+        }
+    }
+
+    private static void DetectRamMac(MachineSpecs specs)
+    {
+        try
+        {
+            string memOutput = ExecuteCommand("sysctl", "-n hw.memsize").Trim();
+            if (long.TryParse(memOutput, out long bytes))
+            {
+                specs.RamGB = (int)(bytes / (1024L * 1024 * 1024));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error detecting Mac RAM: {ex.Message}");
+        }
+    }
+
+    private static void DetectGpuMac(MachineSpecs specs)
+    {
+        try
+        {
+            // Use system_profiler to get GPU information
+            string output = ExecuteCommand("system_profiler", "SPDisplaysDataType");
+
+            // Parse output for GPU name (looks for "Chipset Model:" line)
+            var lines = output.Split('\n');
+            foreach (var line in lines)
+            {
+                if (line.Contains("Chipset Model:", StringComparison.OrdinalIgnoreCase))
+                {
+                    specs.GpuName = line.Split(':').LastOrDefault()?.Trim() ?? string.Empty;
+                    break;
+                }
+            }
+
+            // Note: GPU VRAM on integrated graphics uses shared system memory.
+            // Getting dedicated GPU VRAM would require additional parsing.
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error detecting Mac GPU: {ex.Message}");
+        }
+    }
+
+    private static void DetectDiskMac(MachineSpecs specs)
+    {
+        try
+        {
+            // Use 'df -k' to get the main disk capacity in KB (macOS compatible)
+            string output = ExecuteCommand("df", "-k /");
+            
+            var lines = output.Split('\n');
+            if (lines.Length >= 2)
+            {
+                // Second line contains: filesystem total-kb used available use% mounted
+                var parts = lines[1].Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2 && long.TryParse(parts[1], out long kilobytes))
+                {
+                    specs.DiskGB = (int)(kilobytes / (1024L * 1024));  // KB to GB
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error detecting Mac disk via df: {ex.Message}");
+        }
+
+        // Fallback: use DriveInfo on the main root drive only
+        try
+        {
+            var rootDrive = DriveInfo.GetDrives().FirstOrDefault(d => d.Name == "/");
+            if (rootDrive?.IsReady == true)
+            {
+                specs.DiskGB = (int)(rootDrive.TotalSize / (1024L * 1024 * 1024));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error detecting Mac disk via DriveInfo: {ex.Message}");
         }
     }
 

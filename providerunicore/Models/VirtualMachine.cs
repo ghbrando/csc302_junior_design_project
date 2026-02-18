@@ -74,4 +74,8 @@ public class VirtualMachine
 
     [FirestoreProperty("image")]
     public string Image { get; set; } = string.Empty;
+
+    // SSH access info (PoC)
+    [FirestoreProperty("ssh_port")]
+    public int? SshPort { get; set; }
 }

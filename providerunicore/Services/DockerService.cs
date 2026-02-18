@@ -48,15 +48,65 @@ public class DockerService : IDockerService, IDisposable
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
 
+        // Command to install SSH and start it, then sleep
+        var cmd = new List<string>
+        {
+            "/bin/sh",
+            "-c",
+            "apt-get update && apt-get install -y openssh-server > /dev/null 2>&1 && " +
+            "mkdir -p /run/sshd && " +
+            "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
+            "echo 'consumer:consumer123' | chpasswd && " +
+            "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
+            "/usr/sbin/sshd -D"
+        };
+
         var response = await client.Containers.CreateContainerAsync(new CreateContainerParameters
         {
             Image = image,
             Name = name,
-            Cmd = new List<string> { "sleep", "infinity" },
+            Cmd = cmd,
+            ExposedPorts = new Dictionary<string, EmptyStruct>
+            {
+                { "22/tcp", default }  // Expose SSH port
+            },
+            HostConfig = new HostConfig
+            {
+                PortBindings = new Dictionary<string, IList<PortBinding>>
+                {
+                    {
+                        "22/tcp",
+                        new List<PortBinding>
+                        {
+                            new PortBinding { HostPort = "0" }  // Random port assignment
+                        }
+                    }
+                }
+            }
         });
 
         await client.Containers.StartContainerAsync(response.ID, new ContainerStartParameters());
         return response.ID;
+    }
+
+    public async Task<int?> GetContainerSshPortAsync(string containerId)
+    {
+        var client = await GetClientAsync();
+        
+        var container = await client.Containers.InspectContainerAsync(containerId);
+        
+        // Look for the mapped SSH port (22/tcp)
+        if (container.NetworkSettings?.Ports?.TryGetValue("22/tcp", out var portBindings) == true &&
+            portBindings?.Count > 0)
+        {
+            var binding = portBindings.First();
+            if (int.TryParse(binding.HostPort, out int port))
+            {
+                return port;
+            }
+        }
+
+        return null;
     }
 
     public async Task StopContainerAsync(string containerId)

@@ -14,6 +14,12 @@ public interface IDockerService
     /// </summary>
     Task<string> StartContainerAsync(string name, string image);
 
+    /// <summary>
+    /// Returns the host port mapped to SSH (port 22) inside the container.
+    /// Returns null if no SSH port mapping is found.
+    /// </summary>
+    Task<int?> GetContainerSshPortAsync(string containerId);
+
     /// <summary>Stops and removes a container by its Docker container ID.</summary>
     Task StopContainerAsync(string containerId);
 
