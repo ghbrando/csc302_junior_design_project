@@ -23,6 +23,11 @@ public class VirtualMachineService : IVmService
         return await _repository.GetAllAsync();
     }
 
+    public async Task<IEnumerable<VirtualMachine>> GetVmsByProviderIdAsync(string providerId)
+    {
+        return await _repository.WhereAsync("providerId", providerId);
+    }
+
     public async Task<IEnumerable<VirtualMachine>> GetVmsByStatusAsync(string status)
     {
         return await _repository.WhereAsync("status", status);

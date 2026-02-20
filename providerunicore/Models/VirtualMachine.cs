@@ -65,6 +65,9 @@ public class VirtualMachine
     [FirestoreProperty("ram_history")]
     public List<double> RamHistory { get; set; } = new();
 
+    [FirestoreProperty("providerId")]
+    public string ProviderId { get; set; } = string.Empty;
+
     // Docker container info
     [FirestoreProperty("container_id")]
     public string ContainerId { get; set; } = string.Empty;

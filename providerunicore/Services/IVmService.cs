@@ -7,6 +7,7 @@ public interface IVmService
 {
     Task<VirtualMachine?> GetByIdAsync(string vmId);
     Task<IEnumerable<VirtualMachine>> GetAllVmsAsync();
+    Task<IEnumerable<VirtualMachine>> GetVmsByProviderIdAsync(string providerId);
     Task<IEnumerable<VirtualMachine>> GetVmsByStatusAsync(string status);
     Task<VirtualMachine> CreateVmAsync(VirtualMachine vm);
     Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram, string? uptimeString = null);

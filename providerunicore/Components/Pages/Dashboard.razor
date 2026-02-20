@@ -338,7 +338,10 @@
     {
         _vmListener = VmService.ListenAllVms(vms =>
         {
-            Vms = vms.ToList();
+            var uid = AuthState.FirebaseUid;
+            Vms = uid != null
+                ? vms.Where(v => v.ProviderId == uid).ToList()
+                : new List<VirtualMachine>();
             _ = InvokeAsync(StateHasChanged);
         });
 
@@ -406,6 +409,7 @@
                 StartedAt = startedAt,
                 Status = "Running",
                 Image = _selectedImage,
+                ProviderId = AuthState.FirebaseUid ?? string.Empty,
             };
 
             await VmService.CreateVmAsync(vm);
