@@ -2,6 +2,7 @@ using providerunicore.Components;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Google.Cloud.Firestore;
+using Google.Cloud.SecretManager.V1;
 using providerunicore.Repositories;
 using unicoreprovider.Models;
 using unicoreprovider.Services;
@@ -13,6 +14,24 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var projectId = builder.Configuration["Firebase:ProjectId"];
+
+// Load sensitive relay config from GCP Secret Manager so they are not stored locally.
+try
+{
+    var secretClient = SecretManagerServiceClient.Create();
+    string Secret(string name) => secretClient
+        .AccessSecretVersion($"projects/{projectId}/secrets/{name}/versions/latest")
+        .Payload.Data.ToStringUtf8()
+        .Trim();
+
+    builder.Configuration["FrpRelay:ServerAddr"] = Secret("frp-relay-addr");
+    builder.Configuration["FrpRelay:AuthToken"]  = Secret("frp-relay-token");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[WARNING] Could not load relay secrets from Secret Manager: {ex.Message}");
+    Console.WriteLine("[WARNING] Falling back to appsettings.json values (if present).");
+}
 
 // Add Authentication Services
 builder.Services.AddSingleton(FirestoreDb.Create(projectId));

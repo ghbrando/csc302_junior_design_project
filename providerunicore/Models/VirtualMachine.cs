@@ -81,4 +81,8 @@ public class VirtualMachine
     // SSH access info (PoC)
     [FirestoreProperty("ssh_port")]
     public int? SshPort { get; set; }
+
+    // FRP relay port — the remotePort registered on the GCP relay VM for this container's SSH tunnel
+    [FirestoreProperty("relay_port")]
+    public int? RelayPort { get; set; }
 }

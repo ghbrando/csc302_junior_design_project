@@ -1,11 +1,23 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
 
 namespace unicoreprovider.Services;
 
 public class DockerService : IDockerService, IDisposable
 {
+    private readonly string _relayAddr;
+    private readonly int _relayServerPort;
+    private readonly string _relayToken;
+
+    public DockerService(IConfiguration config)
+    {
+        _relayAddr = config["FrpRelay:ServerAddr"] ?? "136.116.172.0";
+        _relayServerPort = config.GetValue<int>("FrpRelay:ServerPort", 7000);
+        _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
+    }
+
     // Endpoints tried in order on Windows. Named pipe = Docker Desktop or native
     // dockerd. TCP = our WSL2-based Docker Engine setup.
     private static readonly Uri[] WindowsEndpoints =
@@ -43,21 +55,44 @@ public class DockerService : IDockerService, IDisposable
         return false;
     }
 
-    public async Task<string> StartContainerAsync(string name, string image)
+    public async Task<string> StartContainerAsync(string name, string image, int relayPort)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
 
-        // Command to install SSH and start it, then sleep
+        const string frpVersion = "0.61.0";
+        var frpTar = $"/tmp/frp_{frpVersion}_linux_amd64.tar.gz";
+        var frpBin = $"/tmp/frp_{frpVersion}_linux_amd64/frpc";
+        var frpCfg = "/tmp/frpc.toml";
+        var frpUrl = $"https://github.com/fatedier/frp/releases/download/v{frpVersion}/frp_{frpVersion}_linux_amd64.tar.gz";
+
+        // Writes frpc.toml line by line using echo, then starts frpc in the background.
+        // Wrapped in () || true so that SSH still starts even if the relay setup fails.
+        var frpSetup =
+            $"(curl -sL -o {frpTar} {frpUrl} && " +
+            $"tar -xzf {frpTar} -C /tmp && " +
+            $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
+            $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
+            $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+            $"echo '' >> {frpCfg} && " +
+            $"echo '[[proxies]]' >> {frpCfg} && " +
+            $"echo 'name = \"{name}\"' >> {frpCfg} && " +
+            $"echo 'type = \"tcp\"' >> {frpCfg} && " +
+            $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
+            $"echo 'localPort = 22' >> {frpCfg} && " +
+            $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
+            $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
+
         var cmd = new List<string>
         {
             "/bin/sh",
             "-c",
-            "apt-get update && apt-get install -y openssh-server > /dev/null 2>&1 && " +
+            "apt-get update && apt-get install -y openssh-server curl > /dev/null 2>&1 && " +
             "mkdir -p /run/sshd && " +
             "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
             "echo 'consumer:consumer123' | chpasswd && " +
             "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
+            frpSetup + " && " +
             "/usr/sbin/sshd -D"
         };
 

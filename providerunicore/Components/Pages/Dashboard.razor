@@ -11,6 +11,7 @@
 @inject IMachineService MachineService
 @inject IDockerService DockerService
 @inject ContainerMonitorService MonitorService
+@inject IConfiguration Configuration
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreprovider.Services.AuthorizedPageBase
 
@@ -360,7 +361,6 @@
         new("Debian 12 (Bookworm Slim)",  "debian:bookworm-slim"),
         new("Ubuntu 22.04 LTS",           "ubuntu:22.04"),
         new("Ubuntu 24.04 LTS",           "ubuntu:24.04"),
-        new("Alpine 3.19 (Minimal)",      "alpine:3.19"),
     ];
 
     // ── State ─────────────────────────────────────────────────────────────────
@@ -496,7 +496,15 @@
             var name = $"vm-{vmId[..8]}";
             var startedAt = DateTime.UtcNow;
 
-            var containerId = await DockerService.StartContainerAsync(name, _selectedImage);
+            var relayPortStart = Configuration.GetValue<int>("FrpRelay:PortRangeStart", 2222);
+            var relayPortEnd = Configuration.GetValue<int>("FrpRelay:PortRangeEnd", 2300);
+            var usedPorts = Vms.Where(v => v.RelayPort.HasValue).Select(v => v.RelayPort!.Value).ToHashSet();
+            var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
+                .First(p => !usedPorts.Contains(p));
+
+            var containerId = await DockerService.StartContainerAsync(name, _selectedImage, relayPort);
+
+            var relayAddr = Configuration["FrpRelay:ServerAddr"] ?? "136.116.172.0";
 
             var vm = new VirtualMachine
             {
@@ -507,6 +515,7 @@
                 Status = "Running",
                 Image = _selectedImage,
                 ProviderId = AuthState.FirebaseUid ?? string.Empty,
+                RelayPort = relayPort,
             };
 
             await VmService.CreateVmAsync(vm);
