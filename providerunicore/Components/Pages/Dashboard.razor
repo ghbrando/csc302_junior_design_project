@@ -128,7 +128,7 @@
             <button class="btn btn-launch-vm rounded-1" @onclick="OpenLaunchModal">
                 <i class="bi bi-play-circle me-2"></i> LAUNCH VM
             </button>
-            <button class="btn btn-emergency rounded-1">
+            <button class="btn btn-emergency rounded-1" @onclick="OpenStopModal">
                 <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
             </button>
         </div>
@@ -266,6 +266,90 @@
     </div>
 }
 
+<!-- Emergency Stop modal -->
+@if (_showStopModal)
+{
+    <div class="uc-modal-backdrop" @onclick="CloseStopModal">
+        <div class="uc-modal" style="max-width: 520px;" @onclick:stopPropagation="true">
+            <div class="uc-modal-title">
+                <i class="bi bi-exclamation-octagon-fill me-2" style="color: var(--uc-red);"></i>
+                Emergency Stop
+            </div>
+
+            @{
+                var runningVms = Vms.Where(v => v.Status == "Running").ToList();
+            }
+
+            @if (!runningVms.Any())
+            {
+                <p class="text-muted" style="font-size: 0.82rem;">No running VMs to stop.</p>
+            }
+            else
+            {
+                <p class="text-muted mb-2" style="font-size: 0.78rem;">Select which VMs to stop:</p>
+
+                <div class="mb-2 d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-secondary rounded-1"
+                            style="font-size: 0.7rem;"
+                            @onclick="SelectAllVms">
+                        All
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary rounded-1"
+                            style="font-size: 0.7rem;"
+                            @onclick="DeselectAllVms">
+                        None
+                    </button>
+                </div>
+
+                <div class="mb-3" style="max-height: 200px; overflow-y: auto;">
+                    @foreach (var vm in runningVms)
+                    {
+                        <div class="d-flex align-items-center gap-2 py-1 px-2 mb-1 rounded-1"
+                             style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                            <input type="checkbox" class="form-check-input mt-0"
+                                   checked="@_selectedVmIds.Contains(vm.VmId)"
+                                   @onchange="@(e => ToggleVmSelection(vm.VmId, (bool)(e.Value ?? false)))" />
+                            <div>
+                                <div style="font-size: 0.8rem; color: #e2e8f0;">@vm.Name</div>
+                                <div style="font-size: 0.7rem; color: #64748b;">@vm.Image &nbsp;·&nbsp; @vm.UptimeString</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_stopError != null)
+            {
+                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                    <i class="bi bi-exclamation-circle me-1"></i>@_stopError
+                </div>
+            }
+
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button class="btn btn-sm btn-outline-secondary rounded-1"
+                        @onclick="CloseStopModal"
+                        disabled="@_isStopping">
+                    Cancel
+                </button>
+                <button class="btn btn-sm btn-emergency rounded-1"
+                        @onclick="StopSelectedVmsAsync"
+                        disabled="@(_isStopping || !_selectedVmIds.Any())">
+                    @if (_isStopping)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Stopping...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-stop-circle me-1"></i>
+                        <span>Stop Selected (@_selectedVmIds.Count)</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     // ── Available images ──────────────────────────────────────────────────────
 
@@ -296,6 +380,11 @@
     private bool _isLaunching = false;
     private string? _launchError = null;
     private string _selectedImage = "debian:bookworm-slim";
+
+    private bool _showStopModal = false;
+    private bool _isStopping = false;
+    private string? _stopError = null;
+    private HashSet<string> _selectedVmIds = new();
 
     private FirestoreChangeListener? _vmListener;
     private FirestoreChangeListener? _providerListener;
@@ -342,6 +431,14 @@
             Vms = uid != null
                 ? vms.Where(v => v.ProviderId == uid).ToList()
                 : new List<VirtualMachine>();
+
+            // Re-register any running VMs that aren't in the monitor's dictionary yet.
+            // This happens when the user navigates away and back, because _monitored is
+            // in-memory and only populated at launch time. TryAdd is a no-op for VMs
+            // already being monitored, so this is safe to call on every Firestore update.
+            foreach (var vm in Vms.Where(v => v.Status == "Running" && !string.IsNullOrEmpty(v.ContainerId)))
+                MonitorService.StartMonitoring(vm.VmId, vm.ContainerId, vm.StartedAt ?? DateTime.UtcNow);
+
             _ = InvokeAsync(StateHasChanged);
         });
 
@@ -426,6 +523,69 @@
             _isLaunching = false;
             StateHasChanged();
         }
+    }
+
+    // ── Emergency stop modal ──────────────────────────────────────────────────
+
+    private void OpenStopModal()
+    {
+        _stopError = null;
+        _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
+        _showStopModal = true;
+    }
+
+    private void CloseStopModal()
+    {
+        if (!_isStopping)
+            _showStopModal = false;
+    }
+
+    private void SelectAllVms() =>
+        _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
+
+    private void DeselectAllVms() => _selectedVmIds = new();
+
+    private void ToggleVmSelection(string vmId, bool isChecked)
+    {
+        if (isChecked) _selectedVmIds.Add(vmId);
+        else _selectedVmIds.Remove(vmId);
+    }
+
+    private async Task StopSelectedVmsAsync()
+    {
+        _isStopping = true;
+        _stopError = null;
+        StateHasChanged();
+
+        var errors = new List<string>();
+
+        foreach (var vmId in _selectedVmIds.ToList())
+        {
+            var vm = Vms.FirstOrDefault(v => v.VmId == vmId);
+            if (vm == null) continue;
+
+            try
+            {
+                if (!string.IsNullOrEmpty(vm.ContainerId))
+                    await DockerService.StopContainerAsync(vm.ContainerId);
+
+                MonitorService.StopMonitoring(vmId);
+                await VmService.DeleteVmAsync(vmId);
+            }
+            catch (Exception ex)
+            {
+                errors.Add($"{vm.Name}: {ex.Message}");
+            }
+        }
+
+        _isStopping = false;
+
+        if (errors.Any())
+            _stopError = string.Join("; ", errors);
+        else
+            _showStopModal = false;
+
+        StateHasChanged();
     }
 
     // ── Resource sliders ──────────────────────────────────────────────────────
