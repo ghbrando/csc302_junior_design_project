@@ -1,0 +1,88 @@
+@namespace unicoreprovider.Components
+
+<div class="card h-100 p-3 d-flex flex-column justify-content-between"
+     style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+
+    <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="text-uppercase fw-bold" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
+            NODE STATUS
+        </span>
+
+        <label class="toggle-switch">
+            <input type="checkbox" checked="@IsOnline" @onchange="HandleToggle" />
+            <span class="slider"></span>
+        </label>
+    </div>
+
+    <div class="mt-2">
+        <h2 class="fw-bold mb-0"
+            style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @(IsOnline ? "var(--uc-green)" : "var(--uc-text-muted)"); text-shadow: @(IsOnline ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
+            @(IsOnline ? "ONLINE" : "OFFLINE")
+        </h2>
+    </div>
+</div>
+
+<style>
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 48px;
+        height: 24px;
+    }
+
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: var(--uc-border-light);
+        transition: .4s;
+        border-radius: 34px;
+        border: 1px solid #444;
+    }
+
+    .slider:before {
+        position: absolute;
+        content: "";
+        height: 16px;
+        width: 16px;
+        left: 4px;
+        bottom: 3px;
+        background-color: var(--uc-text-secondary);
+        transition: .4s;
+        border-radius: 50%;
+    }
+
+    input:checked + .slider {
+        background-color: rgba(0, 230, 118, 0.2);
+        border-color: var(--uc-green);
+    }
+
+    input:checked + .slider:before {
+        transform: translateX(24px);
+        background-color: var(--uc-green);
+        box-shadow: 0 0 10px var(--uc-green);
+    }
+</style>
+
+@code {
+    [Parameter]
+    public string NodeStatus { get; set; } = "Offline";
+
+    [Parameter]
+    public EventCallback<string> OnNodeStatusChanged { get; set; }
+
+    private bool IsOnline => NodeStatus == "Online";
+
+    private async Task HandleToggle(ChangeEventArgs e)
+    {
+        var isChecked = (bool)(e.Value ?? false);
+        var newStatus = isChecked ? "Online" : "Offline";
+        await OnNodeStatusChanged.InvokeAsync(newStatus);
+    }
+}

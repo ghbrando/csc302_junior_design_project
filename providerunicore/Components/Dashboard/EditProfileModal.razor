@@ -1,0 +1,327 @@
+@if (IsVisible)
+{
+    <div class="modal-backdrop" @onclick="HandleBackdropClick">
+        <div class="profile-modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <div class="modal-avatar">@(EditName.Length > 0 ? EditName[0] : '?')</div>
+                <div>
+                    <h2 class="modal-title">Edit Profile</h2>
+                    <p class="modal-subtitle">Update your account details</p>
+                </div>
+                <button class="modal-close" @onclick="HandleClose">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">DISPLAY NAME</label>
+                    <div class="input-wrapper">
+                        <i class="bi bi-person input-icon"></i>
+                        <input class="form-input"                               type="text"                               @bind="EditName"                               @bind:event="oninput"
+                               placeholder="Enter your name" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">EMAIL ADDRESS</label>
+                    <div class="input-wrapper">
+                        <i class="bi bi-envelope input-icon"></i>
+                        <input class="form-input"                               type="email"                               @bind="EditEmail"                               @bind:event="oninput"
+                               placeholder="Enter your email" />
+                    </div>
+                </div>
+
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="error-message">
+                        <i class="bi bi-exclamation-circle"></i>
+                        @errorMessage
+                    </div>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-cancel" @onclick="HandleClose">Cancel</button>
+                <button class="btn-save" @onclick="HandleSave">
+                    <i class="bi bi-check2"></i>
+                    SAVE CHANGES
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public string InitialName { get; set; } = "";
+    [Parameter] public string InitialEmail { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<(string Name, string Email)> OnSave { get; set; }
+
+    private string EditName = "";
+    private string EditEmail = "";
+    private string errorMessage = "";
+
+    protected override void OnParametersSet()
+    {
+        if (IsVisible)
+        {
+            EditName = InitialName;
+            EditEmail = InitialEmail;
+            errorMessage = "";
+        }
+    }
+
+    private async Task HandleClose()
+    {
+        errorMessage = "";
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleBackdropClick()
+    {
+        await HandleClose();
+    }
+
+    private async Task HandleSave()
+    {
+        if (string.IsNullOrWhiteSpace(EditName))
+        {
+            errorMessage = "Name cannot be empty.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(EditEmail) ||
+            !System.Text.RegularExpressions.Regex.IsMatch(EditEmail, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+        {
+            errorMessage = "Please enter a valid email address.";
+            return;
+        }
+
+        await OnSave.InvokeAsync((EditName.Trim(), EditEmail.Trim()));
+    }
+}
+
+<style>
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        z-index: 2000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        animation: fadeIn 0.15s ease;
+    }
+
+    .profile-modal {
+        background-color: #1a1a1a;
+        border: 1px solid var(--uc-border);
+        border-radius: calc(var(--uc-radius) * 2);
+        width: 100%;
+        max-width: 420px;
+        margin: 1rem;
+        animation: slideUp 0.2s ease;
+        overflow: hidden;
+    }
+
+    .modal-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--uc-border);
+        position: relative;
+    }
+
+    .modal-avatar {
+        width: 48px;
+        height: 48px;
+        border-radius: var(--uc-radius);
+        background-color: var(--uc-green);
+        color: #000;
+        font-weight: 700;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    .modal-title {
+        color: var(--uc-text-white);
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0;
+        letter-spacing: 0.5px;
+    }
+
+    .modal-subtitle {
+        color: var(--uc-text-muted);
+        font-size: 0.72rem;
+        margin: 2px 0 0;
+    }
+
+    .modal-close {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: none;
+        border: none;
+        color: var(--uc-text-muted);
+        font-size: 1.2rem;
+        cursor: pointer;
+        padding: 0.25rem;
+        line-height: 1;
+        transition: color 0.15s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-close:hover {
+        color: var(--uc-text-white);
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .form-label {
+        color: var(--uc-text-muted);
+        font-size: 0.62rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+    }
+
+    .input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    .input-icon {
+        position: absolute;
+        left: 0.85rem;
+        color: var(--uc-text-muted);
+        font-size: 0.9rem;
+        pointer-events: none;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 0.65rem 0.85rem 0.65rem 2.4rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-white);
+        font-size: 0.85rem;
+        transition: border-color 0.2s ease, background-color 0.2s ease;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .form-input::placeholder {
+        color: #555;
+    }
+
+    .form-input:focus {
+        border-color: var(--uc-green);
+        background-color: rgba(0, 230, 118, 0.04);
+    }
+
+    .error-message {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #ff5f5f;
+        font-size: 0.75rem;
+        padding: 0.6rem 0.85rem;
+        background-color: rgba(255, 95, 95, 0.08);
+        border: 1px solid rgba(255, 95, 95, 0.2);
+        border-radius: var(--uc-radius);
+    }
+
+    .modal-footer {
+        display: flex;
+        gap: 0.75rem;
+        padding: 1.25rem 1.5rem;
+        border-top: 1px solid var(--uc-border);
+    }
+
+    .btn-cancel {
+        flex: 1;
+        padding: 0.65rem;
+        background-color: transparent;
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-cancel:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #aaa;
+    }
+
+    .btn-save {
+        flex: 2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.65rem;
+        background-color: var(--uc-green);
+        border: none;
+        border-radius: var(--uc-radius);
+        color: #000;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .btn-save:hover {
+        background-color: #00ff88;
+        box-shadow: 0 0 16px rgba(0, 230, 118, 0.3);
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(16px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>

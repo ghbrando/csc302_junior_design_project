@@ -1,0 +1,296 @@
+@page "/settings"
+@using unicoreprovider.Models
+@using unicoreprovider.Services
+@using Google.Cloud.Firestore
+@implements IDisposable
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreprovider.Services.AuthorizedPageBase
+@inject IMachineService MachineService
+
+<PageTitle>Settings</PageTitle>
+
+<div class="container-fluid px-4 py-3">
+
+    @* Header *@
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h5 class="fw-bold text-white mb-0" style="letter-spacing: 0.5px;">Settings</h5>
+            <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Provider configuration & hardware specifications
+            </p>
+        </div>
+    </div>
+
+    @* Machine Specs Section *@
+    <div class="mb-2">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="text-uppercase text-muted mb-0" style="font-size: 0.7rem; letter-spacing: 1px;">Machine
+                Specifications</h6>
+                <div class="d-flex align-items-center gap-2">
+                    @if (_specs != null)
+                    {
+                        <span class="text-muted" style="font-size: 0.65rem;">
+                            Last detected: @_specs.LastDetected.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                        </span>
+                    }
+                    <button class="btn btn-redetect rounded-1" @onclick="ReDetect" disabled="@_detecting">
+                        <i class="bi bi-arrow-clockwise me-1"></i>
+                        @(_detecting ? "DETECTING..." : (_specs == null ? "DETECT NOW" : "RE-DETECT"))
+                    </button>
+                </div>
+            </div>
+
+            @if (_specs == null && !_detecting)
+            {
+                <div class="specs-empty">
+                    <i class="bi bi-cpu specs-empty-icon"></i>
+                    <p class="text-muted mb-1" style="font-size: 0.85rem;">No hardware specs detected yet.</p>
+                    <p class="text-muted" style="font-size: 0.75rem;">Click "Detect Now" to scan this machine's hardware and
+                        save it to your provider profile.</p>
+                    </div>
+                }
+        else if (_detecting)
+                {
+                    <div class="specs-empty">
+                        <div class="spinner-border spinner-border-sm text-success mb-2" role="status"></div>
+                        <p class="text-muted mb-0" style="font-size: 0.85rem;">Detecting hardware...</p>
+                    </div>
+                }
+                else if (_specs != null)
+                {
+                    <div class="row g-3">
+                        @* CPU *@
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="spec-card">
+                                <div class="spec-card-header">
+                                    <i class="bi bi-cpu spec-icon" style="color: #3b82f6;"></i>
+                                    <span class="spec-label">CPU</span>
+                                </div>
+                                <div class="spec-value">@_specs.CpuName</div>
+                                <div class="spec-details">
+                                    <span>@_specs.CpuCores cores</span>
+                                    <span class="spec-dot">·</span>
+                                    <span>@_specs.CpuThreads threads</span>
+                                    <span class="spec-dot">·</span>
+                                    <span>@_specs.CpuClockSpeedGHz GHz</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* RAM *@
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="spec-card">
+                                <div class="spec-card-header">
+                                    <i class="bi bi-hdd-rack spec-icon" style="color: #a855f7;"></i>
+                                    <span class="spec-label">RAM</span>
+                                </div>
+                                <div class="spec-value">@_specs.RamGB GB</div>
+                                <div class="spec-details">
+                                    <span>System Memory</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* GPU *@
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="spec-card">
+                                <div class="spec-card-header">
+                                    <i class="bi bi-gpu-card spec-icon" style="color: #10b981;"></i>
+                                    <span class="spec-label">GPU</span>
+                                </div>
+                                <div class="spec-value">@(_specs.GpuName == string.Empty ? "Not Detected" : _specs.GpuName)</div>
+                                <div class="spec-details">
+                                    @if (_specs.VramGB > 0)
+                                    {
+                                        <span>@_specs.VramGB GB VRAM</span>
+                                    }
+                                    else
+                                    {
+                                        <span>VRAM not reported</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        @* Disk *@
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="spec-card">
+                                <div class="spec-card-header">
+                                    <i class="bi bi-device-hdd spec-icon" style="color: #f59e0b;"></i>
+                                    <span class="spec-label">Storage</span>
+                                </div>
+                                <div class="spec-value">@_specs.DiskGB GB</div>
+                                <div class="spec-details">
+                                    <span>Total Disk Capacity</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* OS *@
+                        <div class="col-12 col-md-6 col-lg-4">
+                            <div class="spec-card">
+                                <div class="spec-card-header">
+                                    <i class="bi bi-window spec-icon" style="color: #00e5ff;"></i>
+                                    <span class="spec-label">Operating System</span>
+                                </div>
+                                <div class="spec-value">@_specs.OsName</div>
+                                <div class="spec-details">
+                                    <span>Host OS</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <style>
+            .btn-redetect {
+                border: 1px solid var(--uc-border);
+                color: var(--uc-text-muted);
+                font-size: 0.65rem;
+                font-weight: bold;
+                letter-spacing: 1px;
+                padding: 0.35rem 0.75rem;
+                background: transparent;
+                transition: all 0.2s;
+            }
+
+            .btn-redetect:hover:not(:disabled) {
+                background-color: rgba(0, 230, 118, 0.08);
+                border-color: var(--uc-green);
+                color: var(--uc-green);
+            }
+
+            .btn-redetect:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .specs-empty {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 3rem;
+                border: 1px dashed var(--uc-border);
+                border-radius: var(--uc-radius);
+                text-align: center;
+            }
+
+            .specs-empty-icon {
+                font-size: 2rem;
+                color: var(--uc-text-muted);
+                margin-bottom: 0.75rem;
+            }
+
+            .spec-card {
+                background-color: var(--uc-bg-card);
+                border: 1px solid var(--uc-border);
+                border-radius: var(--uc-radius);
+                padding: 1rem 1.25rem;
+            }
+
+            .spec-card-header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .spec-icon {
+                font-size: 1rem;
+            }
+
+            .spec-label {
+                font-size: 0.65rem;
+                font-weight: 600;
+                letter-spacing: 1px;
+                color: var(--uc-text-muted);
+                text-transform: uppercase;
+            }
+
+            .spec-value {
+                font-size: 0.95rem;
+                font-weight: 600;
+                color: var(--uc-text-white);
+                margin-bottom: 0.25rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .spec-details {
+                font-size: 0.7rem;
+                color: var(--uc-text-muted);
+            }
+
+            .spec-dot {
+                margin: 0 0.25rem;
+            }
+        </style>
+
+@code {
+    private MachineSpecs? _specs;
+    private bool _detecting = false;
+    private FirestoreChangeListener? _specsListener;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+
+        if (AuthState.FirebaseUid != null)
+        {
+            _specs = await MachineService.GetCachedSpecsAsync();
+            StartListener();
+        }
+    }
+
+    private void StartListener()
+    {
+        if (AuthState.FirebaseUid == null) return;
+
+        _specsListener = MachineService.ListenSpecs(AuthState.FirebaseUid, specs =>
+        {
+            _specs = specs;
+            _ = InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private void OnAuthStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (AuthState.FirebaseUid != null)
+            {
+                _specs = await MachineService.GetCachedSpecsAsync();
+                StartListener();
+            }
+            StateHasChanged();
+        });
+    }
+
+    private async Task ReDetect()
+    {
+        if (AuthState.FirebaseUid == null) return;
+        _detecting = true;
+        StateHasChanged();
+        try
+        {
+            _specs = await MachineService.GetSpecsAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Hardware detection failed: {ex.Message}");
+        }
+        finally
+        {
+            _detecting = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        _ = _specsListener?.StopAsync();
+    }
+}

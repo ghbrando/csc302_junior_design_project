@@ -1,0 +1,97 @@
+@using unicoreprovider.Models
+@namespace unicoreprovider.Components
+
+<style>
+    .payout-table-override {
+        --bs-table-bg: transparent !important;
+        --bs-table-striped-bg: transparent !important;
+        --bs-table-hover-bg: var(--uc-bg-elevated) !important;
+        --bs-table-color: var(--uc-text-table) !important;
+        --bs-table-border-color: var(--uc-border) !important;
+        background-color: transparent !important;
+        color: var(--uc-text-table) !important;
+    }
+
+    .payout-table-override th,
+    .payout-table-override td {
+        background-color: transparent !important;
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .payout-card {
+        background-color: var(--uc-bg-card) !important;
+        border: 1px solid var(--uc-border) !important;
+        border-radius: var(--uc-radius) !important;
+    }
+
+    .badge-completed {
+        background-color: rgba(0, 230, 118, 0.1);
+        color: var(--uc-green);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        font-size: 0.6rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 1px;
+    }
+
+    .badge-pending {
+        background-color: rgba(255, 235, 59, 0.1);
+        color: var(--uc-yellow);
+        border: 1px solid rgba(255, 235, 59, 0.3);
+        font-size: 0.6rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 1px;
+    }
+</style>
+
+<div class="card payout-card h-100 p-3">
+    <h6 class="text-uppercase fw-bold mb-3" style="letter-spacing: 1.5px; font-size: 0.7rem; color: var(--uc-text-muted);">
+        Payout History
+    </h6>
+
+    <div class="table-responsive">
+        <table class="table payout-table-override align-middle mb-0">
+            <thead>
+                <tr class="text-uppercase" style="font-size: 0.65rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
+                    <th class="pb-2 ps-0">Payout ID</th>
+                    <th class="pb-2">Date</th>
+                    <th class="pb-2">Amount</th>
+                    <th class="pb-2">Method</th>
+                    <th class="pb-2 text-end pe-0">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var payout in Payouts)
+                {
+                    <tr>
+                        <td class="py-3 ps-0" style="font-family: var(--uc-font-mono); color: var(--uc-text-muted); font-size: 0.8rem;">
+                            @payout.Id
+                        </td>
+                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
+                            @payout.Date.ToString("yyyy-MM-dd")
+                        </td>
+                        <td class="py-3 fw-bold" style="color: var(--uc-text-white); font-family: var(--uc-font-mono); font-size: 0.9rem;">
+                            @payout.Amount.ToString("C")
+                        </td>
+                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
+                            @payout.Method
+                        </td>
+                        <td class="py-3 text-end pe-0">
+                            @if (payout.Status == "Completed")
+                            {
+                                <span class="badge rounded-pill badge-completed">COMPLETED</span>
+                            }
+                            else
+                            {
+                                <span class="badge rounded-pill badge-pending">PENDING</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<Payout> Payouts { get; set; } = new();
+}

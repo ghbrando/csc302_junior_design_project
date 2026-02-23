@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("consumerunicore")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+aaad6def534dc1fa29c415e3ff3869c6ac44c28b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ceb73f8c99f2910f2ebec9ff6595aec27fc1b362")]
 [assembly: System.Reflection.AssemblyProductAttribute("consumerunicore")]
 [assembly: System.Reflection.AssemblyTitleAttribute("consumerunicore")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

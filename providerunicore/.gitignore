@@ -13,6 +13,9 @@ appsettings.Development.json
 *.user
 *.userosscache
 *.sln.docstates
+unicore-junior-design-firebase-admin.json
+firebase-service-account.json
+appsettings.json
 
 ## Package Manager files
 .nuget/
@@ -28,3 +31,10 @@ Desktop.ini
 
 ## Environment/Secrets
 .env
+
+## Python virtual environment
+venv/
+.venv/
+
+# Vs Code
+providerunicore.sln
