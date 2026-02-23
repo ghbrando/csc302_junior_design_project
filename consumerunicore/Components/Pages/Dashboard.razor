@@ -1,0 +1,10 @@
+@page "/dashboard"
+@using unicoreconsumer.Services
+@using Microsoft.AspNetCore.Components.Web
+@using System.Threading
+@using Google.Cloud.Firestore
+@inject IConsumerService ConsumerService
+@inject IConfiguration Configuration
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreconsumer.Services.AuthorizedPageBase
+<p>HI</p>

@@ -4,6 +4,7 @@ using Google.Cloud.Firestore;
 using Google.Cloud.SecretManager.V1;
 using consumerunicore.Repositories;
 using consumerunicore.Components;
+using unicoreconsumer.Services;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +21,10 @@ builder.Services.AddFirestoreRepository<Consumer>(
     documentIdSelector: c => c.FirebaseUid);
 
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
+
+// state service used by Blazor components to track current user
+builder.Services.AddScoped<IAuthStateService, AuthStateService>();
+
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
