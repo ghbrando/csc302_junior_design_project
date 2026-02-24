@@ -51,17 +51,20 @@
                    @bind:event="oninput" />
         </div>
 
-        <div class="field-group">
-            <label class="field-label">PASSWORD</label>
-            <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" />
-        </div>
+        @if (!isReset)
+        {
+            <div class="field-group">
+                <label class="field-label">PASSWORD</label>
+                <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" />
+            </div>
+        }
 
         <button class="auth-submit" @onclick="HandleSubmit" disabled="@isLoading">
             @if (isLoading)
             {
                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
             }
-            @(isRegister ? "CREATE ACCOUNT" : "CONTINUE AS PROVIDER")
+            @(isRegister ? "CREATE ACCOUNT" : isReset ? "SEND RESET LINK" : "CONTINUE AS PROVIDER")
         </button>
 
         <div class="auth-toggle">
@@ -72,12 +75,26 @@
                     Sign In
                 </button>
             }
+            else if (isReset)
+            {
+                <span>Remember your password?</span>
+                <button class="toggle-btn" @onclick="() => { isReset = false; errorMessage = string.Empty; }">
+                    Back to Sign In
+                </button>
+            }
             else
             {
-                <span>Don't have an account?</span>
-                <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
-                    Register
-                </button>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div>
+                        <span>Don't have an account?</span>
+                        <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
+                            Register
+                        </button>
+                    </div>
+                    <button class="toggle-btn" @onclick="() => { isReset = true; errorMessage = string.Empty; }">
+                        Forgot Password?
+                    </button>
+                </div>
             }
         </div>
 
@@ -90,6 +107,7 @@
     private string password = string.Empty;
 
     private bool isRegister = false;
+    private bool isReset = false;
     private bool isLoading = false;
     private string errorMessage = string.Empty;
 
@@ -113,6 +131,13 @@
 
         try
         {
+            if (isReset)
+            {
+                await FirebaseAuth.SendPasswordResetEmailAsync(email);
+                errorMessage = "If the address exists, a reset link was sent.";
+                return;
+            }
+
             if (isRegister)
             {
                 // Create Firebase user, then save provider in Firestore
