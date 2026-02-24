@@ -154,6 +154,7 @@ The repository provides type-safe CRUD, advanced querying, real-time change list
 - [Docker Desktop](https://www.docker.com/products/docker-desktop)
 - A GCP project with Firestore and Firebase Authentication enabled
 - `gcloud` CLI authenticated to your project
+- `libnotify-bin` required for linux desktop notifications
 
 ### Local Development
 

@@ -64,6 +64,7 @@ builder.Services.AddControllers(); // Add API Controllers
 
 // Docker services — registered as Singleton so the monitor can receive
 // StartMonitoring() calls from the Dashboard and persist across requests.
+builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
@@ -83,6 +84,25 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 });
 
 builder.Services.AddAuthorization();
+
+// Check for 'notify-send' package on Linux at startup
+// Necessary for desktop push notifications
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+{
+    var check = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "which",
+        Arguments = "notify-send",
+        RedirectStandardOutput = true,
+        UseShellExecute = false
+    });
+    check?.WaitForExit();
+    if (check?.ExitCode != 0)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("notify-send not found. Install libnotify-bin for desktop notifications.");
+    }
+}
 
 var app = builder.Build();
 
