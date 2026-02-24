@@ -56,13 +56,18 @@
                         <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.Client</td>
 
                         <td class="py-3">
+                            @{
+                                var vmCpu = HostCpuCores > 0 && vm.CpuCores > 0
+                                    ? Math.Min(100.0, vm.CurrentCpuUsage * HostCpuCores / vm.CpuCores)
+                                    : vm.CurrentCpuUsage;
+                            }
                             <div class="d-flex align-items-center">
                                 <div class="progress me-3" style="height: 5px; width: 80px; background-color: var(--uc-border); border-radius: 2px;">
                                     <div class="progress-bar"
-                                         style="width: @vm.CurrentCpuUsage%; background-color: var(--uc-blue); border-radius: 2px;">
+                                         style="width: @vmCpu%; background-color: var(--uc-blue); border-radius: 2px;">
                                     </div>
                                 </div>
-                                <span class="small" style="color: var(--uc-text-muted);">@vm.CurrentCpuUsage.ToString("0")%</span>
+                                <span class="small" style="color: var(--uc-text-muted);">@vmCpu.ToString("0")%</span>
                             </div>
                         </td>
 
@@ -84,4 +89,5 @@
 
 @code {
     [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
+    [Parameter] public int HostCpuCores { get; set; }
 }

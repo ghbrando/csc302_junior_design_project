@@ -12,8 +12,10 @@ public interface IDockerService
     /// Pulls <paramref name="image"/> if not present locally, creates a container with SSH and
     /// the FRP client configured to tunnel SSH through the GCP relay on <paramref name="relayPort"/>,
     /// starts it, and returns the Docker container ID.
+    /// Hard Docker limits are applied: <paramref name="cpuCores"/> logical cores and
+    /// <paramref name="ramGB"/> GB of RAM.
     /// </summary>
-    Task<string> StartContainerAsync(string name, string image, int relayPort);
+    Task<string> StartContainerAsync(string name, string image, int relayPort, int cpuCores, int ramGB);
 
     /// <summary>
     /// Returns the host port mapped to SSH (port 22) inside the container.

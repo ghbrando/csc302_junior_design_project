@@ -209,7 +209,7 @@
 
     <div class="row g-3">
         <div class="col-12">
-            <VmList Vms="@Vms" />
+            <VmList Vms="@Vms" HostCpuCores="@(_specs?.CpuThreads ?? 0)" />
         </div>
     </div>
 
@@ -235,6 +235,57 @@
                 </select>
             </div>
 
+            @{
+                var availCores = AvailableCpuCores;
+                var availRam   = AvailableRamGB;
+            }
+
+            <div class="mb-2" style="font-size: 0.72rem; color: #64748b; letter-spacing: 0.5px;">
+                AVAILABLE BUDGET &nbsp;—&nbsp;
+                <span style="color: @(availCores > 0 ? "#00e676" : "var(--uc-red)");">@availCores core@(availCores == 1 ? "" : "s")</span>
+                &nbsp;/&nbsp;
+                <span style="color: @(availRam > 0 ? "#00e676" : "var(--uc-red)");">@availRam GB RAM</span>
+            </div>
+
+            @if (availCores == 0 || availRam == 0)
+            {
+                <div class="alert py-2 mb-3" style="font-size: 0.78rem; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); color: #ef9a9a;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    No resources available. Raise your CPU or RAM limit, or stop a running VM first.
+                </div>
+            }
+
+            <div class="row g-2 mb-3">
+                <div class="col-6">
+                    <div class="uc-label">CPU Cores</div>
+                    <select class="uc-select" @bind="_selectedCpuCores" disabled="@(availCores == 0)">
+                        @for (int c = 1; c <= availCores; c++)
+                        {
+                            var val = c;
+                            <option value="@val">@val core@(val == 1 ? "" : "s")</option>
+                        }
+                        @if (availCores == 0)
+                        {
+                            <option value="0">— none available —</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-6">
+                    <div class="uc-label">RAM</div>
+                    <select class="uc-select" @bind="_selectedRamGB" disabled="@(availRam == 0)">
+                        @for (int r = 1; r <= availRam; r++)
+                        {
+                            var val = r;
+                            <option value="@val">@val GB</option>
+                        }
+                        @if (availRam == 0)
+                        {
+                            <option value="0">— none available —</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
             @if (_launchError != null)
             {
                 <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
@@ -250,7 +301,7 @@
                 </button>
                 <button class="btn btn-sm btn-launch-vm rounded-1"
                         @onclick="LaunchVmAsync"
-                        disabled="@_isLaunching">
+                        disabled="@(_isLaunching || AvailableCpuCores == 0 || AvailableRamGB == 0)">
                     @if (_isLaunching)
                     {
                         <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
@@ -380,6 +431,19 @@
     private bool _isLaunching = false;
     private string? _launchError = null;
     private string _selectedImage = "debian:bookworm-slim";
+    private int _selectedCpuCores = 1;
+    private int _selectedRamGB = 1;
+
+    // Available resources = provider budget minus what running VMs already claim
+    private int AvailableCpuCores =>
+        Math.Max(0,
+            (int)Math.Floor((CurrentProvider?.CpuLimitPercent ?? 0) / 100.0 * (_specs?.CpuCores ?? 0))
+            - Vms.Where(v => v.Status == "Running").Sum(v => v.CpuCores));
+
+    private int AvailableRamGB =>
+        Math.Max(0,
+            (int)Math.Floor(CurrentProvider?.RamLimitGB ?? 0)
+            - Vms.Where(v => v.Status == "Running").Sum(v => v.RamGB));
 
     private bool _showStopModal = false;
     private bool _isStopping = false;
@@ -475,6 +539,8 @@
     private void OpenLaunchModal()
     {
         _launchError = null;
+        _selectedCpuCores = AvailableCpuCores > 0 ? 1 : 0;
+        _selectedRamGB    = AvailableRamGB    > 0 ? 1 : 0;
         _showLaunchModal = true;
     }
 
@@ -492,6 +558,14 @@
 
         try
         {
+            // Guard: reject if the requested allocation exceeds remaining budget
+            if (_selectedCpuCores < 1 || _selectedRamGB < 1 ||
+                _selectedCpuCores > AvailableCpuCores || _selectedRamGB > AvailableRamGB)
+            {
+                _launchError = "Requested resources exceed your available UniCore budget.";
+                return;
+            }
+
             var vmId = Guid.NewGuid().ToString();
             var name = $"vm-{vmId[..8]}";
             var startedAt = DateTime.UtcNow;
@@ -502,9 +576,8 @@
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
                 .First(p => !usedPorts.Contains(p));
 
-            var containerId = await DockerService.StartContainerAsync(name, _selectedImage, relayPort);
-
-            var relayAddr = Configuration["FrpRelay:ServerAddr"] ?? "136.116.172.0";
+            var containerId = await DockerService.StartContainerAsync(
+                name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
 
             var vm = new VirtualMachine
             {
@@ -516,6 +589,8 @@
                 Image = _selectedImage,
                 ProviderId = AuthState.FirebaseUid ?? string.Empty,
                 RelayPort = relayPort,
+                CpuCores = _selectedCpuCores,
+                RamGB = _selectedRamGB,
             };
 
             await VmService.CreateVmAsync(vm);
