@@ -14,6 +14,9 @@ public class ContainerMonitorService : IHostedService, IDisposable
     // vmId → (containerId, startedAt)
     private readonly ConcurrentDictionary<string, (string ContainerId, DateTime StartedAt)> _monitored = new();
 
+    // Prevents overlapping poll cycles when a tick fires before the previous one finishes
+    private readonly SemaphoreSlim _pollGate = new(1, 1);
+
     private Timer? _timer;
 
     public ContainerMonitorService(
@@ -60,24 +63,46 @@ public class ContainerMonitorService : IHostedService, IDisposable
 
     private async Task PollAllAsync()
     {
-        foreach (var (vmId, (containerId, startedAt)) in _monitored.ToList())
-        {
-            try
-            {
-                var (cpu, ram) = await _dockerService.GetContainerStatsAsync(containerId);
-                var uptime = DateTime.UtcNow - startedAt;
-                var uptimeStr = uptime.ToString(@"hh\:mm\:ss");
+        // Skip this tick entirely if the previous poll cycle hasn't finished yet
+        if (!await _pollGate.WaitAsync(0))
+            return;
 
-                // Create a short-lived scope to resolve the scoped IVmService
-                await using var scope = _scopeFactory.CreateAsyncScope();
-                var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
-                await vmService.UpdateVmMetricsAsync(vmId, cpu, 0, ram, uptimeStr);
-            }
-            catch (Exception ex)
+        try
+        {
+            foreach (var (vmId, (containerId, startedAt)) in _monitored.ToList())
             {
-                _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
-                    containerId, vmId, ex.Message);
+                try
+                {
+                    var (cpu, ram) = await _dockerService.GetContainerStatsAsync(containerId);
+                    var uptime = DateTime.UtcNow - startedAt;
+                    var uptimeStr = uptime.ToString(@"hh\:mm\:ss");
+
+                    await using var scope = _scopeFactory.CreateAsyncScope();
+                    var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+                    await vmService.UpdateVmMetricsAsync(vmId, cpu, 0, ram, uptimeStr);
+                }
+                catch (Docker.DotNet.DockerContainerNotFoundException)
+                {
+                    _logger.LogInformation(
+                        "Container {ContainerId} for VM {VmId} no longer exists; sending zero metrics and stopping monitor",
+                        containerId, vmId);
+
+                    StopMonitoring(vmId);
+
+                    await using var scope = _scopeFactory.CreateAsyncScope();
+                    var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+                    await vmService.UpdateVmMetricsAsync(vmId, 0, 0, 0, "00:00:00");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
+                        containerId, vmId, ex.Message);
+                }
             }
+        }
+        finally
+        {
+            _pollGate.Release();
         }
     }
 
