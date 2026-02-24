@@ -32,8 +32,8 @@ public class ContainerMonitorService : IHostedService, IDisposable
     // Called by Dashboard when a new container is launched
     public void StartMonitoring(string vmId, string containerId, DateTime startedAt)
     {
-        _monitored.TryAdd(vmId, (containerId, startedAt));
-        _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
+        if (_monitored.TryAdd(vmId, (containerId, startedAt)))
+            _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
     }
 
     // Called when a container is stopped
