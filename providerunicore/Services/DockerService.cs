@@ -38,6 +38,9 @@ public class DockerService : IDockerService, IDisposable
     // Cached client for the currently working endpoint. Reset if it becomes stale.
     private DockerClient? _cachedClient;
 
+    // Cached host total RAM in bytes, fetched once from Docker system info.
+    private long? _hostRamBytes;
+
     public async Task<bool> IsReachableAsync()
     {
         // Try all endpoints without touching the cache so this is always a fresh check.
@@ -55,7 +58,7 @@ public class DockerService : IDockerService, IDisposable
         return false;
     }
 
-    public async Task<string> StartContainerAsync(string name, string image, int relayPort)
+    public async Task<string> StartContainerAsync(string name, string image, int relayPort, int cpuCores, int ramGB)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
@@ -87,10 +90,11 @@ public class DockerService : IDockerService, IDisposable
         {
             "/bin/sh",
             "-c",
-            "apt-get update && apt-get install -y openssh-server curl > /dev/null 2>&1 && " +
+            "apt-get update && apt-get install -y openssh-server curl sudo > /dev/null 2>&1 && " +
             "mkdir -p /run/sshd && " +
             "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
             "echo 'consumer:consumer123' | chpasswd && " +
+            "echo 'consumer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && " +
             "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
             frpSetup + " && " +
             "/usr/sbin/sshd -D"
@@ -116,7 +120,11 @@ public class DockerService : IDockerService, IDisposable
                             new PortBinding { HostPort = "0" }  // Random port assignment
                         }
                     }
-                }
+                },
+                NanoCPUs   = (long)(cpuCores * 1_000_000_000L),
+                Memory     = (long)(ramGB * 1024L * 1024L * 1024L),
+                MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
+                PidsLimit  = 200   // prevent fork bombs from exhausting the host process table
             }
         });
 
@@ -173,7 +181,18 @@ public class DockerService : IDockerService, IDisposable
         if (stats is null)
             return (0, 0);
 
-        return (CalculateCpuPercent(stats), CalculateRamPercent(stats));
+        var hostRam = await GetHostRamBytesAsync();
+        return (CalculateCpuPercent(stats), CalculateRamPercent(stats, hostRam));
+    }
+
+    // Returns host total RAM in bytes, fetched once and cached.
+    private async Task<long> GetHostRamBytesAsync()
+    {
+        if (_hostRamBytes.HasValue) return _hostRamBytes.Value;
+        var client = await GetClientAsync();
+        var info = await client.System.GetSystemInfoAsync();
+        _hostRamBytes = info.MemTotal;
+        return _hostRamBytes.Value;
     }
 
     // Returns the cached client if it is still responsive, otherwise discovers
@@ -240,6 +259,9 @@ public class DockerService : IDockerService, IDisposable
         return parts.Length == 2 ? (parts[0], parts[1]) : (imageString, "latest");
     }
 
+    // Returns % of total host CPU (0–100 regardless of core count).
+    // systemDelta already accounts for all cores, so dividing without scaling
+    // by cpuCount gives the fraction of the whole machine's CPU budget.
     private static double CalculateCpuPercent(ContainerStatsResponse stats)
     {
         var cpuDelta = (double)(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage);
@@ -248,22 +270,20 @@ public class DockerService : IDockerService, IDisposable
         if (systemDelta <= 0 || cpuDelta <= 0)
             return 0;
 
-        var cpuCount = stats.CPUStats.OnlineCPUs > 0
-            ? (double)stats.CPUStats.OnlineCPUs
-            : (double)(stats.CPUStats.CPUUsage.PercpuUsage?.Count ?? 1);
-
-        return cpuDelta / systemDelta * cpuCount * 100.0;
+        return cpuDelta / systemDelta * 100.0;
     }
 
-    private static double CalculateRamPercent(ContainerStatsResponse stats)
+    // Returns % of total host RAM (0–100) using the machine's actual total,
+    // not the container's capped limit.
+    private static double CalculateRamPercent(ContainerStatsResponse stats, long hostRamBytes)
     {
-        if (stats.MemoryStats.Limit == 0)
+        if (hostRamBytes <= 0)
             return 0;
 
         var cache = stats.MemoryStats.Stats?.TryGetValue("cache", out var c) == true ? c : 0;
         var usedBytes = stats.MemoryStats.Usage - cache;
 
-        return (double)usedBytes / stats.MemoryStats.Limit * 100.0;
+        return (double)usedBytes / hostRamBytes * 100.0;
     }
 
     public void Dispose() => _cachedClient?.Dispose();
