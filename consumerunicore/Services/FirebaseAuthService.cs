@@ -61,6 +61,22 @@ public class FirebaseAuthService : IFirebaseAuthService
         return result.IdToken;
     }
 
+    // send password reset email via Firebase
+    public async Task SendPasswordResetEmailAsync(string email)
+    {
+        var http = _httpFactory.CreateClient();
+        var payload = new { requestType = "PASSWORD_RESET", email };
+        var url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=" + _webApiKey;
+        var response = await http.PostAsJsonAsync(url, payload);
+        var result = await response.Content.ReadFromJsonAsync<FirebaseRestResponse>()
+                       ?? throw new Exception("Invalid response format from Firebase.");
+
+        // the success response does not include an error field but sometimes
+        // the same model is used so we check anyway.
+        if (!string.IsNullOrEmpty(result.Error?.Message))
+            throw new Exception(result.Error.Message);
+    }
+
     // Internal response model for Firebase REST API
     private class FirebaseRestResponse
     {

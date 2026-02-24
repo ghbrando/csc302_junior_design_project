@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using FirebaseAdmin.Auth;
 using unicoreprovider.Services;
 
+public class PasswordResetRequest { public string Email { get; set; } = string.Empty; }
+
+
 //Used For: Authentication Controller
 [ApiController]
 [Route("api/[controller]")]
@@ -96,6 +99,24 @@ public class AuthController : ControllerBase
         await FirebaseAuth.DefaultInstance.RevokeRefreshTokensAsync(uid);
 
         return Ok(new { message = "Logged out successfully." });
+    }
+
+    // Request password-reset email
+    [HttpPost("password-reset")]
+    public async Task<IActionResult> SendPasswordReset([FromBody] PasswordResetRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { error = "Email is required." });
+
+        try
+        {
+            await _firebaseAuthService.SendPasswordResetEmailAsync(request.Email);
+            return Ok(new { message = "Password reset email sent if address exists." });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     // Protected endpoint to get current provider info
