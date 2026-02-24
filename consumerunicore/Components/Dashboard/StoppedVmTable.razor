@@ -1,0 +1,90 @@
+@namespace unicoreconsumer.Components
+
+<div class="stopped-table">
+    <div class="table-header">
+        <span>VM NAME</span>
+        <span>OS / TYPE</span>
+        <span>IP ADDRESS</span>
+        <span>TOTAL COST</span>
+        <span>STATUS</span>
+    </div>
+    @foreach (var vm in Vms)
+    {
+        <div class="table-row">
+            <span class="vm-name-mono">@vm.Name</span>
+            <span>@vm.Os &bull; @vm.Specs</span>
+            <span>@vm.IpAddress</span>
+            <span class="cost-text">@vm.TotalCost</span>
+            <span><span class="stopped-badge">STOPPED</span></span>
+        </div>
+    }
+</div>
+
+@code {
+    public class StoppedVm
+    {
+        public string Name { get; set; } = "";
+        public string Os { get; set; } = "";
+        public string Specs { get; set; } = "";
+        public string IpAddress { get; set; } = "";
+        public string TotalCost { get; set; } = "";
+    }
+
+    [Parameter] public List<StoppedVm> Vms { get; set; } = new();
+}
+
+<style>
+    .stopped-table {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        overflow: hidden;
+    }
+
+    .table-header {
+        display: grid;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        padding: 0.7rem 1.2rem;
+        font-size: 0.65rem;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+        font-weight: 600;
+        border-bottom: 1px solid var(--uc-border);
+        background: var(--uc-bg-elevated);
+    }
+
+    .table-row {
+        display: grid;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        padding: 1rem 1.2rem;
+        font-size: 0.82rem;
+        color: var(--uc-text-table);
+        align-items: center;
+    }
+
+    .table-row:not(:last-child) {
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .vm-name-mono {
+        font-family: var(--uc-font-mono);
+        color: var(--uc-text-white);
+        font-weight: 600;
+    }
+
+    .cost-text {
+        color: var(--uc-text-white);
+        font-weight: 600;
+    }
+
+    .stopped-badge {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-secondary);
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 0.3rem 0.6rem;
+        border-radius: 4px;
+    }
+</style>

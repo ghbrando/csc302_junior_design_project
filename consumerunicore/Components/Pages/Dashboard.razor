@@ -7,4 +7,96 @@
 @inject IConfiguration Configuration
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
-<p>HI</p>
+@using unicoreconsumer.Components
+<div class="dashboard">
+
+    <DashboardHeader Title="Virtual Machines" RunningCount="@runningVms.Count" OnCreate="HandleCreateVm" />
+
+    <!-- Stat Cards -->
+    <div class="stat-grid">
+        <StatCard Label="RUNNING VMS" Icon="bi-hdd-stack" IconColor="var(--uc-purple)"
+                  Value="@runningVms.Count.ToString()" SubText=" active" />
+
+        <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)" Value="@($"${totalSpent:F2}")"
+                  Accent="true" />
+
+        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)" Value="@stoppedVms.Count.ToString()"
+                  SubText=" vm(s)" />
+
+        <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)"
+                  Value="@alertCount.ToString()" SubText=" over budget" />
+    </div>
+
+    <!-- Running VMs -->
+    <div class="section-title">RUNNING INSTANCES — BUDGET MONITORING</div>
+    <div class="vm-grid">
+        @foreach (var vm in runningVms)
+        {
+            <VmCard Name="@vm.Name" Os="@vm.Os" Specs="@vm.Specs" IpAddress="@vm.IpAddress" Cost="@($"${vm.Cost:F2}")"
+                    Budget="@($"${vm.BudgetLimit:F2}")" Uptime="@vm.Uptime" BudgetPercent="@(vm.Cost / vm.BudgetLimit * 100)"
+                    IsOverBudget="@(vm.Cost > vm.BudgetLimit)" OverBy="@($"${vm.Cost - vm.BudgetLimit:F2}")" />
+        }
+    </div>
+
+    <!-- Stopped VMs -->
+    <div class="section-title" style="margin-top: 2rem;">STOPPED INSTANCES</div>
+    <StoppedVmTable Vms="@stoppedVms" />
+
+</div>
+
+@code {
+    // ── Running VM model ──────────────────────────────────────────────────────
+    record RunningVm(string Name, string Os, string Specs, string IpAddress,
+                     double Cost, double BudgetLimit, string Uptime);
+
+    // ── Static sample data ────────────────────────────────────────────────────
+    private List<RunningVm> runningVms = new()
+    {
+        new("ml-training-node-01", "Ubuntu 22.04 LTS", "8 vCPU / 16GB RAM", "203.0.113.42", 387.50, 500.00, "2d 14h"),
+        new("render-server-alpha", "Ubuntu 22.04 LTS", "4 vCPU / 8GB RAM", "203.0.113.87", 215.30, 200.00, "1d 8h"),
+    };
+
+    private List<StoppedVmTable.StoppedVm> stoppedVms = new()
+    {
+        new() { Name = "data-pipeline-worker", Os = "Debian 11", Specs = "2 vCPU / 4GB RAM", IpAddress = "203.0.113.156",
+TotalCost = "$150.00" },
+    };
+
+    private double totalSpent => runningVms.Sum(v => v.Cost);
+    private int alertCount => runningVms.Count(v => v.Cost > v.BudgetLimit);
+
+    private void HandleCreateVm()
+    {
+        // Wire up navigation or modal here
+    }
+}
+
+<style>
+    .dashboard {
+        padding: 2rem 2.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        font-family: var(--uc-font-base);
+    }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .section-title {
+        font-size: 0.65rem;
+        letter-spacing: 0.12em;
+        color: var(--uc-text-muted);
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    .vm-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+</style>

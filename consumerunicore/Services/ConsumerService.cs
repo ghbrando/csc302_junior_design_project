@@ -1,20 +1,35 @@
 using Google.Cloud.Firestore;
 using consumerunicore.Repositories;
+using consumerunicore.Services;    // IProviderService lives here
 
 //Used For: Consumer Service Implementation
 public class ConsumerService : IConsumerService
 {
     private readonly IFirestoreRepository<Consumer> _repository;
+    private readonly IProviderService _providerService;
 
-    public ConsumerService(IFirestoreRepository<Consumer> repository)
+    public ConsumerService(IFirestoreRepository<Consumer> repository,
+                           IProviderService providerService)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _providerService = providerService ?? throw new ArgumentNullException(nameof(providerService));
     }
 
-    // Get consumer by Firebase UID (document ID)
+    // Get consumer by Firebase UID (document ID). If the document doesn't exist
+    // but a provider with that UID does, automatically create and return the
+    // new consumer record.
     public async Task<Consumer?> GetByFirebaseUidAsync(string firebaseUid)
     {
-        return await _repository.GetByIdAsync(firebaseUid);
+        var consumer = await _repository.GetByIdAsync(firebaseUid);
+        if (consumer == null)
+        {
+            var provider = await _providerService.GetByFirebaseUidAsync(firebaseUid);
+            if (provider != null)
+            {
+                consumer = await CreateConsumerAsync(provider.Name, provider.Email, firebaseUid);
+            }
+        }
+        return consumer;
     }
 
     // Create a new consumer

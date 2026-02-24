@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using FirebaseAdmin.Auth;
+using unicoreprovider.Services;
 
 //Used For: Authentication Controller
 [ApiController]
@@ -9,11 +10,15 @@ public class AuthController : ControllerBase
 {
     private readonly IFirebaseAuthService _firebaseAuthService;
     private readonly IProviderService _providerService;
+    private readonly IConsumerService _consumerService;
 
-    public AuthController(IFirebaseAuthService firebaseAuthService, IProviderService providerService)
+    public AuthController(IFirebaseAuthService firebaseAuthService,
+                          IProviderService providerService,
+                          IConsumerService consumerService)
     {
         _firebaseAuthService = firebaseAuthService;
-        _providerService     = providerService;
+        _providerService = providerService;
+        _consumerService = consumerService;
     }
 
     // Register a new provider with email + password + name
@@ -25,9 +30,9 @@ public class AuthController : ControllerBase
 
         try
         {
-            var idToken      = await _firebaseAuthService.SignUpAsync(request.Email, request.Password);
+            var idToken = await _firebaseAuthService.SignUpAsync(request.Email, request.Password);
             var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(idToken);
-            var uid          = decodedToken.Uid;
+            var uid = decodedToken.Uid;
 
             var existing = await _providerService.GetByFirebaseUidAsync(uid);
             if (existing != null)
@@ -38,9 +43,9 @@ public class AuthController : ControllerBase
             return CreatedAtAction(nameof(GetCurrentProvider), new AuthResponse
             {
                 FirebaseUid = uid,
-                Email       = provider.Email,
-                Name        = provider.Name,
-                LastLogin   = provider.LastLogin
+                Email = provider.Email,
+                Name = provider.Name,
+                LastLogin = provider.LastLogin
             });
         }
         catch (Exception ex)
@@ -55,10 +60,11 @@ public class AuthController : ControllerBase
     {
         try
         {
-            var idToken      = await _firebaseAuthService.SignInAsync(request.Email, request.Password);
+            var idToken = await _firebaseAuthService.SignInAsync(request.Email, request.Password);
             var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(idToken);
-            var uid          = decodedToken.Uid;
+            var uid = decodedToken.Uid;
 
+            // GetByFirebaseUidAsync will auto-promote a consumer if necessary.
             var provider = await _providerService.GetByFirebaseUidAsync(uid);
             if (provider == null)
                 return NotFound(new { error = "Provider not found. Please register first." });
@@ -68,9 +74,9 @@ public class AuthController : ControllerBase
             return Ok(new AuthResponse
             {
                 FirebaseUid = uid,
-                Email       = provider.Email,
-                Name        = provider.Name,
-                LastLogin   = provider.LastLogin
+                Email = provider.Email,
+                Name = provider.Name,
+                LastLogin = provider.LastLogin
             });
         }
         catch (Exception ex)
