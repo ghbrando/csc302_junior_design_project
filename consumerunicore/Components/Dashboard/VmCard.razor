@@ -1,0 +1,266 @@
+@namespace unicoreconsumer.Components
+
+<div class="vm-card @(IsOverBudget ? "alert-card" : "")">
+
+    <div class="vm-card-header">
+        <div class="vm-name">
+            <span class="terminal-caret">&gt;_</span>
+            @Name
+        </div>
+        @if (IsOverBudget)
+        {
+            <span class="alert-badge">ALERT</span>
+        }
+    </div>
+
+    <div class="vm-meta">@Os &bull; @Specs</div>
+
+    <div class="vm-status">
+        <span class="running-dot"></span>
+        <span class="running-label">RUNNING</span>
+        <span class="vm-ip">&bull; @IpAddress</span>
+    </div>
+
+    <div class="vm-cost-row">
+        <span class="vm-cost">@Cost</span>
+        <span class="vm-budget">/ @Budget</span>
+        <span class="vm-uptime">&#8679; @Uptime</span>
+    </div>
+
+    <div class="progress-bar-wrap">
+        <div class="progress-bar">
+            <div class="progress-fill @ProgressColor" style="width: @(Math.Min(BudgetPercent, 100))%;"></div>
+        </div>
+        <div class="progress-labels">
+            <span>0%</span>
+            <span>50%</span>
+            <span>75%</span>
+            <span class="label-end @(IsOverBudget ? "red-text" : "")">@BudgetPercent.ToString("F1")%</span>
+        </div>
+    </div>
+
+    @if (IsOverBudget)
+    {
+        <div class="over-budget-banner">
+            <i class="bi bi-exclamation-triangle"></i> Over budget by @OverBy
+        </div>
+    }
+
+    <div class="vm-actions">
+        <button class="btn-ssh"><i class="bi bi-terminal"></i> SSH</button>
+    </div>
+
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Os { get; set; } = "";
+    [Parameter] public string Specs { get; set; } = "";
+    [Parameter] public string IpAddress { get; set; } = "";
+    [Parameter] public string Cost { get; set; } = "";
+    [Parameter] public string Budget { get; set; } = "";
+    [Parameter] public string Uptime { get; set; } = "";
+    [Parameter] public double BudgetPercent { get; set; } = 0;
+    [Parameter] public bool IsOverBudget { get; set; } = false;
+    [Parameter] public string OverBy { get; set; } = "";
+
+    private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
+}
+
+<style>
+    .vm-card {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.4rem;
+    }
+
+    .alert-card {
+        border-color: rgba(255, 82, 82, 0.3);
+    }
+
+    .vm-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .vm-name {
+        font-family: var(--uc-font-mono);
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .terminal-caret {
+        color: var(--uc-green);
+        font-size: 0.85rem;
+    }
+
+    .alert-badge {
+        background: var(--uc-amber);
+        color: #000;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+    }
+
+    .vm-meta {
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .vm-status {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .running-dot {
+        width: 7px;
+        height: 7px;
+        background: var(--uc-green);
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+
+    .running-label {
+        color: var(--uc-green);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        font-size: 0.7rem;
+    }
+
+    .vm-ip {
+        color: var(--uc-text-muted);
+    }
+
+    .vm-cost-row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .vm-cost {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        line-height: 1;
+    }
+
+    .vm-budget {
+        font-size: 0.8rem;
+        color: var(--uc-text-muted);
+    }
+
+    .vm-uptime {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+    }
+
+    .progress-bar-wrap {
+        margin-bottom: 1.2rem;
+    }
+
+    .progress-bar {
+        height: 6px;
+        background: var(--uc-bg-elevated);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 0.35rem;
+    }
+
+    .progress-fill {
+        height: 100%;
+        border-radius: 3px;
+    }
+
+    .progress-fill.yellow {
+        background: var(--uc-yellow);
+    }
+
+    .progress-fill.red {
+        background: var(--uc-red);
+    }
+
+    .progress-fill.green {
+        background: var(--uc-green);
+    }
+
+    .progress-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.65rem;
+        color: var(--uc-text-muted);
+    }
+
+    .label-end {
+        color: var(--uc-text-secondary);
+    }
+
+    .label-end.red-text {
+        color: var(--uc-red);
+    }
+
+    .over-budget-banner {
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.25);
+        color: var(--uc-red);
+        font-size: 0.78rem;
+        padding: 0.6rem 0.9rem;
+        border-radius: var(--uc-radius);
+        margin-bottom: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .vm-actions {
+        display: flex;
+    }
+
+    .btn-ssh {
+        background: rgba(59, 130, 246, .12);
+        color: white;
+        border: none;
+        padding: 0.5rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        font-family: var(--uc-font-mono);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+        margin: 0 auto;
+    }
+
+    .btn-ssh:hover {
+        background: #2563eb;
+    }
+
+    @@keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.4;
+        }
+    }
+</style>

@@ -1,0 +1,97 @@
+@namespace unicoreconsumer.Components
+
+<div class="dashboard-header">
+    <div class="header-left">
+        <h1 class="page-title">@Title</h1>
+        <span class="status-badge">
+            <span class="status-dot"></span>
+            @RunningCount RUNNING
+        </span>
+    </div>
+    <button class="btn-create" @onclick="OnCreate">
+        <i class="bi bi-plus"></i> CREATE VM
+    </button>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Virtual Machines";
+    [Parameter] public int RunningCount { get; set; } = 0;
+    [Parameter] public EventCallback OnCreate { get; set; }
+}
+
+<style>
+    .dashboard-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .page-title {
+        font-size: 1.6rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+        margin: 0;
+    }
+
+    .status-badge {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        background: rgba(0, 230, 118, 0.1);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        color: var(--uc-green);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 0.3rem 0.7rem;
+        border-radius: 20px;
+    }
+
+    .status-dot {
+        width: 7px;
+        height: 7px;
+        background: var(--uc-green);
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.4;
+        }
+    }
+
+    .btn-create {
+        background: rgba(59, 130, 246, .12);
+        color: white;
+        border: none;
+        padding: 0.6rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+    }
+
+    .btn-create:hover {
+        background: #2563eb;
+    }
+</style>

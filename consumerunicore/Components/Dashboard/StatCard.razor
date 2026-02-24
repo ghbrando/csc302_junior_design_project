@@ -1,0 +1,68 @@
+@namespace unicoreconsumer.Components
+
+<div class="stat-card">
+    <div class="stat-header">
+        <span class="stat-label">@Label</span>
+        <i class="bi @Icon stat-icon" style="color: @IconColor;"></i>
+    </div>
+    <div class="stat-value @(Accent ? "accent" : "")">
+        @Value
+        @if (!string.IsNullOrEmpty(SubText))
+        {
+            <span class="stat-sub">@SubText</span>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "bi-circle";
+    [Parameter] public string IconColor { get; set; } = "var(--uc-text-muted)";
+    [Parameter] public string Value { get; set; } = "";
+    [Parameter] public string SubText { get; set; } = "";
+    [Parameter] public bool Accent { get; set; } = false;
+}
+
+<style>
+    .stat-card {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.2rem 1.4rem;
+    }
+
+    .stat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.8rem;
+    }
+
+    .stat-label {
+        font-size: 0.65rem;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+        font-weight: 600;
+    }
+
+    .stat-icon {
+        font-size: 1.1rem;
+    }
+
+    .stat-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        line-height: 1;
+    }
+
+    .stat-value.accent {
+        color: var(--uc-purple);
+    }
+
+    .stat-sub {
+        font-size: 0.8rem;
+        color: var(--uc-text-muted);
+        font-weight: 400;
+    }
+</style>

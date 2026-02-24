@@ -7,157 +7,69 @@
 @inject IConfiguration Configuration
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
+@using unicoreconsumer.Components
 <div class="dashboard">
 
-    <!-- Header -->
-    <div class="dashboard-header">
-        <div class="header-left">
-            <h1 class="page-title">Virtual Machines</h1>
-            <span class="status-badge">
-                <span class="status-dot"></span>
-                2 RUNNING
-            </span>
-        </div>
-        <button class="btn-create">
-            <i class="bi bi-plus"></i> CREATE VM
-        </button>
-    </div>
+    <DashboardHeader Title="Virtual Machines" RunningCount="@runningVms.Count" OnCreate="HandleCreateVm" />
 
     <!-- Stat Cards -->
     <div class="stat-grid">
-        <div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-label">RUNNING VMS</span>
-                <i class="bi bi-hdd-stack stat-icon" style="color: var(--uc-purple);"></i>
-            </div>
-            <div class="stat-value">2 <span class="stat-sub">active</span></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-label">TOTAL SPENT</span>
-                <i class="bi bi-activity stat-icon" style="color: var(--uc-purple);"></i>
-            </div>
-            <div class="stat-value purple">$752.80</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-label">STOPPED</span>
-                <i class="bi bi-clock stat-icon" style="color: var(--uc-text-muted);"></i>
-            </div>
-            <div class="stat-value">1 <span class="stat-sub">vms</span></div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-header">
-                <span class="stat-label">ALERTS</span>
-                <i class="bi bi-exclamation-triangle stat-icon" style="color: var(--uc-amber);"></i>
-            </div>
-            <div class="stat-value">2 <span class="stat-sub">over budget</span></div>
-        </div>
+        <StatCard Label="RUNNING VMS" Icon="bi-hdd-stack" IconColor="var(--uc-purple)"
+                  Value="@runningVms.Count.ToString()" SubText=" active" />
+
+        <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)" Value="@($"${totalSpent:F2}")"
+                  Accent="true" />
+
+        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)" Value="@stoppedVms.Count.ToString()"
+                  SubText=" vm(s)" />
+
+        <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)"
+                  Value="@alertCount.ToString()" SubText=" over budget" />
     </div>
 
-    <!-- Section Title -->
+    <!-- Running VMs -->
     <div class="section-title">RUNNING INSTANCES — BUDGET MONITORING</div>
-
-    <!-- VM Cards -->
     <div class="vm-grid">
-
-        <!-- VM 1 -->
-        <div class="vm-card">
-            <div class="vm-card-header">
-                <div class="vm-name">
-                    <span class="terminal-caret">&gt;_</span>
-                    ml-training-node-01
-                </div>
-            </div>
-            <div class="vm-meta">Ubuntu 22.04 LTS &bull; 8 vCPU / 16GB RAM</div>
-            <div class="vm-status">
-                <span class="running-dot"></span>
-                <span class="running-label">RUNNING</span>
-                <span class="vm-ip">&bull; 203.0.113.42</span>
-            </div>
-            <div class="vm-cost-row">
-                <span class="vm-cost">$387.50</span>
-                <span class="vm-budget">/ $500.00</span>
-                <span class="vm-uptime">&#8679; 2d 14h</span>
-            </div>
-            <div class="progress-bar-wrap">
-                <div class="progress-bar">
-                    <div class="progress-fill yellow" style="width: 77.5%;"></div>
-                </div>
-                <div class="progress-labels">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>75%</span>
-                    <span class="label-end">77.5%</span>
-                </div>
-            </div>
-            <div class="vm-actions">
-                <button class="btn-ssh"><i class="bi bi-terminal"></i> SSH</button>
-            </div>
-        </div>
-
-        <!-- VM 2 -->
-        <div class="vm-card alert-card">
-            <div class="vm-card-header">
-                <div class="vm-name">
-                    <span class="terminal-caret">&gt;_</span>
-                    render-server-alpha
-                </div>
-                <span class="alert-badge">ALERT</span>
-            </div>
-            <div class="vm-meta">Ubuntu 22.04 LTS &bull; 4 vCPU / 8GB RAM</div>
-            <div class="vm-status">
-                <span class="running-dot"></span>
-                <span class="running-label">RUNNING</span>
-                <span class="vm-ip">&bull; 203.0.113.87</span>
-            </div>
-            <div class="vm-cost-row">
-                <span class="vm-cost">$215.30</span>
-                <span class="vm-budget">/ $200.00</span>
-                <span class="vm-uptime">&#8679; 1d 8h</span>
-            </div>
-            <div class="progress-bar-wrap">
-                <div class="progress-bar">
-                    <div class="progress-fill red" style="width: 100%;"></div>
-                </div>
-                <div class="progress-labels">
-                    <span>0%</span>
-                    <span>50%</span>
-                    <span>75%</span>
-                    <span class="label-end red-text">100.0%</span>
-                </div>
-            </div>
-            <div class="over-budget-banner">
-                <i class="bi bi-exclamation-triangle"></i> Over budget by $15.30
-            </div>
-            <div class="vm-actions">
-                <button class="btn-ssh"><i class="bi bi-terminal"></i> SSH</button>
-            </div>
-        </div>
-
+        @foreach (var vm in runningVms)
+        {
+            <VmCard Name="@vm.Name" Os="@vm.Os" Specs="@vm.Specs" IpAddress="@vm.IpAddress" Cost="@($"${vm.Cost:F2}")"
+                    Budget="@($"${vm.BudgetLimit:F2}")" Uptime="@vm.Uptime" BudgetPercent="@(vm.Cost / vm.BudgetLimit * 100)"
+                    IsOverBudget="@(vm.Cost > vm.BudgetLimit)" OverBy="@($"${vm.Cost - vm.BudgetLimit:F2}")" />
+        }
     </div>
 
-    <!-- Stopped Instances -->
+    <!-- Stopped VMs -->
     <div class="section-title" style="margin-top: 2rem;">STOPPED INSTANCES</div>
-
-    <div class="stopped-table">
-        <div class="table-header">
-            <span>VM NAME</span>
-            <span>OS / TYPE</span>
-            <span>IP ADDRESS</span>
-            <span>TOTAL COST</span>
-            <span>STATUS</span>
-        </div>
-        <div class="table-row">
-            <span class="vm-name-mono">data-pipeline-worker</span>
-            <span>Debian 11 &bull; 2 vCPU / 4GB RAM</span>
-            <span>203.0.113.156</span>
-            <span class="cost-text">$150.00</span>
-            <span><span class="stopped-badge">STOPPED</span></span>
-        </div>
-    </div>
+    <StoppedVmTable Vms="@stoppedVms" />
 
 </div>
+
+@code {
+    // ── Running VM model ──────────────────────────────────────────────────────
+    record RunningVm(string Name, string Os, string Specs, string IpAddress,
+                     double Cost, double BudgetLimit, string Uptime);
+
+    // ── Static sample data ────────────────────────────────────────────────────
+    private List<RunningVm> runningVms = new()
+    {
+        new("ml-training-node-01", "Ubuntu 22.04 LTS", "8 vCPU / 16GB RAM", "203.0.113.42", 387.50, 500.00, "2d 14h"),
+        new("render-server-alpha", "Ubuntu 22.04 LTS", "4 vCPU / 8GB RAM", "203.0.113.87", 215.30, 200.00, "1d 8h"),
+    };
+
+    private List<StoppedVmTable.StoppedVm> stoppedVms = new()
+    {
+        new() { Name = "data-pipeline-worker", Os = "Debian 11", Specs = "2 vCPU / 4GB RAM", IpAddress = "203.0.113.156",
+TotalCost = "$150.00" },
+    };
+
+    private double totalSpent => runningVms.Sum(v => v.Cost);
+    private int alertCount => runningVms.Count(v => v.Cost > v.BudgetLimit);
+
+    private void HandleCreateVm()
+    {
+        // Wire up navigation or modal here
+    }
+}
 
 <style>
     .dashboard {
@@ -167,83 +79,6 @@
         font-family: var(--uc-font-base);
     }
 
-    /* Header */
-    .dashboard-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-bottom: 2rem;
-    }
-
-    .header-left {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .page-title {
-        font-size: 1.6rem;
-        font-weight: 600;
-        color: var(--uc-text-white);
-        margin: 0;
-    }
-
-    .status-badge {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        background: rgba(0, 230, 118, 0.1);
-        border: 1px solid rgba(0, 230, 118, 0.3);
-        color: var(--uc-green);
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 0.3rem 0.7rem;
-        border-radius: 20px;
-    }
-
-    .status-dot {
-        width: 7px;
-        height: 7px;
-        background: var(--uc-green);
-        border-radius: 50%;
-        display: inline-block;
-        animation: pulse 2s infinite;
-    }
-
-    @@keyframes pulse {
-
-        0%,
-        100% {
-            opacity: 1;
-        }
-
-        50% {
-            opacity: 0.4;
-        }
-    }
-
-    .btn-create {
-        background: var(--uc-blue);
-        color: white;
-        border: none;
-        padding: 0.6rem 1.2rem;
-        border-radius: var(--uc-radius);
-        font-size: 0.8rem;
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        transition: background 0.2s;
-    }
-
-    .btn-create:hover {
-        background: #2563eb;
-    }
-
-    /* Stat Cards */
     .stat-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
@@ -251,49 +86,6 @@
         margin-bottom: 2rem;
     }
 
-    .stat-card {
-        background: var(--uc-bg-card);
-        border: 1px solid var(--uc-border);
-        border-radius: var(--uc-radius);
-        padding: 1.2rem 1.4rem;
-    }
-
-    .stat-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.8rem;
-    }
-
-    .stat-label {
-        font-size: 0.65rem;
-        letter-spacing: 0.1em;
-        color: var(--uc-text-muted);
-        font-weight: 600;
-    }
-
-    .stat-icon {
-        font-size: 1.1rem;
-    }
-
-    .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--uc-text-white);
-        line-height: 1;
-    }
-
-    .stat-value.purple {
-        color: var(--uc-purple);
-    }
-
-    .stat-sub {
-        font-size: 0.8rem;
-        color: var(--uc-text-muted);
-        font-weight: 400;
-    }
-
-    /* Section Title */
     .section-title {
         font-size: 0.65rem;
         letter-spacing: 0.12em;
@@ -302,244 +94,9 @@
         margin-bottom: 1rem;
     }
 
-    /* VM Grid */
     .vm-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
-    }
-
-    .vm-card {
-        background: var(--uc-bg-card);
-        border: 1px solid var(--uc-border);
-        border-radius: var(--uc-radius);
-        padding: 1.4rem;
-    }
-
-    .alert-card {
-        border-color: rgba(255, 82, 82, 0.3);
-    }
-
-    .vm-card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.4rem;
-    }
-
-    .vm-name {
-        font-family: var(--uc-font-mono);
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: var(--uc-text-white);
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-    }
-
-    .terminal-caret {
-        color: var(--uc-green);
-        font-size: 0.85rem;
-    }
-
-    .alert-badge {
-        background: var(--uc-amber);
-        color: #000;
-        font-size: 0.65rem;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        padding: 0.25rem 0.6rem;
-        border-radius: 4px;
-    }
-
-    .vm-meta {
-        font-size: 0.75rem;
-        color: var(--uc-text-secondary);
-        margin-bottom: 0.5rem;
-    }
-
-    .vm-status {
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        font-size: 0.75rem;
-        margin-bottom: 1rem;
-    }
-
-    .running-dot {
-        width: 7px;
-        height: 7px;
-        background: var(--uc-green);
-        border-radius: 50%;
-        display: inline-block;
-        animation: pulse 2s infinite;
-    }
-
-    .running-label {
-        color: var(--uc-green);
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        font-size: 0.7rem;
-    }
-
-    .vm-ip {
-        color: var(--uc-text-muted);
-    }
-
-    .vm-cost-row {
-        display: flex;
-        align-items: baseline;
-        gap: 0.5rem;
-        margin-bottom: 0.8rem;
-    }
-
-    .vm-cost {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--uc-text-white);
-        line-height: 1;
-    }
-
-    .vm-budget {
-        font-size: 0.8rem;
-        color: var(--uc-text-muted);
-    }
-
-    .vm-uptime {
-        margin-left: auto;
-        font-size: 0.75rem;
-        color: var(--uc-text-secondary);
-    }
-
-    /* Progress Bar */
-    .progress-bar-wrap {
-        margin-bottom: 1.2rem;
-    }
-
-    .progress-bar {
-        height: 6px;
-        background: var(--uc-bg-elevated);
-        border-radius: 3px;
-        overflow: hidden;
-        margin-bottom: 0.35rem;
-    }
-
-    .progress-fill {
-        height: 100%;
-        border-radius: 3px;
-    }
-
-    .progress-fill.yellow {
-        background: var(--uc-yellow);
-    }
-
-    .progress-fill.red {
-        background: var(--uc-red);
-    }
-
-    .progress-labels {
-        display: flex;
-        justify-content: space-between;
-        font-size: 0.65rem;
-        color: var(--uc-text-muted);
-    }
-
-    .label-end {
-        color: var(--uc-text-secondary);
-    }
-
-    .label-end.red-text {
-        color: var(--uc-red);
-    }
-
-    /* Over budget banner */
-    .over-budget-banner {
-        background: rgba(255, 82, 82, 0.08);
-        border: 1px solid rgba(255, 82, 82, 0.25);
-        color: var(--uc-red);
-        font-size: 0.78rem;
-        padding: 0.6rem 0.9rem;
-        border-radius: var(--uc-radius);
-        margin-bottom: 1.2rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    /* SSH Button */
-    .vm-actions {
-        display: flex;
-    }
-
-    .btn-ssh {
-        background: var(--uc-blue);
-        color: white;
-        border: none;
-        padding: 0.5rem 1.2rem;
-        border-radius: var(--uc-radius);
-        font-size: 0.8rem;
-        font-weight: 600;
-        font-family: var(--uc-font-mono);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 0.4rem;
-        transition: background 0.2s;
-        margin: 0 auto;
-    }
-
-    .btn-ssh:hover {
-        background: #2563eb;
-    }
-
-    /* Stopped Table */
-    .stopped-table {
-        background: var(--uc-bg-card);
-        border: 1px solid var(--uc-border);
-        border-radius: var(--uc-radius);
-        overflow: hidden;
-    }
-
-    .table-header {
-        display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
-        padding: 0.7rem 1.2rem;
-        font-size: 0.65rem;
-        letter-spacing: 0.1em;
-        color: var(--uc-text-muted);
-        font-weight: 600;
-        border-bottom: 1px solid var(--uc-border);
-        background: var(--uc-bg-elevated);
-    }
-
-    .table-row {
-        display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
-        padding: 1rem 1.2rem;
-        font-size: 0.82rem;
-        color: var(--uc-text-table);
-        align-items: center;
-    }
-
-    .vm-name-mono {
-        font-family: var(--uc-font-mono);
-        color: var(--uc-text-white);
-        font-weight: 600;
-    }
-
-    .cost-text {
-        color: var(--uc-text-white);
-        font-weight: 600;
-    }
-
-    .stopped-badge {
-        background: var(--uc-bg-elevated);
-        border: 1px solid var(--uc-border-light);
-        color: var(--uc-text-secondary);
-        font-size: 0.65rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 0.3rem 0.6rem;
-        border-radius: 4px;
     }
 </style>
