@@ -25,7 +25,7 @@ try
         .Trim();
 
     builder.Configuration["FrpRelay:ServerAddr"] = Secret("frp-relay-addr");
-    builder.Configuration["FrpRelay:AuthToken"]  = Secret("frp-relay-token");
+    builder.Configuration["FrpRelay:AuthToken"] = Secret("frp-relay-token");
 }
 catch (Exception ex)
 {
@@ -42,6 +42,11 @@ builder.Services.AddFirestoreRepository<Provider>(
     collectionName: "providers",
     documentIdSelector: p => p.FirebaseUid);
 
+// allow lookup of consumer records when promoting to provider
+builder.Services.AddFirestoreRepository<Consumer>(
+    collectionName: "consumers",
+    documentIdSelector: c => c.FirebaseUid);
+
 builder.Services.AddFirestoreRepository<VirtualMachine>(
     collectionName: "virtual_machines",
     documentIdSelector: vm => vm.VmId);
@@ -55,6 +60,8 @@ builder.Services.AddFirestoreRepository<MachineSpecs>(
 
 // Add Services
 builder.Services.AddScoped<IProviderService, ProviderService>();
+// consumer lookup service used during auth fallback
+builder.Services.AddScoped<IConsumerService, ConsumerService>();
 builder.Services.AddScoped<IVmService, VirtualMachineService>();
 builder.Services.AddScoped<IPayoutService, PayoutService>();
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();

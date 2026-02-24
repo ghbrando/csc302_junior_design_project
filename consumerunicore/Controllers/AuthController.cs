@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using FirebaseAdmin.Auth;
+using consumerunicore.Services;
 
 //Used For: Authentication Controller
 [ApiController]
@@ -9,11 +10,13 @@ public class AuthController : ControllerBase
 {
     private readonly IFirebaseAuthService _firebaseAuthService;
     private readonly IConsumerService _consumerService;
+    private readonly IProviderService _providerService;
 
-    public AuthController(IFirebaseAuthService firebaseAuthService, IConsumerService consumerService)
+    public AuthController(IFirebaseAuthService firebaseAuthService, IConsumerService consumerService, IProviderService providerService)
     {
         _firebaseAuthService = firebaseAuthService;
         _consumerService = consumerService;
+        _providerService = providerService;
     }
 
     // Register a new consumer with email + password + name
@@ -59,6 +62,8 @@ public class AuthController : ControllerBase
             var decodedToken = await _firebaseAuthService.VerifyIDTokenAsync(idToken);
             var uid = decodedToken.Uid;
 
+            // GetByFirebaseUidAsync now handles provider fallback and will create
+            // a consumer record if one doesn't exist but a provider does.
             var consumer = await _consumerService.GetByFirebaseUidAsync(uid);
             if (consumer == null)
                 return NotFound(new { error = "Consumer not found. Please register first." });

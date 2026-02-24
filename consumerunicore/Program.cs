@@ -4,6 +4,8 @@ using Google.Cloud.Firestore;
 using Google.Cloud.SecretManager.V1;
 using consumerunicore.Repositories;
 using consumerunicore.Components;
+using consumerunicore.Models;
+using consumerunicore.Services;
 using unicoreconsumer.Services;
 
 
@@ -21,6 +23,12 @@ builder.Services.AddFirestoreRepository<Consumer>(
     documentIdSelector: c => c.FirebaseUid);
 
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
+
+// when logging in we may need to pivot a provider into a consumer
+builder.Services.AddFirestoreRepository<Provider>(
+    collectionName: "providers",
+    documentIdSelector: p => p.FirebaseUid);
+builder.Services.AddScoped<IProviderService, ProviderService>();
 
 // state service used by Blazor components to track current user
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();

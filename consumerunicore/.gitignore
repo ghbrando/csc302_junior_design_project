@@ -1,6 +1,7 @@
 ## .NET / Visual Studio Build Artifacts
 [Bb]in/
 [Oo]bj/
+obj/
 *.exe
 *.dll
 *.pdb
@@ -23,6 +24,7 @@ appsettings.json
 # so we don't commit the local project cache
 project.lock.json
 project.assets.json
+consumerunicore/obj/*
 
 ## OS-specific files
 Thumbs.db
