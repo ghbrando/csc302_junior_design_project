@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>heartbeatservice</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\unicore.shared\unicore.shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Cloud.Firestore" Version="4.1.0" />
+    <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.*" />
+    <!-- Microsoft.Extensions.Hosting is included transitively via Microsoft.NET.Sdk.Web -->
+  </ItemGroup>
+
+</Project>
