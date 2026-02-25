@@ -1,6 +1,4 @@
 using Google.Cloud.Firestore;
-using unicoreprovider.Models;
-using providerunicore.Repositories;
 
 namespace unicoreprovider.Services;
 

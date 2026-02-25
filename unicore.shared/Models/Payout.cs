@@ -1,6 +1,6 @@
 using Google.Cloud.Firestore;
 
-namespace unicoreprovider.Models;
+namespace UniCore.Shared.Models;
 
 [FirestoreData]
 public class Payout

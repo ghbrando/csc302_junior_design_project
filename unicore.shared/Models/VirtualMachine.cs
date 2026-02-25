@@ -1,6 +1,6 @@
 using Google.Cloud.Firestore;
 
-namespace unicoreprovider.Models;
+namespace UniCore.Shared.Models;
 
 [FirestoreData]
 public class VirtualMachine
@@ -20,7 +20,7 @@ public class VirtualMachine
     [FirestoreProperty("uptime")]
     public string UptimeString { get; set; } = "00:00:00";
 
-    // Computed property to get uptime as TimeSpan — not stored in Firestore, derived from UptimeString
+    // Computed property — not stored in Firestore, derived from UptimeString
     public TimeSpan Uptime
     {
         get
@@ -78,11 +78,15 @@ public class VirtualMachine
     [FirestoreProperty("image")]
     public string Image { get; set; } = string.Empty;
 
-    // SSH access info (PoC)
+    // SSH access info
     [FirestoreProperty("ssh_port")]
     public int? SshPort { get; set; }
 
     // FRP relay port — the remotePort registered on the GCP relay VM for this container's SSH tunnel
     [FirestoreProperty("relay_port")]
     public int? RelayPort { get; set; }
+
+    // Tracks how many consecutive heartbeat cycles this VM has failed to respond
+    [FirestoreProperty("consecutive_misses")]
+    public int ConsecutiveMisses { get; set; } = 0;
 }

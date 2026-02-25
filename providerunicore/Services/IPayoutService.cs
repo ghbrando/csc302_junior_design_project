@@ -1,5 +1,3 @@
-using unicoreprovider.Models;
-
 namespace unicoreprovider.Services;
 
 public interface IPayoutService

@@ -1,5 +1,4 @@
 using Google.Cloud.Firestore;
-using providerunicore.Repositories;
 using unicoreprovider.Services; // IConsumerService is in same namespace
 
 //Used For: Provider Service Interface

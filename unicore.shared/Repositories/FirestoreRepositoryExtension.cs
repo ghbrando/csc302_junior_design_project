@@ -1,12 +1,12 @@
 using Google.Cloud.Firestore;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace providerunicore.Repositories;
+namespace UniCore.Shared.Repositories;
 
 public static class FirestoreRepositoryExtensions
 {
     /// <summary>
-    /// Register a generic Firestore repository for a specific entity type
+    /// Registers a generic Firestore repository for a specific entity type.
     /// </summary>
     public static IServiceCollection AddFirestoreRepository<T>(
         this IServiceCollection services,

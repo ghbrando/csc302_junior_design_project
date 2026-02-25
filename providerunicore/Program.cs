@@ -3,8 +3,6 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Google.Cloud.Firestore;
 using Google.Cloud.SecretManager.V1;
-using providerunicore.Repositories;
-using unicoreprovider.Models;
 using unicoreprovider.Services;
 
 var builder = WebApplication.CreateBuilder(args);
