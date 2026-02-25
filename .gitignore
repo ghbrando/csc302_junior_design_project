@@ -17,6 +17,8 @@ providerunicore/unicore-junior-design-firebase-admin.json
 providerunicore/unicore-junior-design-firebase-adminsdk-fbsvc-984c3317cd.json
 providerunicore/*firebase-service-account*.json
 providerunicore/*firebase-adminsdk*.json
+consumerunicore/*firebase-service-account*.json
+consumerunicore/*firebase-adminsdk*.json
 providerunicore/appsettings.json
 ## Package Manager files
 .nuget/
@@ -29,6 +31,9 @@ project.assets.json
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+## Dev tooling
+seed/
 
 ## Environment/Secrets
 .env

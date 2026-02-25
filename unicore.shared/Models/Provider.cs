@@ -23,6 +23,8 @@ public class Provider
     public double CpuLimitPercent { get; set; } = 55;
     [FirestoreProperty("ram_limit_gb")]
     public double RamLimitGB { get; set; } = 4;
+    [FirestoreProperty("region")]
+    public string Region { get; set; } = string.Empty;
     [FirestoreProperty("consistency_score")]
-    public double ConsistencyScore { get; set; } = 0.0;
+    public double ConsistencyScore { get; set; } = 100.0;
 }

@@ -28,6 +28,15 @@ builder.Services.AddFirestoreRepository<Provider>(
     documentIdSelector: p => p.FirebaseUid);
 builder.Services.AddScoped<IProviderService, ProviderService>();
 
+// Matchmaking: read-only access to machine_specs and virtual_machines
+builder.Services.AddFirestoreRepository<MachineSpecs>(
+    collectionName: "machine_specs",
+    documentIdSelector: ms => ms.ProviderId);
+builder.Services.AddFirestoreRepository<VirtualMachine>(
+    collectionName: "virtual_machines",
+    documentIdSelector: vm => vm.VmId);
+builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
+
 // state service used by Blazor components to track current user
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();
 

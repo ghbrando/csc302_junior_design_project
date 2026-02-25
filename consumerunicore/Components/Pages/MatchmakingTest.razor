@@ -1,0 +1,95 @@
+@page "/matchmaking-test"
+@using consumerunicore.Models
+@using consumerunicore.Services
+@inject IMatchmakingService MatchmakingService
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+
+<div style="max-width:560px; margin:40px auto; font-family:monospace; color:#e0e0e0;">
+    <h2 style="margin-bottom:24px;">Matchmaking Dev Tool</h2>
+
+    <div style="display:flex; flex-direction:column; gap:16px; background:#1e1e2e; padding:24px; border-radius:8px;">
+
+        <label>
+            Region
+            <select @bind="region" style="display:block; width:100%; margin-top:4px; padding:8px; background:#2a2a3e; color:#e0e0e0; border:1px solid #444; border-radius:4px;">
+                <option value="US-West">US-West</option>
+                <option value="US-East">US-East</option>
+                <option value="EU-Central">EU-Central</option>
+            </select>
+        </label>
+
+        <label>
+            CPU Cores Needed
+            <input type="number" min="1" @bind="cpuCores"
+                   style="display:block; width:100%; margin-top:4px; padding:8px; background:#2a2a3e; color:#e0e0e0; border:1px solid #444; border-radius:4px;" />
+        </label>
+
+        <label>
+            RAM (GB) Needed
+            <input type="number" min="1" step="0.5" @bind="ramGb"
+                   style="display:block; width:100%; margin-top:4px; padding:8px; background:#2a2a3e; color:#e0e0e0; border:1px solid #444; border-radius:4px;" />
+        </label>
+
+        <button @onclick="RunMatchmaking" disabled="@isSearching"
+                style="padding:10px 20px; background:#7c3aed; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:14px;">
+            @(isSearching ? "Searching..." : "Find Match")
+        </button>
+    </div>
+
+    @if (isSearching)
+    {
+        <p style="margin-top:20px; color:#888;">Querying Firestore...</p>
+    }
+    else if (searched && result == null)
+    {
+        <div style="margin-top:20px; padding:16px; background:#2d1b1b; border:1px solid #7f1d1d; border-radius:8px; color:#fca5a5;">
+            No matching provider found for the given region and resource requirements.
+        </div>
+    }
+    else if (result != null)
+    {
+        <div style="margin-top:20px; padding:20px; background:#1a2e1a; border:1px solid #166534; border-radius:8px;">
+            <div style="color:#86efac; font-size:13px; margin-bottom:12px;">MATCH FOUND</div>
+
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <tr><td style="padding:4px 0; color:#888; width:180px;">Provider Name</td><td style="color:#e0e0e0;">@result.Provider.Name</td></tr>
+                <tr><td style="padding:4px 0; color:#888;">Firebase UID</td><td style="color:#e0e0e0;">@result.Provider.FirebaseUid</td></tr>
+                <tr><td style="padding:4px 0; color:#888;">Region</td><td style="color:#e0e0e0;">@result.Provider.Region</td></tr>
+                <tr><td style="padding:4px 0; color:#888;">Consistency Score</td><td style="color:#e0e0e0;">@result.ConsistencyScore.ToString("F1")</td></tr>
+                <tr><td style="padding:4px 0; color:#888;">Available CPU Cores</td><td style="color:#e0e0e0;">@result.AvailableCpuCores</td></tr>
+                <tr><td style="padding:4px 0; color:#888;">Available RAM (GB)</td><td style="color:#e0e0e0;">@result.AvailableRamGb.ToString("F1")</td></tr>
+                @if (result.MachineSpecs != null)
+                {
+                    <tr><td style="padding:4px 0; color:#888;">CPU</td><td style="color:#e0e0e0;">@result.MachineSpecs.CpuName (@result.MachineSpecs.CpuCores cores)</td></tr>
+                    <tr><td style="padding:4px 0; color:#888;">Total RAM</td><td style="color:#e0e0e0;">@result.MachineSpecs.RamGB GB</td></tr>
+                }
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private string region = "US-West";
+    private int cpuCores = 2;
+    private double ramGb = 4;
+    private bool isSearching = false;
+    private MatchmakingResult? result;
+    private bool searched = false;
+
+    private async Task RunMatchmaking()
+    {
+        isSearching = true;
+        searched = false;
+        result = null;
+
+        result = await MatchmakingService.FindBestMatchAsync(new MatchmakingRequest
+        {
+            Region = region,
+            CpuCoresNeeded = cpuCores,
+            RamGbNeeded = ramGb
+        });
+
+        searched = true;
+        isSearching = false;
+    }
+}
