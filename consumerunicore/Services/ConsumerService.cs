@@ -1,5 +1,4 @@
 using Google.Cloud.Firestore;
-using consumerunicore.Repositories;
 using consumerunicore.Services;    // IProviderService lives here
 
 //Used For: Consumer Service Implementation

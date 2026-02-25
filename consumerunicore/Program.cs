@@ -2,9 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Google.Cloud.Firestore;
 using Google.Cloud.SecretManager.V1;
-using consumerunicore.Repositories;
 using consumerunicore.Components;
-using consumerunicore.Models;
 using consumerunicore.Services;
 using unicoreconsumer.Services;
 
