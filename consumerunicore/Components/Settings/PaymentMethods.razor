@@ -1,0 +1,125 @@
+@namespace unicoreconsumer.Components
+<div class="payment-list">
+    @foreach (var method in Methods)
+    {
+        <div class="payment-row">
+            <div class="payment-left">
+                <div class="bank-icon">
+                    <span>BANK</span>
+                </div>
+                <div>
+                    <div class="payment-name">@method.Name</div>
+                    <div class="payment-sub">@method.SubLabel</div>
+                </div>
+            </div>
+            <button class="btn-edit">EDIT</button>
+        </div>
+    }
+    <button class="btn-add-method">
+        <i class="bi bi-plus"></i> ADD PAYMENT METHOD
+    </button>
+</div>
+
+@code {
+    public class PaymentMethod
+    {
+        public string Name { get; set; } = "";
+        public string SubLabel { get; set; } = "";
+    }
+
+    [Parameter] public List<PaymentMethod> Methods { get; set; } = new();
+}
+
+<style>
+    .payment-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+
+    .payment-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 0.9rem 1.2rem;
+    }
+
+    .payment-left {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+
+    .bank-icon {
+        width: 40px;
+        height: 40px;
+        background: var(--uc-purple);
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.55rem;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        color: white;
+        font-family: var(--uc-font-mono);
+    }
+
+    .payment-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--uc-text-white);
+    }
+
+    .payment-sub {
+        font-size: 0.72rem;
+        color: var(--uc-text-secondary);
+        font-family: var(--uc-font-mono);
+        margin-top: 0.15rem;
+    }
+
+    .btn-edit {
+        background: transparent;
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-primary);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 0.35rem 0.9rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        transition: border-color 0.2s;
+        font-family: var(--uc-font-mono);
+    }
+
+    .btn-edit:hover {
+        border-color: var(--uc-text-primary);
+    }
+
+    .btn-add-method {
+        width: 100%;
+        background: transparent;
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-blue);
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 0.9rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        transition: border-color 0.2s, background 0.2s;
+        font-family: var(--uc-font-mono);
+    }
+
+    .btn-add-method:hover {
+        background: rgba(59, 130, 246, 0.06);
+        border-color: var(--uc-blue);
+    }
+</style>

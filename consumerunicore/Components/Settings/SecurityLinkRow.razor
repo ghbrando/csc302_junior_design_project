@@ -1,0 +1,59 @@
+@namespace unicoreconsumer.Components
+<div class="security-row">
+    <div class="security-left">
+        <i class="bi @Icon security-icon"></i>
+        <span class="security-label">@Label</span>
+    </div>
+    <i class="bi bi-arrow-right security-arrow"></i>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "bi-circle";
+    [Parameter] public EventCallback OnClick { get; set; }
+}
+
+<style>
+    .security-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1rem 1.2rem;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        margin-bottom: 0.6rem;
+    }
+
+    .security-row:last-child {
+        margin-bottom: 0;
+    }
+
+    .security-row:hover {
+        border-color: var(--uc-border-light);
+        background: #222;
+    }
+
+    .security-left {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+    }
+
+    .security-icon {
+        color: var(--uc-text-muted);
+        font-size: 0.95rem;
+    }
+
+    .security-label {
+        font-size: 0.88rem;
+        color: var(--uc-text-primary);
+    }
+
+    .security-arrow {
+        color: var(--uc-text-muted);
+        font-size: 0.85rem;
+    }
+</style>

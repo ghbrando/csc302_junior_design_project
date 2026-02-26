@@ -1,0 +1,117 @@
+@page "/settings"
+@using unicoreconsumer.Services
+@using unicoreconsumer.Components
+@using Google.Cloud.Firestore
+@inject IConsumerService ConsumerService
+@inject IConfiguration Configuration
+@inject FirestoreDb FirestoreDb
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreconsumer.Services.AuthorizedPageBase
+
+<div class="settings-page">
+
+    <SettingsHeader Title="Settings" Subtitle="Manage account and preferences" />
+
+    <!-- Profile Information -->
+    <SettingsSection Title="PROFILE INFORMATION"     Subtitle="Update your personal details"         Icon="bi-person"
+                     IconColor="var(--uc-blue)"         IconBg="rgba(59,130,246,0.15)">
+        <ProfileInformation @bind-FullName="fullName" @bind-Email="email" />
+    </SettingsSection>
+
+    <!-- Notifications -->
+    <SettingsSection Title="NOTIFICATIONS"             Subtitle="Configure alert preferences"                 Icon="bi-bell"
+                     IconColor="var(--uc-purple)"                 IconBg="rgba(168,85,247,0.15)">
+        <ToggleRow Label="Vm Started" Description="Notify when vm started" @bind-IsOn="notifyVmStarted" />
+        <ToggleRow Label="Vm Completed" Description="Notify when vm completed" @bind-IsOn="notifyVmCompleted" />
+        <ToggleRow Label="Budget Alert" Description="Notify when budget alert" @bind-IsOn="notifyBudgetAlert" />
+        <ToggleRow Label="Payout Ready" Description="Notify when payout ready" @bind-IsOn="notifyPayoutReady" />
+        <ToggleRow Label="System Updates" Description="Notify when system updates" @bind-IsOn="notifySystemUpdates" />
+    </SettingsSection>
+
+    <!-- Security -->
+    <SettingsSection Title="SECURITY"        Subtitle="Manage authentication &amp; access"            Icon="bi-shield"
+                     IconColor="var(--uc-teal)"            IconBg="rgba(16,185,129,0.15)">
+        <SecurityLinkRow Label="Change Password" Icon="bi-key" />
+        <SecurityLinkRow Label="Two-Factor Authentication" Icon="bi-shield-lock" />
+        <SecurityLinkRow Label="API Keys" Icon="bi-key" />
+    </SettingsSection>
+
+    <!-- Payment Methods -->
+    <SettingsSection Title="PAYMENT METHODS"    Subtitle="Manage payout destinations"        Icon="bi-credit-card"
+                     IconColor="var(--uc-amber)"        IconBg="rgba(255,171,0,0.15)">
+        <PaymentMethods Methods="@paymentMethods" />
+    </SettingsSection>
+
+    <!-- Regional Settings -->
+    <SettingsSection Title="REGIONAL SETTINGS"             Subtitle="Timezone and currency"                 Icon="bi-globe"
+                     IconColor="var(--uc-sky)"                     IconBg="rgba(0,229,255,0.12)">
+        <RegionalSettings @bind-TimeZone="timeZone" @bind-Currency="currency" />
+    </SettingsSection>
+
+    <!-- Save Button -->
+    <div class="save-row">
+        <button class="btn-save" @onclick="HandleSave">SAVE CHANGES</button>
+    </div>
+
+</div>
+
+@code {
+    // Profile
+    private string fullName = "John Doe";
+    private string email = "john@example.com";
+
+    // Notifications
+    private bool notifyVmStarted = true;
+    private bool notifyVmCompleted = true;
+    private bool notifyBudgetAlert = true;
+    private bool notifyPayoutReady = false;
+    private bool notifySystemUpdates = false;
+
+    // Regional
+    private string timeZone = "UTC-08:00";
+    private string currency = "USD";
+
+    // Payment methods
+    private List<PaymentMethods.PaymentMethod> paymentMethods = new()
+    {
+        new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
+    };
+
+    private void HandleSave()
+    {
+        // Wire up save logic here
+    }
+}
+
+<style>
+    .settings-page {
+        padding: 2rem 2.5rem;
+        max-width: 920px;
+        margin: 0 auto;
+        font-family: var(--uc-font-base);
+    }
+
+    .save-row {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 1rem;
+    }
+
+    .btn-save {
+        background: var(--uc-teal);
+        color: #000;
+        border: none;
+        padding: 0.7rem 1.6rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+        font-family: var(--uc-font-mono);
+        transition: background 0.2s;
+    }
+
+    .btn-save:hover {
+        background: #0ea572;
+    }
+</style>
