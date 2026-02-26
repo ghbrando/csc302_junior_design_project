@@ -1,0 +1,99 @@
+@namespace unicoreconsumer.Components
+<div class="regional-fields">
+    <div class="field-group">
+        <label class="field-label">TIME ZONE</label>
+        <div class="select-wrap">
+            <select class="field-select" @bind="TimeZone">
+                <option value="UTC-12:00">UTC-12:00 (Baker Island)</option>
+                <option value="UTC-11:00">UTC-11:00 (Samoa)</option>
+                <option value="UTC-10:00">UTC-10:00 (Hawaii)</option>
+                <option value="UTC-09:00">UTC-09:00 (Alaska)</option>
+                <option value="UTC-08:00">UTC-08:00 (Pacific)</option>
+                <option value="UTC-07:00">UTC-07:00 (Mountain)</option>
+                <option value="UTC-06:00">UTC-06:00 (Central)</option>
+                <option value="UTC-05:00">UTC-05:00 (Eastern)</option>
+                <option value="UTC+00:00">UTC+00:00 (London)</option>
+                <option value="UTC+01:00">UTC+01:00 (Paris)</option>
+                <option value="UTC+08:00">UTC+08:00 (Singapore)</option>
+                <option value="UTC+09:00">UTC+09:00 (Tokyo)</option>
+            </select>
+            <i class="bi bi-chevron-down select-caret"></i>
+        </div>
+    </div>
+    <div class="field-group">
+        <label class="field-label">CURRENCY</label>
+        <div class="select-wrap">
+            <select class="field-select" @bind="Currency">
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="CAD">CAD (C$)</option>
+                <option value="AUD">AUD (A$)</option>
+            </select>
+            <i class="bi bi-chevron-down select-caret"></i>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string TimeZone { get; set; } = "UTC-08:00";
+    [Parameter] public string Currency { get; set; } = "USD";
+    [Parameter] public EventCallback<string> TimeZoneChanged { get; set; }
+    [Parameter] public EventCallback<string> CurrencyChanged { get; set; }
+}
+
+<style>
+    .regional-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem;
+    }
+
+    .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .field-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+    }
+
+    .select-wrap {
+        position: relative;
+    }
+
+    .field-select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-primary);
+        font-family: var(--uc-font-mono);
+        font-size: 0.85rem;
+        padding: 0.7rem 2.5rem 0.7rem 1rem;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+
+    .field-select:focus {
+        border-color: var(--uc-blue);
+    }
+
+    .select-caret {
+        position: absolute;
+        right: 0.9rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--uc-text-muted);
+        font-size: 0.7rem;
+        pointer-events: none;
+    }
+</style>

@@ -1,0 +1,94 @@
+@namespace unicoreconsumer.Components
+<div class="toggle-row">
+    <div class="toggle-info">
+        <div class="toggle-label">@Label</div>
+        <div class="toggle-desc">@Description</div>
+    </div>
+    <button class="toggle-switch @(IsOn ? "on" : "off")" @onclick="HandleClick" role="switch" aria-checked="@IsOn">
+        <span class="toggle-thumb"></span>
+    </button>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public string Description { get; set; } = "";
+    [Parameter] public bool IsOn { get; set; } = false;
+    [Parameter] public EventCallback<bool> IsOnChanged { get; set; }
+
+    private async Task HandleClick()
+    {
+        IsOn = !IsOn;
+        await IsOnChanged.InvokeAsync(IsOn);
+    }
+}
+
+<style>
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 0;
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .toggle-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .toggle-row:first-child {
+        padding-top: 0;
+    }
+
+    .toggle-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--uc-text-primary);
+        margin-bottom: 0.2rem;
+    }
+
+    .toggle-desc {
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+        font-family: var(--uc-font-mono);
+    }
+
+    .toggle-switch {
+        position: relative;
+        width: 48px;
+        height: 26px;
+        border-radius: 13px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.25s;
+        flex-shrink: 0;
+        padding: 0;
+    }
+
+    .toggle-switch.on {
+        background: var(--uc-green);
+    }
+
+    .toggle-switch.off {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border-light);
+    }
+
+    .toggle-thumb {
+        position: absolute;
+        top: 3px;
+        width: 20px;
+        height: 20px;
+        background: white;
+        border-radius: 50%;
+        transition: left 0.25s;
+    }
+
+    .toggle-switch.on .toggle-thumb {
+        left: calc(100% - 23px);
+    }
+
+    .toggle-switch.off .toggle-thumb {
+        left: 3px;
+    }
+</style>
