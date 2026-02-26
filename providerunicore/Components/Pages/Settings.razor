@@ -1,5 +1,6 @@
 @page "/settings"
 @using unicoreprovider.Services
+@using unicoreprovider.Components
 @using Google.Cloud.Firestore
 @implements IDisposable
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -10,137 +11,134 @@
 
 <div class="container-fluid px-4 py-3">
 
-    @* Header *@
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h5 class="fw-bold text-white mb-0" style="letter-spacing: 0.5px;">Settings</h5>
-            <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Provider configuration & hardware specifications
-            </p>
-        </div>
-    </div>
+    <div class="settings-page specs-section">
+        <SettingsHeader Title="Settings" Subtitle="Provider configuration & hardware specifications" />
 
-    @* Machine Specs Section *@
-    <div class="mb-2">
-        <div class="d-flex align-items-center justify-content-between mb-3">
-            <h6 class="text-uppercase text-muted mb-0" style="font-size: 0.7rem; letter-spacing: 1px;">Machine
-                Specifications</h6>
-                <div class="d-flex align-items-center gap-2">
-                    @if (_specs != null)
-                    {
-                        <span class="text-muted" style="font-size: 0.65rem;">
-                            Last detected: @_specs.LastDetected.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
-                        </span>
-                    }
-                    <button class="btn btn-redetect rounded-1" @onclick="ReDetect" disabled="@_detecting">
-                        <i class="bi bi-arrow-clockwise me-1"></i>
-                        @(_detecting ? "DETECTING..." : (_specs == null ? "DETECT NOW" : "RE-DETECT"))
-                    </button>
-                </div>
-            </div>
-
-            @if (_specs == null && !_detecting)
-            {
-                <div class="specs-empty">
-                    <i class="bi bi-cpu specs-empty-icon"></i>
-                    <p class="text-muted mb-1" style="font-size: 0.85rem;">No hardware specs detected yet.</p>
-                    <p class="text-muted" style="font-size: 0.75rem;">Click "Detect Now" to scan this machine's hardware and
-                        save it to your provider profile.</p>
+        @* Machine Specs Section *@
+        <div class="mb-2">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <h6 class="text-uppercase text-muted mb-0"
+                    style="font-size: 0.7rem; letter-spacing: 1px; color: var(--uc-text-white);">Machine
+                    Specifications</h6>
+                    <div class="d-flex align-items-center gap-2">
+                        @if (_specs != null)
+                        {
+                            <span class="text-muted" style="font-size: 0.65rem; color: var(--uc-text-white);">
+                                Last detected: @_specs.LastDetected.ToLocalTime().ToString("MMM d, yyyy h:mm tt")
+                            </span>
+                        }
+                        <button class="btn btn-redetect rounded-1" @onclick="ReDetect" disabled="@_detecting">
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            @(_detecting ? "DETECTING..." : (_specs == null ? "DETECT NOW" : "RE-DETECT"))
+                        </button>
                     </div>
-                }
-        else if (_detecting)
+                </div>
+
+                @if (_specs == null && !_detecting)
                 {
                     <div class="specs-empty">
-                        <div class="spinner-border spinner-border-sm text-success mb-2" role="status"></div>
-                        <p class="text-muted mb-0" style="font-size: 0.85rem;">Detecting hardware...</p>
-                    </div>
-                }
-                else if (_specs != null)
-                {
-                    <div class="row g-3">
-                        @* CPU *@
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="spec-card">
-                                <div class="spec-card-header">
-                                    <i class="bi bi-cpu spec-icon" style="color: #3b82f6;"></i>
-                                    <span class="spec-label">CPU</span>
-                                </div>
-                                <div class="spec-value">@_specs.CpuName</div>
-                                <div class="spec-details">
-                                    <span>@_specs.CpuCores cores</span>
-                                    <span class="spec-dot">·</span>
-                                    <span>@_specs.CpuThreads threads</span>
-                                    <span class="spec-dot">·</span>
-                                    <span>@_specs.CpuClockSpeedGHz GHz</span>
+                        <i class="bi bi-cpu specs-empty-icon"></i>
+                        <p class="text-muted mb-1" style="font-size: 0.85rem;">No hardware specs detected yet.</p>
+                        <p class="text-muted" style="font-size: 0.75rem;">Click "Detect Now" to scan this machine's hardware and
+                            save it to your provider profile.</p>
+                        </div>
+                    }
+            else if (_detecting)
+                    {
+                        <div class="specs-empty">
+                            <div class="spinner-border spinner-border-sm text-success mb-2" role="status"></div>
+                            <p class="text-muted mb-0" style="font-size: 0.85rem;">Detecting hardware...</p>
+                        </div>
+                    }
+                    else if (_specs != null)
+                    {
+                        <div class="row g-3">
+                            @* CPU *@
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="spec-card">
+                                    <div class="spec-card-header">
+                                        <i class="bi bi-cpu spec-icon" style="color: #3b82f6;"></i>
+                                        <span class="spec-label">CPU</span>
+                                    </div>
+                                    <div class="spec-value">@_specs.CpuName</div>
+                                    <div class="spec-details">
+                                        <span>@_specs.CpuCores cores</span>
+                                        <span class="spec-dot">·</span>
+                                        <span>@_specs.CpuThreads threads</span>
+                                        <span class="spec-dot">·</span>
+                                        <span>@_specs.CpuClockSpeedGHz GHz</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        @* RAM *@
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="spec-card">
-                                <div class="spec-card-header">
-                                    <i class="bi bi-hdd-rack spec-icon" style="color: #a855f7;"></i>
-                                    <span class="spec-label">RAM</span>
-                                </div>
-                                <div class="spec-value">@_specs.RamGB GB</div>
-                                <div class="spec-details">
-                                    <span>System Memory</span>
+                            @* RAM *@
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="spec-card">
+                                    <div class="spec-card-header">
+                                        <i class="bi bi-hdd-rack spec-icon" style="color: #a855f7;"></i>
+                                        <span class="spec-label">RAM</span>
+                                    </div>
+                                    <div class="spec-value">@_specs.RamGB GB</div>
+                                    <div class="spec-details">
+                                        <span>System Memory</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        @* GPU *@
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="spec-card">
-                                <div class="spec-card-header">
-                                    <i class="bi bi-gpu-card spec-icon" style="color: #10b981;"></i>
-                                    <span class="spec-label">GPU</span>
-                                </div>
-                                <div class="spec-value">@(_specs.GpuName == string.Empty ? "Not Detected" : _specs.GpuName)</div>
-                                <div class="spec-details">
-                                    @if (_specs.VramGB > 0)
-                                    {
-                                        <span>@_specs.VramGB GB VRAM</span>
-                                    }
-                                    else
-                                    {
-                                        <span>VRAM not reported</span>
-                                    }
+                            @* GPU *@
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="spec-card">
+                                    <div class="spec-card-header">
+                                        <i class="bi bi-gpu-card spec-icon" style="color: #10b981;"></i>
+                                        <span class="spec-label">GPU</span>
+                                    </div>
+                                    <div class="spec-value">@(_specs.GpuName == string.Empty ? "Not Detected" : _specs.GpuName)
+                                    </div>
+                                    <div class="spec-details">
+                                        @if (_specs.VramGB > 0)
+                                        {
+                                            <span>@_specs.VramGB GB VRAM</span>
+                                        }
+                                        else
+                                        {
+                                            <span>VRAM not reported</span>
+                                        }
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        @* Disk *@
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="spec-card">
-                                <div class="spec-card-header">
-                                    <i class="bi bi-device-hdd spec-icon" style="color: #f59e0b;"></i>
-                                    <span class="spec-label">Storage</span>
-                                </div>
-                                <div class="spec-value">@_specs.DiskGB GB</div>
-                                <div class="spec-details">
-                                    <span>Total Disk Capacity</span>
+                            @* Disk *@
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="spec-card">
+                                    <div class="spec-card-header">
+                                        <i class="bi bi-device-hdd spec-icon" style="color: #f59e0b;"></i>
+                                        <span class="spec-label">Storage</span>
+                                    </div>
+                                    <div class="spec-value">@_specs.DiskGB GB</div>
+                                    <div class="spec-details">
+                                        <span>Total Disk Capacity</span>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        @* OS *@
-                        <div class="col-12 col-md-6 col-lg-4">
-                            <div class="spec-card">
-                                <div class="spec-card-header">
-                                    <i class="bi bi-window spec-icon" style="color: #00e5ff;"></i>
-                                    <span class="spec-label">Operating System</span>
-                                </div>
-                                <div class="spec-value">@_specs.OsName</div>
-                                <div class="spec-details">
-                                    <span>Host OS</span>
+                            @* OS *@
+                            <div class="col-12 col-md-6 col-lg-4">
+                                <div class="spec-card">
+                                    <div class="spec-card-header">
+                                        <i class="bi bi-window spec-icon" style="color: #00e5ff;"></i>
+                                        <span class="spec-label">Operating System</span>
+                                    </div>
+                                    <div class="spec-value">@_specs.OsName</div>
+                                    <div class="spec-details">
+                                        <span>Host OS</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                }
+                    }
+                </div>
             </div>
-        </div>
+        </div> <!-- end machine specs wrapper -->
 
         <style>
             .btn-redetect {
@@ -228,6 +226,92 @@
             }
         </style>
 
+        <div class="settings-page">
+
+            <!-- Profile Information -->
+            <SettingsSection Title="PROFILE INFORMATION" Subtitle="Update your personal details" Icon="bi-person"
+                             IconColor="var(--uc-blue)" IconBg="rgba(59,130,246,0.15)">
+                <ProfileInformation @bind-FullName="fullName" @bind-Email="email" />
+            </SettingsSection>
+
+            <!-- Notifications -->
+            <SettingsSection Title="NOTIFICATIONS" Subtitle="Configure alert preferences" Icon="bi-bell"
+                             IconColor="var(--uc-purple)" IconBg="rgba(168,85,247,0.15)">
+                <ToggleRow Label="Vm Started" Description="Notify when vm started" @bind-IsOn="notifyVmStarted" />
+                <ToggleRow Label="Vm Completed" Description="Notify when vm completed" @bind-IsOn="notifyVmCompleted" />
+                <ToggleRow Label="Budget Alert" Description="Notify when budget alert" @bind-IsOn="notifyBudgetAlert" />
+                <ToggleRow Label="Payout Ready" Description="Notify when payout ready" @bind-IsOn="notifyPayoutReady" />
+                <ToggleRow Label="System Updates" Description="Notify when system updates" @bind-IsOn="notifySystemUpdates" />
+            </SettingsSection>
+
+            <!-- Security -->
+            <SettingsSection Title="SECURITY" Subtitle="Manage authentication &amp; access" Icon="bi-shield"
+                             IconColor="var(--uc-teal)" IconBg="rgba(16,185,129,0.15)">
+                <SecurityLinkRow Label="Change Password" Icon="bi-key" />
+                <SecurityLinkRow Label="Two-Factor Authentication" Icon="bi-shield-lock" />
+                <SecurityLinkRow Label="API Keys" Icon="bi-key" />
+            </SettingsSection>
+
+            <!-- Payment Methods -->
+            <SettingsSection Title="PAYMENT METHODS" Subtitle="Manage payout destinations" Icon="bi-credit-card"
+                             IconColor="var(--uc-amber)" IconBg="rgba(255,171,0,0.15)">
+                <PaymentMethods Methods="@paymentMethods" />
+            </SettingsSection>
+
+            <!-- Regional Settings -->
+            <SettingsSection Title="REGIONAL SETTINGS" Subtitle="Timezone and currency" Icon="bi-globe"
+                             IconColor="var(--uc-sky)" IconBg="rgba(0,229,255,0.12)">
+                <RegionalSettings @bind-TimeZone="timeZone" @bind-Currency="currency" />
+            </SettingsSection>
+
+            <!-- Save Button -->
+            <div class="save-row">
+                <button class="btn-save" @onclick="HandleSave">SAVE CHANGES</button>
+            </div>
+
+        </div>
+
+        <style>
+            .settings-page {
+                padding: 2rem 2.5rem;
+                max-width: 920px;
+                margin: 0 auto;
+                font-family: var(--uc-font-base);
+            }
+
+            /* reduce gap between stacked settings pages */
+            .settings-page+.settings-page {
+                margin-top: 1rem;
+            }
+
+            /* make all text in specs section white */
+            .specs-section {
+                color: var(--uc-text-white);
+            }
+
+            .specs-section .text-muted {
+                color: var(--uc-text-white) !important;
+            }
+
+            .btn-save {
+                background: var(--uc-teal);
+                color: #000;
+                border: none;
+                padding: 0.7rem 1.6rem;
+                border-radius: var(--uc-radius);
+                font-size: 0.78rem;
+                font-weight: 800;
+                letter-spacing: 0.1em;
+                cursor: pointer;
+                font-family: var(--uc-font-mono);
+                transition: background 0.2s;
+            }
+
+            .btn-save:hover {
+                background: #0ea572;
+            }
+        </style>
+
 @code {
     private MachineSpecs? _specs;
     private bool _detecting = false;
@@ -291,5 +375,31 @@
     {
         AuthState.OnChange -= OnAuthStateChanged;
         _ = _specsListener?.StopAsync();
+    }
+
+    // Profile
+    private string fullName = "John Doe";
+    private string email = "john@example.com";
+
+    // Notifications
+    private bool notifyVmStarted = true;
+    private bool notifyVmCompleted = true;
+    private bool notifyBudgetAlert = true;
+    private bool notifyPayoutReady = false;
+    private bool notifySystemUpdates = false;
+
+    // Regional
+    private string timeZone = "UTC-08:00";
+    private string currency = "USD";
+
+    // Payment methods
+    private List<PaymentMethods.PaymentMethod> paymentMethods = new()
+{
+new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
+};
+
+    private void HandleSave()
+    {
+        // Wire up save logic here
     }
 }

@@ -1,0 +1,57 @@
+@namespace unicoreprovider.Components
+<div class="profile-fields">
+    <div class="field-group">
+        <label class="field-label">FULL NAME</label>
+        <input class="field-input" type="text" @bind="FullName" placeholder="John Doe" />
+    </div>
+    <div class="field-group">
+        <label class="field-label">EMAIL</label>
+        <input class="field-input" type="email" @bind="Email" placeholder="john@example.com" />
+    </div>
+</div>
+
+@code {
+    [Parameter] public string FullName { get; set; } = "John Doe";
+    [Parameter] public string Email { get; set; } = "john@example.com";
+    [Parameter] public EventCallback<string> FullNameChanged { get; set; }
+    [Parameter] public EventCallback<string> EmailChanged { get; set; }
+}
+
+<style>
+    .profile-fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem;
+    }
+
+    .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .field-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+    }
+
+    .field-input {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-primary);
+        font-family: var(--uc-font-mono);
+        font-size: 0.85rem;
+        padding: 0.7rem 1rem;
+        outline: none;
+        transition: border-color 0.2s;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .field-input:focus {
+        border-color: var(--uc-blue);
+    }
+</style>

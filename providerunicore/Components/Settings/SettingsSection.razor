@@ -1,0 +1,73 @@
+@namespace unicoreprovider.Components
+<div class="settings-section">
+    <div class="section-heading">
+        <div class="section-icon-wrap" style="background: @IconBg;">
+            <i class="bi @Icon" style="color: @IconColor;"></i>
+        </div>
+        <div>
+            <div class="section-title">@Title</div>
+            <div class="section-subtitle">@Subtitle</div>
+        </div>
+    </div>
+    <div class="section-body">
+        @ChildContent
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string Subtitle { get; set; } = "";
+    [Parameter] public string Icon { get; set; } = "bi-circle";
+    [Parameter] public string IconColor { get; set; } = "var(--uc-blue)";
+    [Parameter] public string IconBg { get; set; } = "rgba(59,130,246,0.15)";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
+
+<style>
+    .settings-section {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.5rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .section-heading {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .section-icon-wrap {
+        width: 42px;
+        height: 42px;
+        border-radius: var(--uc-radius);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.1rem;
+        flex-shrink: 0;
+    }
+
+    .section-title {
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-white);
+        font-family: var(--uc-font-mono);
+    }
+
+    .section-subtitle {
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+        font-family: var(--uc-font-mono);
+        margin-top: 0.15rem;
+    }
+
+    .section-body {
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+    }
+</style>
