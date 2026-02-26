@@ -49,23 +49,17 @@ public class WebShellService : IWebShellService
 
     private (string? host, int port) ResolveTarget(VirtualMachine vm)
     {
-        // Development: connect directly to the provider host on the Docker-mapped SSH port.
-        if (_env.IsDevelopment() && vm.SshPort.HasValue)
-        {
-            var localHost = _config["WebShell:ProviderHost"] ?? "localhost";
-            return (localHost, vm.SshPort.Value);
-        }
-
-        // Production: connect via the FRP relay.
+        // Prefer the FRP relay when available — works for both local and remote connections.
         var relayHost = _config["FrpRelay:ServerAddr"] ?? _config["WebShell:RelayHost"];
         if (!string.IsNullOrWhiteSpace(relayHost) && vm.RelayPort.HasValue)
             return (relayHost, vm.RelayPort.Value);
 
-        // Optional local fallback in production (e.g. single-machine demo).
-        if (vm.SshPort.HasValue && _config.GetValue("WebShell:UseLocalHostPortFallback", false))
+        // Fallback: connect directly to the provider host on the Docker-mapped SSH port.
+        // Only works when the consumer is on the same machine as the provider.
+        if (vm.SshPort.HasValue)
         {
-            var h = _config["WebShell:ProviderHost"] ?? "localhost";
-            return (h, vm.SshPort.Value);
+            var localHost = _config["WebShell:ProviderHost"] ?? "localhost";
+            return (localHost, vm.SshPort.Value);
         }
 
         return (null, 0);
@@ -96,8 +90,8 @@ public class WebShellService : IWebShellService
         }
 
         var password = _config["WebShell:SshPassword"];
-        // In development, fall back to a default password so local testing works without secrets.
-        if (string.IsNullOrWhiteSpace(password) && _env.IsDevelopment())
+        // Fall back to the default container password if none is configured.
+        if (string.IsNullOrWhiteSpace(password))
             password = "consumer123";
 
         if (!string.IsNullOrWhiteSpace(password))
