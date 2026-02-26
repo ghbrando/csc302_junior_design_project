@@ -3,6 +3,7 @@
 @using unicoreprovider.Components
 @using Microsoft.AspNetCore.Components.Web
 @using System.Threading
+@using System.Collections.Generic
 @using Google.Cloud.Firestore
 @implements IDisposable
 @inject IVmService VmService
@@ -11,6 +12,7 @@
 @inject IDockerService DockerService
 @inject ContainerMonitorService MonitorService
 @inject IConfiguration Configuration
+@inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreprovider.Services.AuthorizedPageBase
 
@@ -451,6 +453,8 @@
 
     private FirestoreChangeListener? _vmListener;
     private FirestoreChangeListener? _providerListener;
+    private FirestoreChangeListener? _requestListener;
+    private readonly HashSet<string> _processedRequestIds = new();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -520,6 +524,13 @@
 
                 _ = InvokeAsync(StateHasChanged);
             });
+
+            _requestListener?.StopAsync();
+            _requestListener = FirestoreDb
+                .Collection("vm_requests")
+                .WhereEqualTo("provider_uid", AuthState.FirebaseUid)
+                .WhereEqualTo("status", "pending")
+                .Listen(OnRequestSnapshot);
         }
     }
 
@@ -578,6 +589,8 @@
             var containerId = await DockerService.StartContainerAsync(
                 name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
 
+            var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
+
             var vm = new VirtualMachine
             {
                 VmId = vmId,
@@ -588,6 +601,7 @@
                 Image = _selectedImage,
                 ProviderId = AuthState.FirebaseUid ?? string.Empty,
                 RelayPort = relayPort,
+                SshPort = sshPort,
                 CpuCores = _selectedCpuCores,
                 RamGB = _selectedRamGB,
             };
@@ -605,6 +619,88 @@
         {
             _isLaunching = false;
             StateHasChanged();
+        }
+    }
+
+    // ── Consumer VM request processing ────────────────────────────────────────
+
+    private void OnRequestSnapshot(QuerySnapshot snapshot)
+    {
+        foreach (var doc in snapshot.Documents)
+        {
+            var req = doc.ConvertTo<VmRequest>();
+            if (_processedRequestIds.Add(req.RequestId))
+                _ = InvokeAsync(() => ProcessRequestAsync(req));
+        }
+    }
+
+    private async Task ProcessRequestAsync(VmRequest request)
+    {
+        var docRef = FirestoreDb.Collection("vm_requests").Document(request.RequestId);
+
+        try
+        {
+            await docRef.UpdateAsync(new Dictionary<string, object> { ["status"] = "processing" });
+
+            if (request.CpuCores < 1 || request.RamGb < 1 ||
+                request.CpuCores > AvailableCpuCores || request.RamGb > AvailableRamGB)
+            {
+                await docRef.UpdateAsync(new Dictionary<string, object>
+                {
+                    ["status"] = "failed",
+                    ["error"]  = "Provider does not have enough resources to fulfil this request.",
+                });
+                return;
+            }
+
+            var relayPortStart = Configuration.GetValue<int>("FrpRelay:PortRangeStart", 2222);
+            var relayPortEnd   = Configuration.GetValue<int>("FrpRelay:PortRangeEnd",   2300);
+            var usedPorts = Vms.Where(v => v.RelayPort.HasValue).Select(v => v.RelayPort!.Value).ToHashSet();
+            var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
+                .First(p => !usedPorts.Contains(p));
+
+            var vmId      = Guid.NewGuid().ToString();
+            var vmName    = string.IsNullOrWhiteSpace(request.VmName) ? $"vm-{vmId[..8]}" : request.VmName;
+            var startedAt = DateTime.UtcNow;
+
+            var containerId = await DockerService.StartContainerAsync(
+                vmName, request.Image, relayPort, request.CpuCores, request.RamGb);
+
+            var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
+
+            var vm = new VirtualMachine
+            {
+                VmId        = vmId,
+                Name        = vmName,
+                ContainerId = containerId,
+                StartedAt   = startedAt,
+                Status      = "Running",
+                Image       = request.Image,
+                ProviderId  = AuthState.FirebaseUid ?? string.Empty,
+                Client      = request.ConsumerUid,
+                RelayPort   = relayPort,
+                SshPort     = sshPort,
+                CpuCores    = request.CpuCores,
+                RamGB       = request.RamGb,
+            };
+
+            await VmService.CreateVmAsync(vm);
+            MonitorService.StartMonitoring(vmId, containerId, startedAt);
+
+            await docRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["status"] = "completed",
+                ["vm_id"]  = vmId,
+            });
+        }
+        catch (Exception ex)
+        {
+            _processedRequestIds.Remove(request.RequestId);
+            await docRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["status"] = "failed",
+                ["error"]  = ex.Message,
+            });
         }
     }
 
@@ -730,6 +826,7 @@
         AuthState.OnChange -= OnAuthStateChanged;
         _ = _vmListener?.StopAsync();
         _ = _providerListener?.StopAsync();
+        _ = _requestListener?.StopAsync();
         lock (_saveLock)
         {
             _saveCts.Cancel();

@@ -10,7 +10,8 @@ using unicoreconsumer.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+        options.DetailedErrors = builder.Environment.IsDevelopment());
 var projectId = builder.Configuration["Firebase:ProjectId"];
 
 builder.Services.AddSingleton(FirestoreDb.Create(projectId));
@@ -36,6 +37,7 @@ builder.Services.AddFirestoreRepository<VirtualMachine>(
     collectionName: "virtual_machines",
     documentIdSelector: vm => vm.VmId);
 builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
+builder.Services.AddScoped<IWebShellService, WebShellService>();
 
 // state service used by Blazor components to track current user
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();

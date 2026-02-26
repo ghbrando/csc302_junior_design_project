@@ -23,31 +23,34 @@
 
     <div class="vm-cost-row">
         <span class="vm-cost">@Cost</span>
-        <span class="vm-budget">/ @Budget</span>
+        @if (ShowBudget) { <span class="vm-budget">/ @Budget</span> }
         <span class="vm-uptime">&#8679; @Uptime</span>
     </div>
 
-    <div class="progress-bar-wrap">
-        <div class="progress-bar">
-            <div class="progress-fill @ProgressColor" style="width: @(Math.Min(BudgetPercent, 100))%;"></div>
-        </div>
-        <div class="progress-labels">
-            <span>0%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span class="label-end @(IsOverBudget ? "red-text" : "")">@BudgetPercent.ToString("F1")%</span>
-        </div>
-    </div>
-
-    @if (IsOverBudget)
+    @if (ShowBudget)
     {
-        <div class="over-budget-banner">
-            <i class="bi bi-exclamation-triangle"></i> Over budget by @OverBy
+        <div class="progress-bar-wrap">
+            <div class="progress-bar">
+                <div class="progress-fill @ProgressColor" style="width: @(Math.Min(BudgetPercent, 100))%;"></div>
+            </div>
+            <div class="progress-labels">
+                <span>0%</span>
+                <span>50%</span>
+                <span>75%</span>
+                <span class="label-end @(IsOverBudget ? "red-text" : "")">@BudgetPercent.ToString("F1")%</span>
+            </div>
         </div>
+
+        @if (IsOverBudget)
+        {
+            <div class="over-budget-banner">
+                <i class="bi bi-exclamation-triangle"></i> Over budget by @OverBy
+            </div>
+        }
     }
 
     <div class="vm-actions">
-        <button class="btn-ssh"><i class="bi bi-terminal"></i> SSH</button>
+        <button class="btn-ssh" @onclick="OnSsh"><i class="bi bi-terminal"></i> SSH</button>
     </div>
 
 </div>
@@ -63,6 +66,9 @@
     [Parameter] public double BudgetPercent { get; set; } = 0;
     [Parameter] public bool IsOverBudget { get; set; } = false;
     [Parameter] public string OverBy { get; set; } = "";
+    [Parameter] public string VmId { get; set; } = "";
+    [Parameter] public EventCallback OnSsh { get; set; }
+    [Parameter] public bool ShowBudget { get; set; } = true;
 
     private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
 }

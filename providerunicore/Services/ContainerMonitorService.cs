@@ -29,8 +29,8 @@ public class ContainerMonitorService : IHostedService, IDisposable
     // Called by Dashboard when a new container is launched
     public void StartMonitoring(string vmId, string containerId, DateTime startedAt)
     {
-        _monitored.TryAdd(vmId, (containerId, startedAt));
-        _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
+        if (_monitored.TryAdd(vmId, (containerId, startedAt)))
+            _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
     }
 
     // Called when a container is stopped
@@ -75,8 +75,17 @@ public class ContainerMonitorService : IHostedService, IDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
-                    containerId, vmId, ex.Message);
+                if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("no such container", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("VM {VmId} no longer exists in Firestore; removing from monitor.", vmId);
+                    StopMonitoring(vmId);
+                }
+                else
+                {
+                    _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
+                        containerId, vmId, ex.Message);
+                }
             }
         }
     }

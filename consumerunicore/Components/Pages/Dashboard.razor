@@ -1,73 +1,205 @@
 @page "/dashboard"
 @using unicoreconsumer.Services
-@using Microsoft.AspNetCore.Components.Web
-@using System.Threading
+@using unicoreconsumer.Components
 @using Google.Cloud.Firestore
+@implements IAsyncDisposable
 @inject IConsumerService ConsumerService
 @inject IConfiguration Configuration
+@inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
-@using unicoreconsumer.Components
+
 <div class="dashboard">
 
-    <DashboardHeader Title="Virtual Machines" RunningCount="@runningVms.Count" OnCreate="HandleCreateVm" />
+    <DashboardHeader Title="Virtual Machines" RunningCount="@_runningVms.Count" OnCreate="HandleCreateVm" />
 
     <!-- Stat Cards -->
     <div class="stat-grid">
         <StatCard Label="RUNNING VMS" Icon="bi-hdd-stack" IconColor="var(--uc-purple)"
-                  Value="@runningVms.Count.ToString()" SubText=" active" />
+                  Value="@_runningVms.Count.ToString()" SubText=" active" />
 
-        <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)" Value="@($"${totalSpent:F2}")"
-                  Accent="true" />
+        <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)"
+                  Value="@($"${_totalSpent:F2}")" Accent="true" />
 
-        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)" Value="@stoppedVms.Count.ToString()"
-                  SubText=" vm(s)" />
+        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)"
+                  Value="@_stoppedVms.Count.ToString()" SubText=" vm(s)" />
 
         <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)"
-                  Value="@alertCount.ToString()" SubText=" over budget" />
+                  Value="0" SubText=" over budget" />
     </div>
 
     <!-- Running VMs -->
-    <div class="section-title">RUNNING INSTANCES — BUDGET MONITORING</div>
-    <div class="vm-grid">
-        @foreach (var vm in runningVms)
-        {
-            <VmCard Name="@vm.Name" Os="@vm.Os" Specs="@vm.Specs" IpAddress="@vm.IpAddress" Cost="@($"${vm.Cost:F2}")"
-                    Budget="@($"${vm.BudgetLimit:F2}")" Uptime="@vm.Uptime" BudgetPercent="@(vm.Cost / vm.BudgetLimit * 100)"
-                    IsOverBudget="@(vm.Cost > vm.BudgetLimit)" OverBy="@($"${vm.Cost - vm.BudgetLimit:F2}")" />
-        }
-    </div>
+    <div class="section-title">RUNNING INSTANCES</div>
+
+    @if (_loading)
+    {
+        <div class="empty-state">Loading your virtual machines...</div>
+    }
+    else if (_runningVms.Count == 0)
+    {
+        <div class="empty-state">No running instances. Create a VM to get started.</div>
+    }
+    else
+    {
+        <div class="vm-grid">
+            @foreach (var vm in _runningVms)
+            {
+                <VmCard Name="@vm.Name"
+                        Os="@vm.Os"
+                        Specs="@vm.Specs"
+                        IpAddress="@vm.Connection"
+                        Cost="@($"${vm.Cost:F2}")"
+                        Uptime="@vm.Uptime"
+                        VmId="@vm.VmId"
+                        ShowBudget="false"
+                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))" />
+            }
+        </div>
+    }
 
     <!-- Stopped VMs -->
     <div class="section-title" style="margin-top: 2rem;">STOPPED INSTANCES</div>
-    <StoppedVmTable Vms="@stoppedVms" />
+
+    @if (!_loading && _stoppedVms.Count == 0)
+    {
+        <div class="empty-state">No stopped instances.</div>
+    }
+    else
+    {
+        <StoppedVmTable Vms="@_stoppedVms" />
+    }
 
 </div>
 
+<CreateVmModal IsOpen="@_showCreateModal"
+               ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+               OnClose="@(() => _showCreateModal = false)" />
+
 @code {
-    // ── Running VM model ──────────────────────────────────────────────────────
-    record RunningVm(string Name, string Os, string Specs, string IpAddress,
-                     double Cost, double BudgetLimit, string Uptime);
+    // ── Display models ────────────────────────────────────────────────────────
+    record RunningVm(string VmId, string Name, string Os, string Specs,
+                     string Connection, double Cost, string Uptime);
 
-    // ── Static sample data ────────────────────────────────────────────────────
-    private List<RunningVm> runningVms = new()
+    // ── State ─────────────────────────────────────────────────────────────────
+    private List<RunningVm> _runningVms = new();
+    private List<StoppedVmTable.StoppedVm> _stoppedVms = new();
+    private bool _loading = true;
+    private bool _listenerStarted;
+    private FirestoreChangeListener? _vmListener;
+
+    private double _totalSpent => _runningVms.Sum(v => v.Cost);
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override void OnInitialized()
     {
-        new("ml-training-node-01", "Ubuntu 22.04 LTS", "8 vCPU / 16GB RAM", "203.0.113.42", 387.50, 500.00, "2d 14h"),
-        new("render-server-alpha", "Ubuntu 22.04 LTS", "4 vCPU / 8GB RAM", "203.0.113.87", 215.30, 200.00, "1d 8h"),
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        if (!string.IsNullOrEmpty(AuthState.FirebaseUid) && !_listenerStarted)
+            _ = InvokeAsync(StartListenerAsync);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender && !string.IsNullOrEmpty(AuthState.FirebaseUid) && !_listenerStarted)
+            await StartListenerAsync();
+    }
+
+    // ── Firestore real-time listener ──────────────────────────────────────────
+    private Task StartListenerAsync()
+    {
+        if (_listenerStarted) return Task.CompletedTask;
+        _listenerStarted = true;
+
+        var query = FirestoreDb
+            .Collection("virtual_machines")
+            .WhereEqualTo("client", AuthState.FirebaseUid);
+
+        _vmListener = query.Listen(OnVmSnapshot);
+        return Task.CompletedTask;
+    }
+
+    private void OnVmSnapshot(QuerySnapshot snapshot)
+    {
+        var all = snapshot.Documents
+            .Select(d => d.ConvertTo<VirtualMachine>())
+            .ToList();
+
+        _ = InvokeAsync(() =>
+        {
+            _runningVms = all
+                .Where(vm => string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase))
+                .Select(MapRunning)
+                .ToList();
+
+            _stoppedVms = all
+                .Where(vm => !string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase))
+                .Select(MapStopped)
+                .ToList();
+
+            _loading = false;
+            StateHasChanged();
+        });
+    }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
+    private static RunningVm MapRunning(VirtualMachine vm) => new(
+        VmId:       vm.VmId,
+        Name:       string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+        Os:         FormatImage(vm.Image),
+        Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+        Connection: FormatConnection(vm),
+        Cost:       vm.CurrentSessionCost,
+        Uptime:     FormatUptime(vm.UptimeString)
+    );
+
+    private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
+    {
+        Name      = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+        Os        = FormatImage(vm.Image),
+        Specs     = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+        IpAddress = FormatConnection(vm),
+        TotalCost = $"${vm.CurrentSessionCost:F2}",
     };
 
-    private List<StoppedVmTable.StoppedVm> stoppedVms = new()
+    // ── Formatters ────────────────────────────────────────────────────────────
+    private static string FormatImage(string image)
     {
-        new() { Name = "data-pipeline-worker", Os = "Debian 11", Specs = "2 vCPU / 4GB RAM", IpAddress = "203.0.113.156",
-TotalCost = "$150.00" },
-    };
+        if (string.IsNullOrWhiteSpace(image)) return "Linux";
+        var name = image.Split(':')[0];
+        var tag  = image.Contains(':') ? " " + image.Split(':')[1] : "";
+        return char.ToUpper(name[0]) + name[1..].Replace("-", " ") + tag;
+    }
 
-    private double totalSpent => runningVms.Sum(v => v.Cost);
-    private int alertCount => runningVms.Count(v => v.Cost > v.BudgetLimit);
-
-    private void HandleCreateVm()
+    private static string FormatConnection(VirtualMachine vm)
     {
-        // Wire up navigation or modal here
+        if (vm.RelayPort.HasValue) return $"relay:{vm.RelayPort}";
+        if (vm.SshPort.HasValue)   return $"ssh:{vm.SshPort}";
+        return "—";
+    }
+
+    private static string FormatUptime(string uptimeString)
+    {
+        if (!TimeSpan.TryParse(uptimeString, out var ts)) return uptimeString;
+        if (ts.TotalDays >= 1)  return $"{(int)ts.TotalDays}d {ts.Hours}h";
+        if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        return $"{ts.Minutes}m";
+    }
+
+    private bool _showCreateModal = false;
+
+    private void HandleCreateVm() => _showCreateModal = true;
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+    public async ValueTask DisposeAsync()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        if (_vmListener != null)
+            await _vmListener.StopAsync();
     }
 }
 
@@ -98,5 +230,11 @@ TotalCost = "$150.00" },
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 1rem;
+    }
+
+    .empty-state {
+        color: var(--uc-text-muted);
+        font-size: 0.82rem;
+        padding: 1.5rem 0;
     }
 </style>
