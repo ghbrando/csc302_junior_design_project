@@ -2,6 +2,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using providerunicore.Services;
 
 namespace unicoreprovider.Services;
 
@@ -150,7 +151,7 @@ public class DockerService : IDockerService, IDisposable
         return null;
     }
 
-    public async Task StopContainerAsync(string containerId)
+    public async Task StopContainerAsync(string containerId, string vmName)
     {
         var client = await GetClientAsync();
 
@@ -165,7 +166,7 @@ public class DockerService : IDockerService, IDisposable
         });
 
         // Notify the provider that a VM is stopping
-        await _notificationService.SendVmStoppedNotificationAsync(containerId, containerId);
+        await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
     }
 
     public async Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId)

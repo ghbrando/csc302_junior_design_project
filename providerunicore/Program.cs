@@ -6,6 +6,8 @@ using Google.Cloud.SecretManager.V1;
 using providerunicore.Repositories;
 using unicoreprovider.Models;
 using unicoreprovider.Services;
+using providerunicore.Services;
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -85,6 +87,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 
 builder.Services.AddAuthorization();
 
+var app = builder.Build();
+
 // Check for 'notify-send' package on Linux at startup
 // Necessary for desktop push notifications
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -103,8 +107,6 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
         logger.LogWarning("notify-send not found. Install libnotify-bin for desktop notifications.");
     }
 }
-
-var app = builder.Build();
 
 // 2. Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

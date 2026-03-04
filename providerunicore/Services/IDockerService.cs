@@ -22,7 +22,7 @@ public interface IDockerService
     Task<int?> GetContainerSshPortAsync(string containerId);
 
     /// <summary>Stops and removes a container by its Docker container ID.</summary>
-    Task StopContainerAsync(string containerId);
+    Task StopContainerAsync(string containerId, string vmName);
 
     /// <summary>
     /// Returns a one-shot CPU% and RAM% snapshot for a running container.

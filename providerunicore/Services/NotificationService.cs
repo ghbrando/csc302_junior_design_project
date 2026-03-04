@@ -20,14 +20,14 @@ public class NotificationService : INotificationService
     public async Task SendVmStartedNotificationAsync(string vmName, string vmId)
     {
         string title = "UniCore – VM Started";
-        string message = $"VM \"{vmName}\" is now running.\nID: {vmId}";
+        string message = $"VM \"{vmName}\" is now running.";
         await SendNativeNotificationAsync(title, message);
     }
 
     public async Task SendVmStoppedNotificationAsync(string vmName, string vmId)
     {
         string title = "UniCore – VM Stopped";
-        string message = $"VM \"{vmName}\" has stopped.\nID: {vmId}";
+        string message = $"VM \"{vmName}\" has stopped.";
         await SendNativeNotificationAsync(title, message);
     }
 
@@ -79,10 +79,12 @@ public class NotificationService : INotificationService
         // notify-send is part of libnotify, available on most Linux distros.
         // Install with: sudo apt install libnotify-bin (Debian/Ubuntu)
         //               sudo dnf install libnotify      (Fedora)
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "icons", "unicore-notification-icon.png");
+
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "notify-send",
-            ArgumentList = { "--app-name=UniCore", "--urgency=normal", title, body },
+            ArgumentList = { "--app-name=UniCore", "--urgency=normal", $"--icon={iconPath}", title, body },
             UseShellExecute = false,
             CreateNoWindow = true
         };
