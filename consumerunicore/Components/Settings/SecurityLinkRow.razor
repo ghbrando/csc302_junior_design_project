@@ -1,5 +1,5 @@
 @namespace unicoreconsumer.Components
-<div class="security-row">
+<div class="security-row" @onclick="HandleClick">
     <div class="security-left">
         <i class="bi @Icon security-icon"></i>
         <span class="security-label">@Label</span>
@@ -11,6 +11,12 @@
     [Parameter] public string Label { get; set; } = "";
     [Parameter] public string Icon { get; set; } = "bi-circle";
     [Parameter] public EventCallback OnClick { get; set; }
+
+    private async Task HandleClick()
+    {
+        if (OnClick.HasDelegate)
+            await OnClick.InvokeAsync();
+    }
 }
 
 <style>

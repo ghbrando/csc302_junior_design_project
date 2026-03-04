@@ -1,10 +1,9 @@
 @page "/settings"
 @using unicoreconsumer.Services
 @using unicoreconsumer.Components
-@using Google.Cloud.Firestore
+@implements IDisposable
 @inject IConsumerService ConsumerService
-@inject IConfiguration Configuration
-@inject FirestoreDb FirestoreDb
+@inject IFirebaseAuthService FirebaseAuthService
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
 
@@ -31,9 +30,9 @@
     <!-- Security -->
     <SettingsSection Title="SECURITY"        Subtitle="Manage authentication &amp; access"            Icon="bi-shield"
                      IconColor="var(--uc-teal)"            IconBg="rgba(16,185,129,0.15)">
-        <SecurityLinkRow Label="Change Password" Icon="bi-key" />
-        <SecurityLinkRow Label="Two-Factor Authentication" Icon="bi-shield-lock" />
-        <SecurityLinkRow Label="API Keys" Icon="bi-key" />
+        <SecurityLinkRow Label="Change Password" Icon="bi-key" OnClick="HandlePasswordResetAsync" />
+        <SecurityLinkRow Label="Two-Factor Authentication" Icon="bi-shield-lock" OnClick="HandleTwoFactorClick" />
+        <SecurityLinkRow Label="API Keys" Icon="bi-key" OnClick="HandleApiKeysClick" />
     </SettingsSection>
 
     <!-- Payment Methods -->
@@ -50,15 +49,22 @@
 
     <!-- Save Button -->
     <div class="save-row">
-        <button class="btn-save" @onclick="HandleSave">SAVE CHANGES</button>
+        <button class="btn-save" @onclick="HandleSaveAsync" disabled="@(_saving || _loading)">
+            @(_saving ? "SAVING..." : "SAVE CHANGES")
+        </button>
     </div>
+
+    @if (_showStatusToast && !string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div class="status-toast @(_statusIsError ? "status-error" : "status-success")">@_statusMessage</div>
+    }
 
 </div>
 
 @code {
     // Profile
-    private string fullName = "John Doe";
-    private string email = "john@example.com";
+    private string fullName = "";
+    private string email = "";
 
     // Notifications
     private bool notifyVmStarted = true;
@@ -77,9 +83,198 @@
         new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
     };
 
-    private void HandleSave()
+    private bool _loading;
+    private bool _saving;
+    private string _statusMessage = "";
+    private bool _statusIsError;
+    private bool _profileLoaded;
+    private bool _showStatusToast;
+    private CancellationTokenSource? _statusCts;
+
+    protected override void OnInitialized()
     {
-        // Wire up save logic here
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        if (!string.IsNullOrWhiteSpace(AuthState.FirebaseUid) && !_profileLoaded)
+            _ = InvokeAsync(LoadProfileAsync);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender && !string.IsNullOrWhiteSpace(AuthState.FirebaseUid) && !_profileLoaded)
+            await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid) || _profileLoaded)
+            return;
+
+        _loading = true;
+        _statusMessage = "";
+        StateHasChanged();
+
+        try
+        {
+            var consumer = await ConsumerService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
+            if (consumer != null)
+            {
+                fullName = consumer.Name;
+                email = consumer.Email;
+                notifyVmStarted = consumer.NotifyVmStarted;
+                notifyVmCompleted = consumer.NotifyVmCompleted;
+                notifyBudgetAlert = consumer.NotifyBudgetAlert;
+                notifyPayoutReady = consumer.NotifyPayoutReady;
+                notifySystemUpdates = consumer.NotifySystemUpdates;
+                timeZone = string.IsNullOrWhiteSpace(consumer.TimeZone) ? timeZone : consumer.TimeZone;
+                currency = string.IsNullOrWhiteSpace(consumer.Currency) ? currency : consumer.Currency;
+            }
+            else
+            {
+                fullName = AuthState.Name ?? "";
+                email = AuthState.Email ?? "";
+            }
+
+            _profileLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to load profile: {ex.Message}", true);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid))
+            return;
+
+        if (string.IsNullOrWhiteSpace(fullName))
+        {
+            ShowStatus("Full name is required.", true);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            ShowStatus("Email is required.", true);
+            return;
+        }
+
+        _saving = true;
+        _statusMessage = "";
+
+        try
+        {
+            var updated = await ConsumerService.UpdateSettingsAsync(
+                AuthState.FirebaseUid,
+                fullName,
+                email,
+                notifyVmStarted,
+                notifyVmCompleted,
+                notifyBudgetAlert,
+                notifyPayoutReady,
+                notifySystemUpdates,
+                timeZone,
+                currency);
+
+            fullName = updated.Name;
+            email = updated.Email;
+            notifyVmStarted = updated.NotifyVmStarted;
+            notifyVmCompleted = updated.NotifyVmCompleted;
+            notifyBudgetAlert = updated.NotifyBudgetAlert;
+            notifyPayoutReady = updated.NotifyPayoutReady;
+            notifySystemUpdates = updated.NotifySystemUpdates;
+            timeZone = updated.TimeZone;
+            currency = updated.Currency;
+            AuthState.SetAuthState(updated.FirebaseUid, updated.Email, updated.Name);
+            await JS.InvokeVoidAsync("authStorage.save", updated.FirebaseUid, updated.Email, updated.Name);
+
+            ShowStatus("Settings saved.", false);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Failed to save settings: {ex.Message}", true);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task HandlePasswordResetAsync()
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            ShowStatus("Add an email address before requesting a password reset.", true);
+            return;
+        }
+
+        try
+        {
+            await FirebaseAuthService.SendPasswordResetEmailAsync(email);
+            ShowStatus("Password reset email sent.", false);
+        }
+        catch (Exception ex)
+        {
+            ShowStatus($"Password reset failed: {ex.Message}", true);
+        }
+    }
+
+    private void HandleTwoFactorClick()
+    {
+        ShowStatus("Two-factor authentication setup is coming soon.", false);
+    }
+
+    private void HandleApiKeysClick()
+    {
+        ShowStatus("API key management is coming soon.", false);
+    }
+
+    private void ShowStatus(string message, bool isError)
+    {
+        _statusMessage = message;
+        _statusIsError = isError;
+        _showStatusToast = true;
+
+        _statusCts?.Cancel();
+        _statusCts?.Dispose();
+        _statusCts = new CancellationTokenSource();
+        var token = _statusCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(5000, token);
+                await InvokeAsync(() =>
+                {
+                    _showStatusToast = false;
+                    StateHasChanged();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }, token);
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        _statusCts?.Cancel();
+        _statusCts?.Dispose();
     }
 }
 
@@ -113,5 +308,37 @@
 
     .btn-save:hover {
         background: #0ea572;
+    }
+
+    .btn-save:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .status-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 1.25rem;
+        transform: translateX(-50%);
+        z-index: 1500;
+        min-width: 280px;
+        max-width: min(90vw, 640px);
+        padding: 0.8rem 1rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.85rem;
+        border: 1px solid transparent;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .status-success {
+        background: rgba(16, 185, 129, 0.12);
+        border-color: rgba(16, 185, 129, 0.4);
+        color: var(--uc-green);
+    }
+
+    .status-error {
+        background: rgba(255, 82, 82, 0.12);
+        border-color: rgba(255, 82, 82, 0.4);
+        color: #ff9a9a;
     }
 </style>

@@ -19,7 +19,7 @@
                   Value="@_runningVms.Count.ToString()" SubText=" active" />
 
         <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)"
-                  Value="@($"${_totalSpent:F2}")" Accent="true" />
+                  Value="@FormatCurrency(_totalSpent)" Accent="true" />
 
         <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)"
                   Value="@_stoppedVms.Count.ToString()" SubText=" vm(s)" />
@@ -86,6 +86,8 @@
     private bool _loading = true;
     private bool _listenerStarted;
     private FirestoreChangeListener? _vmListener;
+    private FirestoreChangeListener? _consumerListener;
+    private string _currencyCode = "USD";
 
     private double _totalSpent => _runningVms.Sum(v => v.Cost);
 
@@ -115,12 +117,27 @@
         if (_listenerStarted) return Task.CompletedTask;
         _listenerStarted = true;
 
+        var uid = AuthState.FirebaseUid;
+        if (string.IsNullOrWhiteSpace(uid))
+            return Task.CompletedTask;
+
         var query = FirestoreDb
             .Collection("virtual_machines")
-            .WhereEqualTo("client", AuthState.FirebaseUid);
+            .WhereEqualTo("client", uid);
 
         _vmListener = query.Listen(OnVmSnapshot);
+        _consumerListener = ConsumerService.ListenByFirebaseUid(uid, OnConsumerChanged);
         return Task.CompletedTask;
+    }
+
+    private void OnConsumerChanged(Consumer? consumer)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(consumer?.Currency))
+                _currencyCode = consumer.Currency;
+            StateHasChanged();
+        });
     }
 
     private void OnVmSnapshot(QuerySnapshot snapshot)
@@ -190,6 +207,21 @@
         return $"{ts.Minutes}m";
     }
 
+    private string FormatCurrency(double amount)
+    {
+        var symbol = _currencyCode switch
+        {
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "CAD" => "C$",
+            "AUD" => "A$",
+            _ => "$"
+        };
+
+        return $"{symbol}{amount:F2}";
+    }
+
     private bool _showCreateModal = false;
 
     private void HandleCreateVm() => _showCreateModal = true;
@@ -200,6 +232,8 @@
         AuthState.OnChange -= OnAuthStateChanged;
         if (_vmListener != null)
             await _vmListener.StopAsync();
+        if (_consumerListener != null)
+            await _consumerListener.StopAsync();
     }
 }
 
