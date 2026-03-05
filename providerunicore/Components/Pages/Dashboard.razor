@@ -746,7 +746,7 @@
             try
             {
                 if (!string.IsNullOrEmpty(vm.ContainerId))
-                    await DockerService.StopContainerAsync(vm.ContainerId);
+                    await DockerService.StopContainerAsync(vm.ContainerId, vm.Name);
 
                 MonitorService.StopMonitoring(vmId);
                 await VmService.DeleteVmAsync(vmId);

@@ -2,6 +2,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using providerunicore.Services;
 
 namespace unicoreprovider.Services;
 
@@ -10,12 +11,14 @@ public class DockerService : IDockerService, IDisposable
     private readonly string _relayAddr;
     private readonly int _relayServerPort;
     private readonly string _relayToken;
+    private readonly INotificationService _notificationService;
 
-    public DockerService(IConfiguration config)
+    public DockerService(IConfiguration config, INotificationService notificationService)
     {
         _relayAddr = config["FrpRelay:ServerAddr"] ?? "136.116.172.0";
         _relayServerPort = config.GetValue<int>("FrpRelay:ServerPort", 7000);
         _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
+        _notificationService = notificationService;
     }
 
     // Endpoints tried in order on Windows. Named pipe = Docker Desktop or native
@@ -129,6 +132,10 @@ public class DockerService : IDockerService, IDisposable
         });
 
         await client.Containers.StartContainerAsync(response.ID, new ContainerStartParameters());
+
+        // Notify the provider that a new VM is running
+        await _notificationService.SendVmStartedNotificationAsync(name, response.ID);
+
         return response.ID;
     }
 
@@ -152,7 +159,7 @@ public class DockerService : IDockerService, IDisposable
         return null;
     }
 
-    public async Task StopContainerAsync(string containerId)
+    public async Task StopContainerAsync(string containerId, string vmName)
     {
         var client = await GetClientAsync();
 
@@ -165,6 +172,9 @@ public class DockerService : IDockerService, IDisposable
         {
             Force = true
         });
+
+        // Notify the provider that a VM is stopping
+        await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
     }
 
     public async Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId)
