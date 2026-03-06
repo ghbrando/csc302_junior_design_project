@@ -53,7 +53,9 @@ public class HeartbeatWorker : BackgroundService
 
     private async Task RunCycleAsync(CancellationToken ct)
     {
-        var runningVms = (await _vmRepo.WhereAsync("status", "Running")).ToList();
+        var runningVms = (await _vmRepo.WhereAsync("status", "Running"))
+        .Where(vm => !vm.IsPaused)
+        .ToList();
 
         if (runningVms.Count == 0)
         {
