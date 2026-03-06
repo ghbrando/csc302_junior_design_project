@@ -20,6 +20,9 @@ public class VirtualMachine
     [FirestoreProperty("uptime")]
     public string UptimeString { get; set; } = "00:00:00";
 
+    [FirestoreProperty("is_paused")]
+    public bool IsPaused { get; set; } = false;
+
     // Computed property — not stored in Firestore, derived from UptimeString
     public TimeSpan Uptime
     {

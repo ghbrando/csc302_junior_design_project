@@ -38,12 +38,19 @@ builder.Services.AddFirestoreRepository<VirtualMachine>(
     documentIdSelector: vm => vm.VmId);
 builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
 builder.Services.AddScoped<IWebShellService, WebShellService>();
+// Register ConsumerVmService through HttpClientFactory so it gets configured client
+// instead of a plain scoped registration which would bypass the typed client.
+// (previously caused BaseAddress to be missing.)
+// builder.Services.AddScoped<IConsumerVmService, ConsumerVmService>();
 
 // state service used by Blazor components to track current user
 builder.Services.AddScoped<IAuthStateService, AuthStateService>();
 
+// Configure HttpClient for API calls with BaseAddress and register service with it
+builder.Services.AddScoped<IConsumerVmService, ConsumerVmService>();
+
 builder.Services.AddHttpClient();   // For Firebase REST API calls
-builder.Services.AddControllers(); // Add API Controllers
+builder.Services.AddControllers();  // Add API Controllers
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
 {

@@ -64,13 +64,22 @@ public class ContainerMonitorService : IHostedService, IDisposable
         {
             try
             {
+                // Create a short-lived scope to resolve the scoped IVmService
+                await using var scope = _scopeFactory.CreateAsyncScope();
+                var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+
+                // Check if VM is paused; skip metrics update if it is
+                var vm = await vmService.GetByIdAsync(vmId);
+                if (vm?.IsPaused == true)
+                {
+                    _logger.LogDebug("VM {VmId} is paused; skipping metrics update", vmId);
+                    continue;
+                }
+
                 var (cpu, ram) = await _dockerService.GetContainerStatsAsync(containerId);
                 var uptime = DateTime.UtcNow - startedAt;
                 var uptimeStr = uptime.ToString(@"hh\:mm\:ss");
 
-                // Create a short-lived scope to resolve the scoped IVmService
-                await using var scope = _scopeFactory.CreateAsyncScope();
-                var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
                 await vmService.UpdateVmMetricsAsync(vmId, cpu, 0, ram, uptimeStr);
             }
             catch (Exception ex)

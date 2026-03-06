@@ -30,4 +30,14 @@ public interface IDockerService
     /// Returns a one-shot CPU% and RAM% snapshot for a running container.
     /// </summary>
     Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId);
+
+    /// <summary>
+    /// Pauses a running container without stopping it.
+    /// </summary>
+    Task PauseContainerAsync(string containerId);
+
+    /// <summary>
+    /// Unpauses a paused container.
+    /// </summary>
+    Task UnpauseContainerAsync(string containerId);
 }

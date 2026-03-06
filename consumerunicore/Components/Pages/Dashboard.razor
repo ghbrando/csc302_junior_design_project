@@ -4,6 +4,7 @@
 @using Google.Cloud.Firestore
 @implements IAsyncDisposable
 @inject IConsumerService ConsumerService
+@inject IConsumerVmService ConsumerVmService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -51,8 +52,10 @@
                         Cost="@($"${vm.Cost:F2}")"
                         Uptime="@vm.Uptime"
                         VmId="@vm.VmId"
+                        IsPaused="@vm.IsPaused"
                         ShowBudget="false"
-                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))" />
+                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
+                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" />
             }
         </div>
     }
@@ -78,7 +81,7 @@
 @code {
     // ── Display models ────────────────────────────────────────────────────────
     record RunningVm(string VmId, string Name, string Os, string Specs,
-                     string Connection, double Cost, string Uptime);
+                     string Connection, double Cost, string Uptime, bool IsPaused);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -154,7 +157,8 @@
         Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
         Connection: FormatConnection(vm),
         Cost:       vm.CurrentSessionCost,
-        Uptime:     FormatUptime(vm.UptimeString)
+        Uptime:     FormatUptime(vm.UptimeString),
+        IsPaused:   vm.IsPaused
     );
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
@@ -193,6 +197,25 @@
     private bool _showCreateModal = false;
 
     private void HandleCreateVm() => _showCreateModal = true;
+
+    private async Task HandlePauseVm(string vmId, bool isPaused)
+    {
+        try
+        {
+            if (isPaused)
+            {
+                await ConsumerVmService.ResumeVmAsync(vmId);
+            }
+            else
+            {
+                await ConsumerVmService.PauseVmAsync(vmId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error pausing/resuming VM: {ex.Message}");
+        }
+    }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
     public async ValueTask DisposeAsync()
