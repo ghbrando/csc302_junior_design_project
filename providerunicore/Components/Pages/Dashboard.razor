@@ -11,6 +11,7 @@
 @inject IMachineService MachineService
 @inject IDockerService DockerService
 @inject ContainerMonitorService MonitorService
+@inject PauseResumeListenerService PauseResumeListenerService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -141,10 +142,10 @@
             var runningCount = Vms.Count(v => v.Status == "Running");
             var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
             var longestUptime = Vms
-                .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
-                .OrderByDescending(v => v.Uptime)
-                .Select(v => v.UptimeString)
-                .FirstOrDefault();
+            .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
+            .OrderByDescending(v => v.Uptime)
+            .Select(v => v.UptimeString)
+            .FirstOrDefault();
             var uptime = longestUptime ?? "N/A";
         }
 
@@ -152,30 +153,28 @@
             <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
         </div>
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running"
-                      IconClass="bi bi-activity" Color="#3b82f6" />
+            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
+                      Color="#3b82f6" />
         </div>
         <div class="col-12 col-md-6 col-lg-3">
             <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
                       IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
         </div>
         <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit=""
-                      IconClass="bi bi-lightning-charge-fill" Color="#ffeb3b" />
+            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
+                      Color="#ffeb3b" />
         </div>
     </div>
 
     <div class="row mb-3 g-3">
         <div class="col-md-6">
             <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
-                            IconClass="bi bi-cpu" Value="@CpuLimit"
-                            ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
+                            IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
         </div>
         <div class="col-md-6">
             <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
                             Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
-                            IconClass="bi bi-hdd-rack" Value="@RamLimit"
-                            ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
+                            IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
         </div>
     </div>
 
@@ -194,16 +193,15 @@
             var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
         }
         <div class="col-md-4">
-            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)"
-                        Color="#3b82f6" DataPoints="@demoVm.CpuHistory" />
+            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6"
+                        DataPoints="@demoVm.CpuHistory" />
         </div>
         <div class="col-md-4">
-            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)"
-                        Color="#10b981" DataPoints="@demoVm.GpuHistory" />
+            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981"
+                        DataPoints="@demoVm.GpuHistory" />
         </div>
         <div class="col-md-4">
-            <MetricCard Title="RAM"
-                        Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
+            <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
                         Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
         </div>
     </div>
@@ -238,7 +236,7 @@
 
             @{
                 var availCores = AvailableCpuCores;
-                var availRam   = AvailableRamGB;
+                var availRam = AvailableRamGB;
             }
 
             <div class="mb-2" style="font-size: 0.72rem; color: #64748b; letter-spacing: 0.5px;">
@@ -250,7 +248,8 @@
 
             @if (availCores == 0 || availRam == 0)
             {
-                <div class="alert py-2 mb-3" style="font-size: 0.78rem; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); color: #ef9a9a;">
+                <div class="alert py-2 mb-3"
+                     style="font-size: 0.78rem; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); color: #ef9a9a;">
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     No resources available. Raise your CPU or RAM limit, or stop a running VM first.
                 </div>
@@ -295,13 +294,11 @@
             }
 
             <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-sm btn-outline-secondary rounded-1"
-                        @onclick="CloseLaunchModal"
+                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseLaunchModal"
                         disabled="@_isLaunching">
                     Cancel
                 </button>
-                <button class="btn btn-sm btn-launch-vm rounded-1"
-                        @onclick="LaunchVmAsync"
+                <button class="btn btn-sm btn-launch-vm rounded-1" @onclick="LaunchVmAsync"
                         disabled="@(_isLaunching || AvailableCpuCores == 0 || AvailableRamGB == 0)">
                     @if (_isLaunching)
                     {
@@ -342,13 +339,11 @@
                 <p class="text-muted mb-2" style="font-size: 0.78rem;">Select which VMs to stop:</p>
 
                 <div class="mb-2 d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-secondary rounded-1"
-                            style="font-size: 0.7rem;"
+                    <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
                             @onclick="SelectAllVms">
                         All
                     </button>
-                    <button class="btn btn-sm btn-outline-secondary rounded-1"
-                            style="font-size: 0.7rem;"
+                    <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
                             @onclick="DeselectAllVms">
                         None
                     </button>
@@ -359,8 +354,7 @@
                     {
                         <div class="d-flex align-items-center gap-2 py-1 px-2 mb-1 rounded-1"
                              style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-                            <input type="checkbox" class="form-check-input mt-0"
-                                   checked="@_selectedVmIds.Contains(vm.VmId)"
+                            <input type="checkbox" class="form-check-input mt-0" checked="@_selectedVmIds.Contains(vm.VmId)"
                                    @onchange="@(e => ToggleVmSelection(vm.VmId, (bool)(e.Value ?? false)))" />
                             <div>
                                 <div style="font-size: 0.8rem; color: #e2e8f0;">@vm.Name</div>
@@ -379,13 +373,11 @@
             }
 
             <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-sm btn-outline-secondary rounded-1"
-                        @onclick="CloseStopModal"
+                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseStopModal"
                         disabled="@_isStopping">
                     Cancel
                 </button>
-                <button class="btn btn-sm btn-emergency rounded-1"
-                        @onclick="StopSelectedVmsAsync"
+                <button class="btn btn-sm btn-emergency rounded-1" @onclick="StopSelectedVmsAsync"
                         disabled="@(_isStopping || !_selectedVmIds.Any())">
                     @if (_isStopping)
                     {
@@ -410,10 +402,10 @@
 
     private static readonly ImageOption[] AvailableImages =
     [
-        new("Debian 12 (Bookworm Slim)",  "debian:bookworm-slim"),
-        new("Ubuntu 22.04 LTS",           "ubuntu:22.04"),
-        new("Ubuntu 24.04 LTS",           "ubuntu:24.04"),
-    ];
+    new("Debian 12 (Bookworm Slim)", "debian:bookworm-slim"),
+new("Ubuntu 22.04 LTS", "ubuntu:22.04"),
+new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
+];
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -437,14 +429,14 @@
 
     // Available resources = provider budget minus what running VMs already claim
     private int AvailableCpuCores =>
-        Math.Max(0,
-            (int)Math.Floor((CurrentProvider?.CpuLimitPercent ?? 0) / 100.0 * (_specs?.CpuCores ?? 0))
-            - Vms.Where(v => v.Status == "Running").Sum(v => v.CpuCores));
+    Math.Max(0,
+    (int)Math.Floor((CurrentProvider?.CpuLimitPercent ?? 0) / 100.0 * (_specs?.CpuCores ?? 0))
+    - Vms.Where(v => v.Status == "Running").Sum(v => v.CpuCores));
 
     private int AvailableRamGB =>
-        Math.Max(0,
-            (int)Math.Floor(CurrentProvider?.RamLimitGB ?? 0)
-            - Vms.Where(v => v.Status == "Running").Sum(v => v.RamGB));
+    Math.Max(0,
+    (int)Math.Floor(CurrentProvider?.RamLimitGB ?? 0)
+    - Vms.Where(v => v.Status == "Running").Sum(v => v.RamGB));
 
     private bool _showStopModal = false;
     private bool _isStopping = false;
@@ -462,7 +454,7 @@
     {
         AuthState.OnChange += OnAuthStateChanged;
         await LoadProviderDataAsync();
-        StartListeners();
+        await StartListeners();
     }
 
     private async Task LoadProviderDataAsync()
@@ -490,14 +482,15 @@
         }
     }
 
-    private void StartListeners()
+    private async Task StartListeners()
     {
+        // Always set up VM listener (doesn't need auth)
         _vmListener = VmService.ListenAllVms(vms =>
         {
             var uid = AuthState.FirebaseUid;
             Vms = uid != null
-                ? vms.Where(v => v.ProviderId == uid).ToList()
-                : new List<VirtualMachine>();
+    ? vms.Where(v => v.ProviderId == uid).ToList()
+    : new List<VirtualMachine>();
 
             // Re-register any running VMs that aren't in the monitor's dictionary yet.
             // This happens when the user navigates away and back, because _monitored is
@@ -509,28 +502,56 @@
             _ = InvokeAsync(StateHasChanged);
         });
 
-        if (AuthState.FirebaseUid != null)
+        // Only set up authenticated listeners if we have a Firebase UID
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid))
         {
-            _providerListener = ProviderService.ListenByFirebaseUid(AuthState.FirebaseUid, provider =>
+            // Clear any existing listeners if auth is not available
+            if (_requestListener != null)
             {
-                CurrentProvider = provider;
-                CurrentNodeStatus = provider?.NodeStatus ?? "Offline";
+                await _requestListener.StopAsync();
+                _requestListener = null;
+            }
+            return;
+        }
 
-                if (_limitsLoaded)
-                {
-                    if (provider?.CpuLimitPercent > 0) _cpuLimit = provider.CpuLimitPercent;
-                    if (provider?.RamLimitGB > 0) _ramLimit = provider.RamLimitGB;
-                }
+        var uid = AuthState.FirebaseUid;
 
-                _ = InvokeAsync(StateHasChanged);
-            });
+        // Start/restart pause-resume listener
+        PauseResumeListenerService.StartListening(uid);
 
-            _requestListener?.StopAsync();
+        // Start/restart provider listener
+        _providerListener = ProviderService.ListenByFirebaseUid(uid, provider =>
+        {
+            CurrentProvider = provider;
+            CurrentNodeStatus = provider?.NodeStatus ?? "Offline";
+
+            if (_limitsLoaded)
+            {
+                if (provider?.CpuLimitPercent > 0) _cpuLimit = provider.CpuLimitPercent;
+                if (provider?.RamLimitGB > 0) _ramLimit = provider.RamLimitGB;
+            }
+
+            _ = InvokeAsync(StateHasChanged);
+        });
+
+        // Start/restart request listener with defensive error handling
+        try
+        {
+            // Stop existing listener if it exists
+            if (_requestListener != null)
+            {
+                await _requestListener.StopAsync();
+            }
+            
             _requestListener = FirestoreDb
-                .Collection("vm_requests")
-                .WhereEqualTo("provider_uid", AuthState.FirebaseUid)
-                .WhereEqualTo("status", "pending")
-                .Listen(OnRequestSnapshot);
+            .Collection("vm_requests")
+            .WhereEqualTo("provider_uid", uid)
+            .WhereEqualTo("status", "pending")
+            .Listen(OnRequestSnapshot);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to start request listener: {ex.Message}");
         }
     }
 
@@ -539,7 +560,7 @@
         _ = InvokeAsync(async () =>
         {
             await LoadProviderDataAsync();
-            StartListeners();
+            await StartListeners();
             StateHasChanged();
         });
     }
@@ -550,7 +571,7 @@
     {
         _launchError = null;
         _selectedCpuCores = AvailableCpuCores > 0 ? 1 : 0;
-        _selectedRamGB    = AvailableRamGB    > 0 ? 1 : 0;
+        _selectedRamGB = AvailableRamGB > 0 ? 1 : 0;
         _showLaunchModal = true;
     }
 
@@ -570,7 +591,7 @@
         {
             // Guard: reject if the requested allocation exceeds remaining budget
             if (_selectedCpuCores < 1 || _selectedRamGB < 1 ||
-                _selectedCpuCores > AvailableCpuCores || _selectedRamGB > AvailableRamGB)
+            _selectedCpuCores > AvailableCpuCores || _selectedRamGB > AvailableRamGB)
             {
                 _launchError = "Requested resources exceed your available UniCore budget.";
                 return;
@@ -584,10 +605,10 @@
             var relayPortEnd = Configuration.GetValue<int>("FrpRelay:PortRangeEnd", 2300);
             var usedPorts = Vms.Where(v => v.RelayPort.HasValue).Select(v => v.RelayPort!.Value).ToHashSet();
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
-                .First(p => !usedPorts.Contains(p));
+            .First(p => !usedPorts.Contains(p));
 
             var containerId = await DockerService.StartContainerAsync(
-                name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
+            name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -626,9 +647,11 @@
 
     private void OnRequestSnapshot(QuerySnapshot snapshot)
     {
+        Console.WriteLine($"[DEBUG] OnRequestSnapshot fired with {snapshot.Documents.Count} documents");
         foreach (var doc in snapshot.Documents)
         {
             var req = doc.ConvertTo<VmRequest>();
+            Console.WriteLine($"[DEBUG] Processing request {req.RequestId} with status '{req.Status}'");
             if (_processedRequestIds.Add(req.RequestId))
                 _ = InvokeAsync(() => ProcessRequestAsync(req));
         }
@@ -640,66 +663,71 @@
 
         try
         {
+            Console.WriteLine($"[DEBUG] ProcessRequestAsync starting for request {request.RequestId}");
             await docRef.UpdateAsync(new Dictionary<string, object> { ["status"] = "processing" });
 
             if (request.CpuCores < 1 || request.RamGb < 1 ||
-                request.CpuCores > AvailableCpuCores || request.RamGb > AvailableRamGB)
+            request.CpuCores > AvailableCpuCores || request.RamGb > AvailableRamGB)
             {
+                Console.WriteLine($"[DEBUG] Request {request.RequestId} failed: insufficient resources. Requested {request.CpuCores} CPU (available: {AvailableCpuCores}), {request.RamGb} RAM (available: {AvailableRamGB})");
                 await docRef.UpdateAsync(new Dictionary<string, object>
                 {
                     ["status"] = "failed",
-                    ["error"]  = "Provider does not have enough resources to fulfil this request.",
+                    ["error"] = "Provider does not have enough resources to fulfil this request.",
                 });
                 return;
             }
 
             var relayPortStart = Configuration.GetValue<int>("FrpRelay:PortRangeStart", 2222);
-            var relayPortEnd   = Configuration.GetValue<int>("FrpRelay:PortRangeEnd",   2300);
+            var relayPortEnd = Configuration.GetValue<int>("FrpRelay:PortRangeEnd", 2300);
             var usedPorts = Vms.Where(v => v.RelayPort.HasValue).Select(v => v.RelayPort!.Value).ToHashSet();
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
-                .First(p => !usedPorts.Contains(p));
+            .First(p => !usedPorts.Contains(p));
 
-            var vmId      = Guid.NewGuid().ToString();
-            var vmName    = string.IsNullOrWhiteSpace(request.VmName) ? $"vm-{vmId[..8]}" : request.VmName;
+            var vmId = Guid.NewGuid().ToString();
+            var vmName = string.IsNullOrWhiteSpace(request.VmName) ? $"vm-{vmId[..8]}" : request.VmName;
             var startedAt = DateTime.UtcNow;
 
+            Console.WriteLine($"[DEBUG] Starting Docker container {vmName} for request {request.RequestId}");
             var containerId = await DockerService.StartContainerAsync(
-                vmName, request.Image, relayPort, request.CpuCores, request.RamGb);
+            vmName, request.Image, relayPort, request.CpuCores, request.RamGb);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
             var vm = new VirtualMachine
             {
-                VmId        = vmId,
-                Name        = vmName,
+                VmId = vmId,
+                Name = vmName,
                 ContainerId = containerId,
-                StartedAt   = startedAt,
-                Status      = "Running",
-                Image       = request.Image,
-                ProviderId  = AuthState.FirebaseUid ?? string.Empty,
-                Client      = request.ConsumerUid,
-                RelayPort   = relayPort,
-                SshPort     = sshPort,
-                CpuCores    = request.CpuCores,
-                RamGB       = request.RamGb,
+                StartedAt = startedAt,
+                Status = "Running",
+                Image = request.Image,
+                ProviderId = AuthState.FirebaseUid ?? string.Empty,
+                Client = request.ConsumerUid,
+                RelayPort = relayPort,
+                SshPort = sshPort,
+                CpuCores = request.CpuCores,
+                RamGB = request.RamGb,
             };
 
             await VmService.CreateVmAsync(vm);
             MonitorService.StartMonitoring(vmId, containerId, startedAt);
 
+            Console.WriteLine($"[DEBUG] Request {request.RequestId} completed successfully with VM {vmId}");
             await docRef.UpdateAsync(new Dictionary<string, object>
             {
                 ["status"] = "completed",
-                ["vm_id"]  = vmId,
+                ["vm_id"] = vmId,
             });
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[ERROR] ProcessRequestAsync failed for request {request.RequestId}: {ex.Message}\n{ex.StackTrace}");
             _processedRequestIds.Remove(request.RequestId);
             await docRef.UpdateAsync(new Dictionary<string, object>
             {
                 ["status"] = "failed",
-                ["error"]  = ex.Message,
+                ["error"] = ex.Message,
             });
         }
     }
@@ -720,7 +748,7 @@
     }
 
     private void SelectAllVms() =>
-        _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
+    _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
 
     private void DeselectAllVms() => _selectedVmIds = new();
 
@@ -819,14 +847,13 @@
         }
     }
 
-    // ── Dispose ───────────────────────────────────────────────────────────────
-
     public void Dispose()
     {
         AuthState.OnChange -= OnAuthStateChanged;
         _ = _vmListener?.StopAsync();
         _ = _providerListener?.StopAsync();
         _ = _requestListener?.StopAsync();
+        _ = PauseResumeListenerService.StopListening();
         lock (_saveLock)
         {
             _saveCts.Cancel();

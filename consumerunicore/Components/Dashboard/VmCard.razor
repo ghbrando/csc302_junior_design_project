@@ -16,8 +16,8 @@
     <div class="vm-meta">@Os &bull; @Specs</div>
 
     <div class="vm-status">
-        <span class="running-dot"></span>
-        <span class="running-label">RUNNING</span>
+        <span class="running-dot @(IsPaused ? "paused" : "")"></span>
+        <span class="running-label @(IsPaused ? "paused-label" : "")">@(IsPaused ? "PAUSED" : "RUNNING")</span>
         <span class="vm-ip">&bull; @IpAddress</span>
     </div>
 
@@ -50,7 +50,8 @@
     }
 
     <div class="vm-actions">
-        <button class="btn-ssh" @onclick="OnSsh"><i class="bi bi-terminal"></i> SSH</button>
+        <button class="btn-ssh" @onclick="OnSsh" disabled="@IsPaused"><i class="bi bi-terminal"></i> SSH</button>
+        <button class="btn-pause" @onclick="OnPause"><i class="@(IsPaused ? "bi bi-play-fill" : "bi bi-pause-fill")"></i> @(IsPaused ? "RESUME" : "PAUSE")</button>
     </div>
 
 </div>
@@ -67,7 +68,9 @@
     [Parameter] public bool IsOverBudget { get; set; } = false;
     [Parameter] public string OverBy { get; set; } = "";
     [Parameter] public string VmId { get; set; } = "";
+    [Parameter] public bool IsPaused { get; set; } = false;
     [Parameter] public EventCallback OnSsh { get; set; }
+    [Parameter] public EventCallback OnPause { get; set; }
     [Parameter] public bool ShowBudget { get; set; } = true;
 
     private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
@@ -140,11 +143,20 @@
         animation: pulse 2s infinite;
     }
 
+    .running-dot.paused {
+        background: var(--uc-yellow);
+        animation: none;
+    }
+
     .running-label {
         color: var(--uc-green);
         font-weight: 700;
         letter-spacing: 0.06em;
         font-size: 0.7rem;
+    }
+
+    .running-label.paused-label {
+        color: var(--uc-yellow);
     }
 
     .vm-ip {
@@ -235,6 +247,7 @@
 
     .vm-actions {
         display: flex;
+        gap: 0.6rem;
     }
 
     .btn-ssh {
@@ -251,11 +264,39 @@
         align-items: center;
         gap: 0.4rem;
         transition: background 0.2s;
-        margin: 0 auto;
+        flex: 1;
+        justify-content: center;
     }
 
-    .btn-ssh:hover {
+    .btn-ssh:hover:not(:disabled) {
         background: #2563eb;
+    }
+
+    .btn-ssh:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-pause {
+        background: rgba(168, 85, 247, .12);
+        color: white;
+        border: none;
+        padding: 0.5rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        font-family: var(--uc-font-mono);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-pause:hover {
+        background: #a855f7;
     }
 
     @@keyframes pulse {

@@ -124,10 +124,10 @@ public class DockerService : IDockerService, IDisposable
                         }
                     }
                 },
-                NanoCPUs   = (long)(cpuCores * 1_000_000_000L),
-                Memory     = (long)(ramGB * 1024L * 1024L * 1024L),
+                NanoCPUs = (long)(cpuCores * 1_000_000_000L),
+                Memory = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
-                PidsLimit  = 200   // prevent fork bombs from exhausting the host process table
+                PidsLimit = 200   // prevent fork bombs from exhausting the host process table
             }
         });
 
@@ -142,9 +142,9 @@ public class DockerService : IDockerService, IDisposable
     public async Task<int?> GetContainerSshPortAsync(string containerId)
     {
         var client = await GetClientAsync();
-        
+
         var container = await client.Containers.InspectContainerAsync(containerId);
-        
+
         // Look for the mapped SSH port (22/tcp)
         if (container.NetworkSettings?.Ports?.TryGetValue("22/tcp", out var portBindings) == true &&
             portBindings?.Count > 0)
@@ -193,6 +193,18 @@ public class DockerService : IDockerService, IDisposable
 
         var hostRam = await GetHostRamBytesAsync();
         return (CalculateCpuPercent(stats), CalculateRamPercent(stats, hostRam));
+    }
+
+    public async Task PauseContainerAsync(string containerId)
+    {
+        var client = await GetClientAsync();
+        await client.Containers.PauseContainerAsync(containerId);
+    }
+
+    public async Task UnpauseContainerAsync(string containerId)
+    {
+        var client = await GetClientAsync();
+        await client.Containers.UnpauseContainerAsync(containerId);
     }
 
     // Returns host total RAM in bytes, fetched once and cached.

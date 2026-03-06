@@ -75,6 +75,7 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
+builder.Services.AddSingleton<PauseResumeListenerService>();
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
