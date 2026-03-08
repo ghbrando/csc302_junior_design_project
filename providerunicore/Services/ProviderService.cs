@@ -9,6 +9,7 @@ public interface IProviderService
     Task<Provider> UpdateLastLoginAsync(string firebaseUid);
     Task<Provider> UpdateNodeStatusAsync(string status, string firebaseUid);
     Task<Provider> UpdateResourceLimitsAsync(double cpuLimitPercent, double ramLimitGB, string firebaseUid);
+    Task IncrementConsistencyScoreAsync(string firebaseUid, double incrementBy);
     FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged);
 }
 
@@ -106,6 +107,17 @@ public class ProviderService : IProviderService
         provider.RamLimitGB = ramLimitGB;
         await _repository.UpdateAsync(firebaseUid, provider);
         return provider;
+    }
+
+    public async Task IncrementConsistencyScoreAsync(string firebaseUid, double incrementBy)
+    {
+        var provider = await _repository.GetByIdAsync(firebaseUid);
+
+        if (provider == null)
+            throw new InvalidOperationException($"Provider {firebaseUid} not found");
+
+        provider.ConsistencyScore += incrementBy;
+        await _repository.UpdateAsync(firebaseUid, provider);
     }
 
     // Listen for real-time changes to a provider document

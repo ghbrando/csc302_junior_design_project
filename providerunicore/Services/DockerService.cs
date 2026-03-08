@@ -12,13 +12,15 @@ public class DockerService : IDockerService, IDisposable
     private readonly int _relayServerPort;
     private readonly string _relayToken;
     private readonly INotificationService _notificationService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public DockerService(IConfiguration config, INotificationService notificationService)
+    public DockerService(IConfiguration config, INotificationService notificationService, IServiceScopeFactory scopeFactory)
     {
         _relayAddr = config["FrpRelay:ServerAddr"] ?? "136.116.172.0";
         _relayServerPort = config.GetValue<int>("FrpRelay:ServerPort", 7000);
         _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
         _notificationService = notificationService;
+        _scopeFactory = scopeFactory;
     }
 
     // Endpoints tried in order on Windows. Named pipe = Docker Desktop or native
@@ -205,6 +207,16 @@ public class DockerService : IDockerService, IDisposable
     {
         var client = await GetClientAsync();
         await client.Containers.UnpauseContainerAsync(containerId);
+
+        // Use scope factory to safely access scoped services from this singleton
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+            var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
+
+            await vmService.DecrementVmConsecutiveFailedConnectionsAsync(containerId, 3);
+            await providerService.IncrementConsistencyScoreAsync(containerId, 0.06);
+        }
     }
 
     // Returns host total RAM in bytes, fetched once and cached.

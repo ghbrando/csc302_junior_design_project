@@ -76,6 +76,20 @@ public class VirtualMachineService : IVmService
         await _repository.DeleteAsync(vmId);
     }
 
+    public async Task DecrementVmConsecutiveFailedConnectionsAsync(string vmId, int decrementBy)
+    {
+        var vm = await _repository.GetByIdAsync(vmId);
+
+        if (vm == null)
+            throw new Exception($"VM {vmId} not found");
+
+        if (vm.ConsecutiveMisses >= decrementBy)
+        {
+            vm.ConsecutiveMisses -= decrementBy;
+            await _repository.UpdateAsync(vmId, vm);
+        }
+    }
+
     // Listen for real-time changes to all VMs
     public FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged)
     {
