@@ -213,7 +213,12 @@ The hub uses SignalR's connection routing to map every consumer terminal session
 
 This project was built as part of **EGR 302: Team Design Project** at California Baptist University, covering the full engineering lifecycle: requirements, architecture, ethics, teamwork, and delivery.
 
-Pull requests, issue reports, and feedback are welcome. For architecture questions, start with [docs/NETWORKING_ARCHITECTURE.md](docs/NETWORKING_ARCHITECTURE.md). For data model questions, see [providerunicore/Repositories/README.md](providerunicore/Repositories/README.md).
+Pull requests, issue reports, and feedback are welcome.
+
+**Developer Resources:**
+- **[CLAUDE.md](CLAUDE.md)** — Comprehensive development guide (start here for coding)
+- **[docs/NETWORKING_ARCHITECTURE.md](docs/NETWORKING_ARCHITECTURE.md)** — How the GCP relay works
+- **[providerunicore/Repositories/README.md](providerunicore/Repositories/README.md)** — Data model guide
 
 ---
 
