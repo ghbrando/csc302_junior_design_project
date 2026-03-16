@@ -64,7 +64,7 @@ builder.Services.AddScoped<IProviderService, ProviderService>();
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
 builder.Services.AddScoped<IVmService, VirtualMachineService>();
 builder.Services.AddScoped<IPayoutService, PayoutService>();
-builder.Services.AddScoped<IAuthStateService, AuthStateService>();
+builder.Services.AddSingleton<IAuthStateService, AuthStateService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
@@ -95,6 +95,28 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(() =>
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var AuthState = app.Services.GetRequiredService<IAuthStateService>(); // Singleton, can resolve from root
+        String? firebaseUID = AuthState.FirebaseUid;
+        if (!string.IsNullOrEmpty(firebaseUID))
+        {
+            var ProviderService = scope.ServiceProvider.GetRequiredService<IProviderService>();
+            try
+            {
+                ProviderService.UpdateNodeStatusAsync("Offline", firebaseUID).Wait();
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't crash the shutdown
+                Console.WriteLine($"Failed to update provider status to offline: {ex.Message}");
+            }
+        }
+    }
+});
 // Check for 'notify-send' package on Linux at startup
 // Necessary for desktop push notifications
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

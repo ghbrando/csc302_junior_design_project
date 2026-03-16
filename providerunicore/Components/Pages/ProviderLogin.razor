@@ -172,7 +172,7 @@
                 AuthState.SetAuthState(decoded.Uid, email, provider.Name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, provider.Name);
             }
-
+            await ProviderService.UpdateNodeStatusAsync("Online", AuthState.FirebaseUid ?? "unknown-uid");
             Nav.NavigateTo("/dashboard/");
         }
         catch (Exception ex)
