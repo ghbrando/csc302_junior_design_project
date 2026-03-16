@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using providerunicore.Components.Dashboard
 @inject IAuthStateService AuthState
+@inject IProviderService ProviderService
 @inject NavigationManager Nav
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JS
@@ -74,6 +75,8 @@
 
     private async Task HandleLogout()
     {
+        String firebaseUid = AuthState.FirebaseUid ?? "unknown-uid";
+        await ProviderService.UpdateNodeStatusAsync("Offline", firebaseUid);
         AuthState.ClearAuthState();
         await JS.InvokeVoidAsync("authStorage.clear");
         Nav.NavigateTo("/", forceLoad: true);
