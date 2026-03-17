@@ -18,6 +18,7 @@ public class ConsumerVmService : IConsumerVmService
             ?? throw new Exception($"VM {vmId} not found");
 
         vm.IsPaused = true;
+        vm.ResumeSuccess = false; // Reset resume success flag on new pause
         await _vmRepository.UpdateAsync(vmId, vm);
 
         var updatedVm = await _vmRepository.GetByIdAsync(vmId)

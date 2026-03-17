@@ -203,7 +203,7 @@ public class DockerService : IDockerService, IDisposable
         await client.Containers.PauseContainerAsync(containerId);
     }
 
-    public async Task UnpauseContainerAsync(string containerId)
+    public async Task UnpauseContainerAsync(string containerId, string vmId)
     {
         var client = await GetClientAsync();
         await client.Containers.UnpauseContainerAsync(containerId);
@@ -213,9 +213,7 @@ public class DockerService : IDockerService, IDisposable
         {
             var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
             var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
-
-            await vmService.DecrementVmConsecutiveFailedConnectionsAsync(containerId, 3);
-            await providerService.IncrementConsistencyScoreAsync(containerId, 0.06);
+            await vmService.UpdateResumedFlag(vmId);
         }
     }
 

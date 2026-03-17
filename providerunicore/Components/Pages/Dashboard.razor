@@ -208,7 +208,7 @@
 
     <div class="row g-3">
         <div class="col-12">
-            <VmList Vms="@Vms" HostCpuCores="@(_specs?.CpuThreads ?? 0)" />
+            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)" />
         </div>
     </div>
 
@@ -542,7 +542,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             {
                 await _requestListener.StopAsync();
             }
-            
+
             _requestListener = FirestoreDb
             .Collection("vm_requests")
             .WhereEqualTo("provider_uid", uid)
