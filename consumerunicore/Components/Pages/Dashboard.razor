@@ -52,10 +52,15 @@
                         Cost="@($"${vm.Cost:F2}")"
                         Uptime="@vm.Uptime"
                         VmId="@vm.VmId"
+                    ResumeSuccess="@vm.ResumeSuccess"
+                    IsResumeInProgress="@_resumingVmIds.Contains(vm.VmId)"
+                        IsRunning="true"
+                        IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)"
                         IsPaused="@vm.IsPaused"
                         ShowBudget="false"
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
-                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" />
+                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
+                        OnStop="@(() => HandleStopVm(vm.VmId))" />
             }
         </div>
     }
@@ -81,7 +86,7 @@
 @code {
     // ── Display models ────────────────────────────────────────────────────────
     record RunningVm(string VmId, string Name, string Os, string Specs,
-                     string Connection, double Cost, string Uptime, bool IsPaused);
+                     string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -89,6 +94,8 @@
     private bool _loading = true;
     private bool _listenerStarted;
     private FirestoreChangeListener? _vmListener;
+    private readonly HashSet<string> _stoppingVmIds = new();
+    private readonly HashSet<string> _resumingVmIds = new();
 
     private double _totalSpent => _runningVms.Sum(v => v.Cost);
 
@@ -158,7 +165,8 @@
         Connection: FormatConnection(vm),
         Cost:       vm.CurrentSessionCost,
         Uptime:     FormatUptime(vm.UptimeString),
-        IsPaused:   vm.IsPaused
+        IsPaused:   vm.IsPaused,
+        ResumeSuccess: vm.ResumeSuccess
     );
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
@@ -204,6 +212,10 @@
         {
             if (isPaused)
             {
+                if (_resumingVmIds.Contains(vmId))
+                    return;
+
+                _resumingVmIds.Add(vmId);
                 await ConsumerVmService.ResumeVmAsync(vmId);
             }
             else
@@ -214,6 +226,30 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Error pausing/resuming VM: {ex.Message}");
+        }
+        finally
+        {
+            _resumingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleStopVm(string vmId)
+    {
+        if (_stoppingVmIds.Contains(vmId))
+            return;
+
+        try
+        {
+            _stoppingVmIds.Add(vmId);
+            await ConsumerVmService.StopVmAsync(vmId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping VM: {ex.Message}");
+        }
+        finally
+        {
+            _stoppingVmIds.Remove(vmId);
         }
     }
 

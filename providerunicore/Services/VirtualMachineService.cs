@@ -90,6 +90,17 @@ public class VirtualMachineService : IVmService
         }
     }
 
+    public async Task UpdateResumedFlag(string vmID)
+    {
+        var vm = await _repository.GetByIdAsync(vmID);
+
+        if (vm == null)
+            throw new Exception($"VM {vmID} not found");
+
+        vm.ResumeSuccess = true;
+        await _repository.UpdateAsync(vmID, vm);
+    }
+
     // Listen for real-time changes to all VMs
     public FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged)
     {

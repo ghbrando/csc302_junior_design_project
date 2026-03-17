@@ -39,5 +39,5 @@ public interface IDockerService
     /// <summary>
     /// Unpauses a paused container.
     /// </summary>
-    Task UnpauseContainerAsync(string containerId);
+    Task UnpauseContainerAsync(string containerId, string vmId);
 }
