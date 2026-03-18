@@ -95,4 +95,40 @@ public class VirtualMachine
     // Tracks how many consecutive heartbeat cycles this VM has failed to respond
     [FirestoreProperty("consecutive_misses")]
     public int ConsecutiveMisses { get; set; } = 0;
+
+    [FirestoreProperty("volume_name")]
+    public string? VolumeName { get; set; }
+
+    [FirestoreProperty("gcs_bucket")]
+    public string? GcsBucket { get; set; }
+
+    [FirestoreProperty("gcs_path")]
+    public string? GcsPath { get; set; }
+
+    [FirestoreProperty("last_volume_sync_at")]
+    public DateTime? LastVolumeSyncAt { get; set; }
+
+    [FirestoreProperty("volume_sync_status")]
+    public string? VolumeSyncStatus { get; set; }
+
+    [FirestoreProperty("snapshot_image")]
+    public string? SnapshotImage { get; set; }
+
+    [FirestoreProperty("last_snapshot_at")]
+    public DateTime? LastSnapshotAt { get; set; }
+
+    [FirestoreProperty("snapshot_status")]
+    public string? SnapshotStatus { get; set; }
+
+    [FirestoreProperty("migration_status")]
+    public string? MigrationStatus { get; set; }
+
+    [FirestoreProperty("migration_requested_at")]
+    public DateTime? MigrationRequestedAt { get; set; }
+
+    [FirestoreProperty("migration_error")]
+    public string? MigrationError { get; set; }
+
+    [FirestoreProperty("original_vm_id")]
+    public string? OriginalVmId { get; set; }
 }
