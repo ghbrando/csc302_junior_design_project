@@ -97,13 +97,13 @@ public class VirtualMachine
     public int ConsecutiveMisses { get; set; } = 0;
 
     [FirestoreProperty("volume_name")]
-    public string? VolumeName { get; set; } = string.Empty;
+    public string? VolumeName { get; set; }
 
     [FirestoreProperty("gcs_bucket")]
-    public string? GcsBucket { get; set; } = string.Empty;
+    public string? GcsBucket { get; set; }
 
     [FirestoreProperty("gcs_path")]
-    public string? GcsPath { get; set; } = string.Empty;
+    public string? GcsPath { get; set; }
 
     [FirestoreProperty("last_volume_sync_at")]
     public DateTime? LastVolumeSyncAt { get; set; }
@@ -112,7 +112,7 @@ public class VirtualMachine
     public string? VolumeSyncStatus { get; set; }
 
     [FirestoreProperty("snapshot_image")]
-    public string? SnapshotImage { get; set; } = string.Empty;
+    public string? SnapshotImage { get; set; }
 
     [FirestoreProperty("last_snapshot_at")]
     public DateTime? LastSnapshotAt { get; set; }
@@ -127,8 +127,8 @@ public class VirtualMachine
     public DateTime? MigrationRequestedAt { get; set; }
 
     [FirestoreProperty("migration_error")]
-    public string? MigrationError { get; set; } = string.Empty;
+    public string? MigrationError { get; set; }
 
     [FirestoreProperty("original_vm_id")]
-    public string? OriginalVmId { get; set; } = string.Empty;
+    public string? OriginalVmId { get; set; }
 }

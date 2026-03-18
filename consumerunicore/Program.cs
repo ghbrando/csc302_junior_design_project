@@ -36,6 +36,11 @@ builder.Services.AddFirestoreRepository<MachineSpecs>(
 builder.Services.AddFirestoreRepository<VirtualMachine>(
     collectionName: "virtual_machines",
     documentIdSelector: vm => vm.VmId);
+
+builder.Services.AddFirestoreRepository<VmMigrationRequest>(
+    collectionName: "vm_migration_requests",
+    documentIdSelector: r => r.MigrationRequestId);
+
 builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
 builder.Services.AddScoped<IWebShellService, WebShellService>();
 // Register ConsumerVmService through HttpClientFactory so it gets configured client

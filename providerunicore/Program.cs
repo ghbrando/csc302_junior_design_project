@@ -58,6 +58,10 @@ builder.Services.AddFirestoreRepository<MachineSpecs>(
     collectionName: "machine_specs",
     documentIdSelector: ms => ms.ProviderId);
 
+builder.Services.AddFirestoreRepository<VmMigrationRequest>(
+    collectionName: "vm_migration_requests",
+    documentIdSelector: r => r.MigrationRequestId);
+
 // Add Services
 builder.Services.AddScoped<IProviderService, ProviderService>();
 // consumer lookup service used during auth fallback
