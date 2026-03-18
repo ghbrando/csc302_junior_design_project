@@ -14,7 +14,7 @@ public class PauseResumeListenerService : IDisposable
     private readonly ILogger<PauseResumeListenerService> _logger;
 
     // vmId → (containerId, isPaused)
-    private readonly ConcurrentDictionary<string, (string ContainerId, bool IsPaused)> _vmState = new();
+    private readonly ConcurrentDictionary<string, (string ContainerId, bool IsPaused, String Status)> _vmState = new();
 
     private FirestoreChangeListener? _listener;
 
@@ -81,7 +81,7 @@ public class PauseResumeListenerService : IDisposable
                 }
 
                 // Track state and detect changes
-                var newState = (vm.ContainerId, vm.IsPaused);
+                var newState = (vm.ContainerId, vm.IsPaused, vm.Status);
 
                 if (_vmState.TryGetValue(vm.VmId, out var oldState))
                 {
@@ -95,6 +95,17 @@ public class PauseResumeListenerService : IDisposable
                             newState.IsPaused ? "PAUSED" : "RUNNING");
 
                         _ = HandlePauseStateChangeAsync(vm.VmId, vm.ContainerId, newState.IsPaused);
+                    }
+
+                    if ((oldState.Status != newState.Status) && (newState.Status == "Stopped"))
+                    {
+                        _logger.LogInformation(
+                            "Status changed for VM {VmId}: {OldStatus} -> {NewStatus}",
+                            vm.VmId,
+                            oldState.Status,
+                            newState.Status);
+
+                        _ = HandleVMStoppedAsync(vm.VmId, vm.ContainerId);
                     }
 
                     _vmState[vm.VmId] = newState;
@@ -124,7 +135,7 @@ public class PauseResumeListenerService : IDisposable
             else
             {
                 _logger.LogInformation("Unpausing Docker container {ContainerId} for VM {VmId}", containerId, vmId);
-                await _dockerService.UnpauseContainerAsync(containerId);
+                await _dockerService.UnpauseContainerAsync(containerId, vmId);
             }
         }
         catch (Exception ex)
@@ -133,6 +144,24 @@ public class PauseResumeListenerService : IDisposable
                 ex,
                 "Failed to {Action} Docker container {ContainerId} for VM {VmId}: {Message}",
                 isPaused ? "pause" : "unpause",
+                containerId,
+                vmId,
+                ex.Message);
+        }
+    }
+
+    private async Task HandleVMStoppedAsync(string vmId, string containerId)
+    {
+        try
+        {
+            _logger.LogInformation("Stopping Docker container {ContainerId} for VM {VmId}", containerId, vmId);
+            await _dockerService.StopContainerAsync(containerId, vmId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "Failed to stop Docker container {ContainerId} for VM {VmId}: {Message}",
                 containerId,
                 vmId,
                 ex.Message);

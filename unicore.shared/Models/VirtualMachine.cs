@@ -23,6 +23,9 @@ public class VirtualMachine
     [FirestoreProperty("is_paused")]
     public bool IsPaused { get; set; } = false;
 
+    [FirestoreProperty("resume_success")]
+    public bool ResumeSuccess { get; set; } = true;
+
     // Computed property — not stored in Firestore, derived from UptimeString
     public TimeSpan Uptime
     {
