@@ -78,6 +78,9 @@ public class VirtualMachine
     [FirestoreProperty("container_id")]
     public string ContainerId { get; set; } = string.Empty;
 
+    [FirestoreProperty("volume_name")]
+    public string? VolumeName { get; set; }
+
     [FirestoreProperty("started_at")]
     public DateTime? StartedAt { get; set; }
 
@@ -95,9 +98,6 @@ public class VirtualMachine
     // Tracks how many consecutive heartbeat cycles this VM has failed to respond
     [FirestoreProperty("consecutive_misses")]
     public int ConsecutiveMisses { get; set; } = 0;
-
-    [FirestoreProperty("volume_name")]
-    public string? VolumeName { get; set; }
 
     [FirestoreProperty("gcs_bucket")]
     public string? GcsBucket { get; set; }

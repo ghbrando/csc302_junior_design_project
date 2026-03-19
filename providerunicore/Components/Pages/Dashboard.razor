@@ -607,8 +607,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
             .First(p => !usedPorts.Contains(p));
 
-            var containerId = await DockerService.StartContainerAsync(
-            name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
+            var (containerId, volumeName) = await DockerService.StartContainerAsync(
+                vmId, name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -617,6 +617,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 VmId = vmId,
                 Name = name,
                 ContainerId = containerId,
+                VolumeName = volumeName,
                 StartedAt = startedAt,
                 Status = "Running",
                 Image = _selectedImage,
@@ -689,8 +690,9 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var startedAt = DateTime.UtcNow;
 
             Console.WriteLine($"[DEBUG] Starting Docker container {vmName} for request {request.RequestId}");
-            var containerId = await DockerService.StartContainerAsync(
-            vmName, request.Image, relayPort, request.CpuCores, request.RamGb);
+            var (containerId, volumeName) = await DockerService.StartContainerAsync(
+                vmId, vmName, request.Image, relayPort, request.CpuCores, request.RamGb,
+                consumerUid: request.ConsumerUid);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -699,6 +701,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 VmId = vmId,
                 Name = vmName,
                 ContainerId = containerId,
+                VolumeName = volumeName,
                 StartedAt = startedAt,
                 Status = "Running",
                 Image = request.Image,
@@ -774,7 +777,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             try
             {
                 if (!string.IsNullOrEmpty(vm.ContainerId))
-                    await DockerService.StopContainerAsync(vm.ContainerId, vm.Name);
+                    await DockerService.StopContainerAsync(vm.ContainerId, vm.Name, vm.VolumeName);
 
                 MonitorService.StopMonitoring(vmId);
                 await VmService.DeleteVmAsync(vmId);

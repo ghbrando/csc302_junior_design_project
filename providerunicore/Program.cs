@@ -33,6 +33,22 @@ catch (Exception ex)
     Console.WriteLine("[WARNING] Falling back to appsettings.json values (if present).");
 }
 
+// Load GCP service account key for container GCS sync and Artifact Registry authentication
+try
+{
+    var secretClient = SecretManagerServiceClient.Create();
+    var gcpKey = secretClient
+        .AccessSecretVersion($"projects/{projectId}/secrets/unicore-provider-gcp-key/versions/latest")
+        .Payload.Data.ToStringUtf8()
+        .Trim();
+    Environment.SetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY", gcpKey);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[WARNING] GCP key not loaded from Secret Manager: {ex.Message}");
+    Console.WriteLine("[WARNING] GCS sync and Artifact Registry auth will fail, but VMs will still start.");
+}
+
 // Add Authentication Services
 builder.Services.AddSingleton(FirestoreDb.Create(projectId));
 builder.Services.AddSingleton<IFirebaseAuthService, FirebaseAuthService>();
