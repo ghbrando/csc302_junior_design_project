@@ -234,6 +234,12 @@
                 <ProfileInformation @bind-FullName="fullName" @bind-Email="email" />
             </SettingsSection>
 
+            <!-- Appearance -->
+            <SettingsSection Title="APPEARANCE" Subtitle="Display and theme preferences" Icon="bi-palette"
+                            IconColor="var(--uc-magenta)" IconBg="rgba(213,0,249,0.15)">
+                <ToggleRow Label="Light Mode" Description="Switch between dark and light interface" @bind-IsOn="IsLightMode" />
+            </SettingsSection>
+
             <!-- Notifications -->
             <SettingsSection Title="NOTIFICATIONS" Subtitle="Configure alert preferences" Icon="bi-bell"
                              IconColor="var(--uc-purple)" IconBg="rgba(168,85,247,0.15)">
@@ -375,6 +381,28 @@
     {
         AuthState.OnChange -= OnAuthStateChanged;
         _ = _specsListener?.StopAsync();
+    }
+
+    // Theme
+    private bool _isLightMode = false;
+    private bool IsLightMode
+    {
+        get => _isLightMode;
+        set
+        {
+            _isLightMode = value;
+            _ = JS.InvokeVoidAsync("themeManager.apply", value ? "light" : "dark");
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var theme = await JS.InvokeAsync<string>("themeManager.current");
+            _isLightMode = theme == "light";
+            StateHasChanged();
+        }
     }
 
     // Profile
