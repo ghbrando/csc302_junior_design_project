@@ -63,10 +63,31 @@ public class DockerService : IDockerService, IDisposable
         return false;
     }
 
-    public async Task<string> StartContainerAsync(string name, string image, int relayPort, int cpuCores, int ramGB)
+    public async Task<(string ContainerId, string VolumeName)> StartContainerAsync(
+        string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
+        string? existingVolumeName = null, string? consumerUid = null,
+        CancellationToken ct = default)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
+
+        // Create or reuse volume for persistent storage
+        string volumeName = existingVolumeName ?? $"unicore-vol-{vmId}";
+        try
+        {
+            await CreateVolumeAsync(volumeName, ct);
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // Volume already exists, which is fine
+        }
+
+        // Load GCP service account key from environment
+        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY") ?? "";
+        var gcpKeyContent = gcpKeyJson.Replace("\"", "\\\"").Replace("\n", "\\n");
+
+        // Determine the consumer context for GCS path
+        var consumerContext = consumerUid ?? "shared";
 
         const string frpVersion = "0.61.0";
         var frpTar = $"/tmp/frp_{frpVersion}_linux_amd64.tar.gz";
@@ -91,6 +112,16 @@ public class DockerService : IDockerService, IDisposable
             $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
             $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
 
+        // GCP key setup: write service account key to /tmp/gcp-key.json with restricted permissions
+        var gcpKeySetup = $"echo '{gcpKeyContent}' | sed 's/\\\\n/\\n/g' > /tmp/gcp-key.json && chmod 600 /tmp/gcp-key.json && ";
+
+        // Google Cloud SDK setup and cron job for GCS sync
+        var gcsSetup =
+            "apt-get install -y cron > /dev/null 2>&1 && " +
+            "echo '*/5 * * * * root /usr/bin/gsutil -m rsync -r /home/consumer gs://unicore-vm-volumes/consumers/" + consumerContext + "/" + vmId + "/home/' > /etc/cron.d/unicore-backup-volume && " +
+            "chmod 0644 /etc/cron.d/unicore-backup-volume && " +
+            "/etc/init.d/cron start > /dev/null 2>&1 && ";
+
         var cmd = new List<string>
         {
             "/bin/sh",
@@ -101,6 +132,9 @@ public class DockerService : IDockerService, IDisposable
             "echo 'consumer:consumer123' | chpasswd && " +
             "echo 'consumer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && " +
             "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
+            gcpKeySetup +
+            gcsSetup +
+            "chown -R consumer:consumer /home/consumer && " +
             frpSetup + " && " +
             "/usr/sbin/sshd -D"
         };
@@ -126,6 +160,7 @@ public class DockerService : IDockerService, IDisposable
                         }
                     }
                 },
+                Binds = new[] { $"{volumeName}:/home/consumer" },  // Mount the named volume
                 NanoCPUs = (long)(cpuCores * 1_000_000_000L),
                 Memory = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
@@ -138,7 +173,7 @@ public class DockerService : IDockerService, IDisposable
         // Notify the provider that a new VM is running
         await _notificationService.SendVmStartedNotificationAsync(name, response.ID);
 
-        return response.ID;
+        return (response.ID, volumeName);
     }
 
     public async Task<int?> GetContainerSshPortAsync(string containerId)
@@ -161,7 +196,7 @@ public class DockerService : IDockerService, IDisposable
         return null;
     }
 
-    public async Task StopContainerAsync(string containerId, string vmName)
+    public async Task StopContainerAsync(string containerId, string vmName, string? volumeName = null)
     {
         var client = await GetClientAsync();
 
@@ -174,6 +209,19 @@ public class DockerService : IDockerService, IDisposable
         {
             Force = true
         });
+
+        // Remove associated volume if provided
+        if (!string.IsNullOrEmpty(volumeName))
+        {
+            try
+            {
+                await RemoveVolumeAsync(volumeName);
+            }
+            catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // Volume already removed, which is fine
+            }
+        }
 
         // Notify the provider that a VM is stopping
         await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
@@ -316,6 +364,62 @@ public class DockerService : IDockerService, IDisposable
         var usedBytes = stats.MemoryStats.Usage - cache;
 
         return (double)usedBytes / hostRamBytes * 100.0;
+    }
+
+    public async Task<string> CreateVolumeAsync(string volumeName, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        var response = await client.Volumes.CreateAsync(
+            new VolumesCreateParameters { Name = volumeName },
+            ct);
+        return response.Name;
+    }
+
+    public async Task RemoveVolumeAsync(string volumeName, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        await client.Volumes.RemoveAsync(volumeName, force: false, ct);
+    }
+
+    public async Task<VolumeResponse> InspectVolumeAsync(string volumeName, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        return await client.Volumes.InspectAsync(volumeName, ct);
+    }
+
+    public async Task<string> CommitContainerAsync(string containerId, string repository, string tag, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        var response = await client.Images.CommitContainerChangesAsync(
+            new CommitContainerChangesParameters
+            {
+                ContainerID = containerId,
+                RepositoryName = repository,
+                Tag = tag
+            },
+            ct);
+        return response.ID;
+    }
+
+    public async Task PushImageAsync(string imageTag, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+
+        // Load GCP credentials for authentication with Artifact Registry
+        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY") ?? "";
+
+        var authConfig = new AuthConfig
+        {
+            Username = "_json_key",
+            Password = gcpKeyJson
+        };
+
+        await client.Images.PushImageAsync(
+            imageTag,
+            new ImagePushParameters(),
+            authConfig,
+            new Progress<JSONMessage>(),
+            ct);
     }
 
     public void Dispose() => _cachedClient?.Dispose();
