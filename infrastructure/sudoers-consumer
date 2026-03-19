@@ -1,0 +1,15 @@
+# UniCore consumer user sudoers rules
+# Allow package management without password
+consumer ALL=(ALL) NOPASSWD: /usr/bin/apt, /usr/bin/apt-get, /usr/bin/apt-cache
+
+# Allow viewing logs
+consumer ALL=(ALL) NOPASSWD: /usr/bin/tail /var/log/*, /usr/bin/less /var/log/*
+
+# DENY access to critical resources
+consumer ALL=(ALL) !/bin/cat /tmp/gcp-key.json
+consumer ALL=(ALL) !/usr/bin/cat /tmp/gcp-key.json
+consumer ALL=(ALL) !/bin/cat /etc/frpc/frpc.toml
+consumer ALL=(ALL) !/usr/bin/cat /etc/frpc/frpc.toml
+consumer ALL=(ALL) !/usr/sbin/reboot
+consumer ALL=(ALL) !/usr/sbin/shutdown
+consumer ALL=(ALL) !/usr/bin/crontab
