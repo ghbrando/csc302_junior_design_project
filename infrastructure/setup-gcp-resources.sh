@@ -130,14 +130,14 @@ else
     ok "Artifact Registry created: $ARTIFACT_REPO"
 fi
 
-# Set cleanup policy: keep latest 5 versions per package
+# Set cleanup policy: keep only the latest 1 image per VM
 cat > /tmp/cleanup-policy.json << 'EOF'
 [
   {
-    "name": "keep-latest-5",
+    "name": "keep-latest-1",
     "action": {"type": "Keep"},
     "mostRecentVersions": {
-      "keepCount": 5
+      "keepCount": 1
     }
   },
   {
