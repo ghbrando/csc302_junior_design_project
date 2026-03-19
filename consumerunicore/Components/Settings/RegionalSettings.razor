@@ -3,7 +3,7 @@
     <div class="field-group">
         <label class="field-label">TIME ZONE</label>
         <div class="select-wrap">
-            <select class="field-select" @bind="TimeZone">
+            <select class="field-select" value="@TimeZone" @onchange="OnTimeZoneChangedAsync">
                 <option value="UTC-12:00">UTC-12:00 (Baker Island)</option>
                 <option value="UTC-11:00">UTC-11:00 (Samoa)</option>
                 <option value="UTC-10:00">UTC-10:00 (Hawaii)</option>
@@ -23,7 +23,7 @@
     <div class="field-group">
         <label class="field-label">CURRENCY</label>
         <div class="select-wrap">
-            <select class="field-select" @bind="Currency">
+            <select class="field-select" value="@Currency" @onchange="OnCurrencyChangedAsync">
                 <option value="USD">USD ($)</option>
                 <option value="EUR">EUR (€)</option>
                 <option value="GBP">GBP (£)</option>
@@ -41,6 +41,24 @@
     [Parameter] public string Currency { get; set; } = "USD";
     [Parameter] public EventCallback<string> TimeZoneChanged { get; set; }
     [Parameter] public EventCallback<string> CurrencyChanged { get; set; }
+
+    private async Task OnTimeZoneChangedAsync(ChangeEventArgs args)
+    {
+        var nextValue = args.Value?.ToString() ?? "UTC-08:00";
+        TimeZone = nextValue;
+
+        if (TimeZoneChanged.HasDelegate)
+            await TimeZoneChanged.InvokeAsync(nextValue);
+    }
+
+    private async Task OnCurrencyChangedAsync(ChangeEventArgs args)
+    {
+        var nextValue = args.Value?.ToString() ?? "USD";
+        Currency = nextValue;
+
+        if (CurrencyChanged.HasDelegate)
+            await CurrencyChanged.InvokeAsync(nextValue);
+    }
 }
 
 <style>
