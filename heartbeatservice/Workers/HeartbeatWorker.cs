@@ -14,6 +14,9 @@ public class HeartbeatWorker : BackgroundService
     private readonly int _intervalSeconds;
     private readonly int _sshTimeoutSeconds;
     private readonly int _startupGraceMinutes;
+    private readonly int _resumeGraceSeconds;
+    private readonly Dictionary<string, bool> _lastPausedStateByVmId = new();
+    private readonly Dictionary<string, DateTime> _resumeGraceUntilByVmId = new();
 
     public HeartbeatWorker(
         ILogger<HeartbeatWorker> logger,
@@ -30,6 +33,7 @@ public class HeartbeatWorker : BackgroundService
         _intervalSeconds = configuration.GetValue<int>("Heartbeat:IntervalSeconds", 10);
         _sshTimeoutSeconds = configuration.GetValue<int>("Heartbeat:SshBannerTimeoutSeconds", 3);
         _startupGraceMinutes = configuration.GetValue<int>("Heartbeat:StartupGraceMinutes", 5);
+        _resumeGraceSeconds = configuration.GetValue<int>("Heartbeat:ResumeGraceSeconds", 5);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -53,7 +57,28 @@ public class HeartbeatWorker : BackgroundService
 
     private async Task RunCycleAsync(CancellationToken ct)
     {
-        var runningVms = (await _vmRepo.WhereAsync("status", "Running")).ToList();
+        var runningVmCandidates = (await _vmRepo.WhereAsync("status", "Running")).ToList();
+
+        var activeVmIds = runningVmCandidates.Select(vm => vm.VmId).ToHashSet();
+        var staleStateKeys = _lastPausedStateByVmId.Keys.Where(id => !activeVmIds.Contains(id)).ToList();
+        foreach (var staleId in staleStateKeys)
+        {
+            _lastPausedStateByVmId.Remove(staleId);
+            _resumeGraceUntilByVmId.Remove(staleId);
+        }
+
+        foreach (var vm in runningVmCandidates)
+        {
+            if (_lastPausedStateByVmId.TryGetValue(vm.VmId, out var wasPaused) && wasPaused && !vm.IsPaused)
+            {
+                _resumeGraceUntilByVmId[vm.VmId] = DateTime.UtcNow.AddSeconds(_resumeGraceSeconds);
+                _logger.LogDebug("[HeartbeatWorker] VM {VmId} resumed; applying {GraceSeconds}s grace before probing.", vm.VmId, _resumeGraceSeconds);
+            }
+
+            _lastPausedStateByVmId[vm.VmId] = vm.IsPaused;
+        }
+
+        var runningVms = runningVmCandidates.Where(vm => !vm.IsPaused).ToList();
 
         if (runningVms.Count == 0)
         {
@@ -90,6 +115,17 @@ public class HeartbeatWorker : BackgroundService
 
             foreach (var vm in group)
             {
+                if (_resumeGraceUntilByVmId.TryGetValue(vm.VmId, out var resumeGraceUntilUtc))
+                {
+                    if (DateTime.UtcNow < resumeGraceUntilUtc)
+                    {
+                        _logger.LogDebug("[HeartbeatWorker] VM {VmId} is within resume grace period, skipping.", vm.VmId);
+                        continue;
+                    }
+
+                    _resumeGraceUntilByVmId.Remove(vm.VmId);
+                }
+
                 if (vm.RelayPort == null)
                 {
                     _logger.LogDebug("[HeartbeatWorker] VM {VmId} has no relay port, skipping.", vm.VmId);

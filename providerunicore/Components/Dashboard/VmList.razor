@@ -26,7 +26,8 @@
 
 <div class="card vm-list-card h-100 p-3">
     <div class="d-flex align-items-center mb-3">
-        <h6 class="text-uppercase fw-bold mb-0" style="letter-spacing: 1px; font-size: 0.75rem; color: var(--uc-text-muted);">
+        <h6 class="text-uppercase fw-bold mb-0"
+            style="letter-spacing: 1px; font-size: 0.75rem; color: var(--uc-text-muted);">
             Active VMs — Docker Sandbox
         </h6>
     </div>
@@ -34,7 +35,8 @@
     <div class="table-responsive">
         <table class="table table-dark-override align-middle mb-0">
             <thead>
-                <tr class="text-uppercase" style="font-size: 0.7rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
+                <tr class="text-uppercase"
+                    style="font-size: 0.7rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
                     <th class="pb-2 ps-0" style="width: 10%;">VM ID</th>
                     <th class="pb-2" style="width: 25%;">Name</th>
                     <th class="pb-2" style="width: 20%;">Client</th>
@@ -48,45 +50,55 @@
                 @foreach (var vm in Vms)
                 {
                     <tr>
-                        <td class="py-3 ps-0" style="font-family: var(--uc-font-mono); color: var(--uc-text-muted); font-size: 0.8rem;">@vm.VmId</td>
+                        <td class="py-3 ps-0"
+                            style="font-family: var(--uc-font-mono); color: var(--uc-text-muted); font-size: 0.8rem;">
+                            @vm.VmId</td>
 
-                        <td class="py-3 fw-bold" style="color: var(--uc-text-white); font-size: 0.9rem;">@vm.Name</td>
+                            <td class="py-3 fw-bold" style="color: var(--uc-text-white); font-size: 0.9rem;">
+                                @vm.Name@isPaused(vm)</td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.Client</td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.Client</td>
 
-                        <td class="py-3">
-                            @{
-                                var vmCpu = HostCpuCores > 0 && vm.CpuCores > 0
-                                    ? Math.Min(100.0, vm.CurrentCpuUsage * HostCpuCores / vm.CpuCores)
-                                    : vm.CurrentCpuUsage;
-                            }
-                            <div class="d-flex align-items-center">
-                                <div class="progress me-3" style="height: 5px; width: 80px; background-color: var(--uc-border); border-radius: 2px;">
-                                    <div class="progress-bar"
-                                         style="width: @vmCpu%; background-color: var(--uc-blue); border-radius: 2px;">
+                                <td class="py-3">
+                                    @{
+                                        var vmCpu = HostCpuCores > 0 && vm.CpuCores > 0
+                                            ? Math.Min(100.0, vm.CurrentCpuUsage * HostCpuCores / vm.CpuCores)
+                                            : vm.CurrentCpuUsage;
+                                    }
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress me-3"
+                                             style="height: 5px; width: 80px; background-color: var(--uc-border); border-radius: 2px;">
+                                            <div class="progress-bar"
+                                                 style="width: @vmCpu%; background-color: var(--uc-blue); border-radius: 2px;">
+                                            </div>
+                                        </div>
+                                        <span class="small" style="color: var(--uc-text-muted);">@vmCpu.ToString("0")%</span>
                                     </div>
-                                </div>
-                                <span class="small" style="color: var(--uc-text-muted);">@vmCpu.ToString("0")%</span>
-                            </div>
-                        </td>
+                                </td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.RamGB GB</td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.RamGB GB</td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
-                            @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
-                        </td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
+                                    @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
+                                </td>
 
-                        <td class="py-3 text-end pe-0 fw-bold" style="color: var(--uc-green); font-family: var(--uc-font-mono); font-size: 0.95rem;">
-                            @vm.CurrentSessionCost.ToString("C")
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</div>
+                                <td class="py-3 text-end pe-0 fw-bold"
+                                    style="color: var(--uc-green); font-family: var(--uc-font-mono); font-size: 0.95rem;">
+                                    @vm.CurrentSessionCost.ToString("C")
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
 @code {
     [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
     [Parameter] public int HostCpuCores { get; set; }
+
+    String isPaused(VirtualMachine vm)
+    {
+        return vm.IsPaused ? " (Paused)" : "";
+    }
 }

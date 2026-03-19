@@ -2,6 +2,7 @@ using Docker.DotNet;
 using Docker.DotNet.Models;
 using Microsoft.Extensions.Configuration;
 using System.Runtime.InteropServices;
+using providerunicore.Services;
 
 namespace unicoreprovider.Services;
 
@@ -10,12 +11,16 @@ public class DockerService : IDockerService, IDisposable
     private readonly string _relayAddr;
     private readonly int _relayServerPort;
     private readonly string _relayToken;
+    private readonly INotificationService _notificationService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
-    public DockerService(IConfiguration config)
+    public DockerService(IConfiguration config, INotificationService notificationService, IServiceScopeFactory scopeFactory)
     {
         _relayAddr = config["FrpRelay:ServerAddr"] ?? "136.116.172.0";
         _relayServerPort = config.GetValue<int>("FrpRelay:ServerPort", 7000);
         _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
+        _notificationService = notificationService;
+        _scopeFactory = scopeFactory;
     }
 
     // Endpoints tried in order on Windows. Named pipe = Docker Desktop or native
@@ -121,23 +126,27 @@ public class DockerService : IDockerService, IDisposable
                         }
                     }
                 },
-                NanoCPUs   = (long)(cpuCores * 1_000_000_000L),
-                Memory     = (long)(ramGB * 1024L * 1024L * 1024L),
+                NanoCPUs = (long)(cpuCores * 1_000_000_000L),
+                Memory = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
-                PidsLimit  = 200   // prevent fork bombs from exhausting the host process table
+                PidsLimit = 200   // prevent fork bombs from exhausting the host process table
             }
         });
 
         await client.Containers.StartContainerAsync(response.ID, new ContainerStartParameters());
+
+        // Notify the provider that a new VM is running
+        await _notificationService.SendVmStartedNotificationAsync(name, response.ID);
+
         return response.ID;
     }
 
     public async Task<int?> GetContainerSshPortAsync(string containerId)
     {
         var client = await GetClientAsync();
-        
+
         var container = await client.Containers.InspectContainerAsync(containerId);
-        
+
         // Look for the mapped SSH port (22/tcp)
         if (container.NetworkSettings?.Ports?.TryGetValue("22/tcp", out var portBindings) == true &&
             portBindings?.Count > 0)
@@ -152,7 +161,7 @@ public class DockerService : IDockerService, IDisposable
         return null;
     }
 
-    public async Task StopContainerAsync(string containerId)
+    public async Task StopContainerAsync(string containerId, string vmName)
     {
         var client = await GetClientAsync();
 
@@ -165,6 +174,9 @@ public class DockerService : IDockerService, IDisposable
         {
             Force = true
         });
+
+        // Notify the provider that a VM is stopping
+        await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
     }
 
     public async Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId)
@@ -183,6 +195,26 @@ public class DockerService : IDockerService, IDisposable
 
         var hostRam = await GetHostRamBytesAsync();
         return (CalculateCpuPercent(stats), CalculateRamPercent(stats, hostRam));
+    }
+
+    public async Task PauseContainerAsync(string containerId)
+    {
+        var client = await GetClientAsync();
+        await client.Containers.PauseContainerAsync(containerId);
+    }
+
+    public async Task UnpauseContainerAsync(string containerId, string vmId)
+    {
+        var client = await GetClientAsync();
+        await client.Containers.UnpauseContainerAsync(containerId);
+
+        // Use scope factory to safely access scoped services from this singleton
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+            var providerService = scope.ServiceProvider.GetRequiredService<IProviderService>();
+            await vmService.UpdateResumedFlag(vmId);
+        }
     }
 
     // Returns host total RAM in bytes, fetched once and cached.

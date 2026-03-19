@@ -4,6 +4,7 @@
 @using Google.Cloud.Firestore
 @implements IAsyncDisposable
 @inject IConsumerService ConsumerService
+@inject IConsumerVmService ConsumerVmService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -51,8 +52,15 @@
                         Cost="@($"${vm.Cost:F2}")"
                         Uptime="@vm.Uptime"
                         VmId="@vm.VmId"
+                    ResumeSuccess="@vm.ResumeSuccess"
+                    IsResumeInProgress="@_resumingVmIds.Contains(vm.VmId)"
+                        IsRunning="true"
+                        IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)"
+                        IsPaused="@vm.IsPaused"
                         ShowBudget="false"
-                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))" />
+                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
+                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
+                        OnStop="@(() => HandleStopVm(vm.VmId))" />
             }
         </div>
     }
@@ -78,7 +86,7 @@
 @code {
     // ── Display models ────────────────────────────────────────────────────────
     record RunningVm(string VmId, string Name, string Os, string Specs,
-                     string Connection, double Cost, string Uptime);
+                     string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -86,6 +94,8 @@
     private bool _loading = true;
     private bool _listenerStarted;
     private FirestoreChangeListener? _vmListener;
+    private readonly HashSet<string> _stoppingVmIds = new();
+    private readonly HashSet<string> _resumingVmIds = new();
     private FirestoreChangeListener? _consumerListener;
     private string _currencyCode = "USD";
 
@@ -171,7 +181,9 @@
         Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
         Connection: FormatConnection(vm),
         Cost:       vm.CurrentSessionCost,
-        Uptime:     FormatUptime(vm.UptimeString)
+        Uptime:     FormatUptime(vm.UptimeString),
+        IsPaused:   vm.IsPaused,
+        ResumeSuccess: vm.ResumeSuccess
     );
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
@@ -225,6 +237,53 @@
     private bool _showCreateModal = false;
 
     private void HandleCreateVm() => _showCreateModal = true;
+
+    private async Task HandlePauseVm(string vmId, bool isPaused)
+    {
+        try
+        {
+            if (isPaused)
+            {
+                if (_resumingVmIds.Contains(vmId))
+                    return;
+
+                _resumingVmIds.Add(vmId);
+                await ConsumerVmService.ResumeVmAsync(vmId);
+            }
+            else
+            {
+                await ConsumerVmService.PauseVmAsync(vmId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error pausing/resuming VM: {ex.Message}");
+        }
+        finally
+        {
+            _resumingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleStopVm(string vmId)
+    {
+        if (_stoppingVmIds.Contains(vmId))
+            return;
+
+        try
+        {
+            _stoppingVmIds.Add(vmId);
+            await ConsumerVmService.StopVmAsync(vmId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping VM: {ex.Message}");
+        }
+        finally
+        {
+            _stoppingVmIds.Remove(vmId);
+        }
+    }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
     public async ValueTask DisposeAsync()

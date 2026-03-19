@@ -4,6 +4,8 @@ using Microsoft.IdentityModel.Tokens;
 using Google.Cloud.Firestore;
 using Google.Cloud.SecretManager.V1;
 using unicoreprovider.Services;
+using providerunicore.Services;
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,22 +58,28 @@ builder.Services.AddFirestoreRepository<MachineSpecs>(
     collectionName: "machine_specs",
     documentIdSelector: ms => ms.ProviderId);
 
+builder.Services.AddFirestoreRepository<VmMigrationRequest>(
+    collectionName: "vm_migration_requests",
+    documentIdSelector: r => r.MigrationRequestId);
+
 // Add Services
 builder.Services.AddScoped<IProviderService, ProviderService>();
 // consumer lookup service used during auth fallback
 builder.Services.AddScoped<IConsumerService, ConsumerService>();
 builder.Services.AddScoped<IVmService, VirtualMachineService>();
 builder.Services.AddScoped<IPayoutService, PayoutService>();
-builder.Services.AddScoped<IAuthStateService, AuthStateService>();
+builder.Services.AddSingleton<IAuthStateService, AuthStateService>();
 builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
 // Docker services — registered as Singleton so the monitor can receive
 // StartMonitoring() calls from the Dashboard and persist across requests.
+builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
+builder.Services.AddSingleton<PauseResumeListenerService>();
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
@@ -90,6 +98,45 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+lifetime.ApplicationStopping.Register(() =>
+{
+    using var scope = app.Services.CreateScope();
+    var AuthState = app.Services.GetRequiredService<IAuthStateService>(); // Singleton, can resolve from root
+    String? firebaseUID = AuthState.FirebaseUid;
+    if (!string.IsNullOrEmpty(firebaseUID))
+    {
+        var ProviderService = scope.ServiceProvider.GetRequiredService<IProviderService>();
+        try
+        {
+            ProviderService.UpdateNodeStatusAsync("Offline", firebaseUID).Wait();
+        }
+        catch (Exception ex)
+        {
+            // Log the error but don't crash the shutdown
+            Console.WriteLine($"Failed to update provider status to offline: {ex.Message}");
+        }
+    }
+});
+// Check for 'notify-send' package on Linux at startup
+// Necessary for desktop push notifications
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+{
+    var check = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+    {
+        FileName = "which",
+        Arguments = "notify-send",
+        RedirectStandardOutput = true,
+        UseShellExecute = false
+    });
+    check?.WaitForExit();
+    if (check?.ExitCode != 0)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("notify-send not found. Install libnotify-bin for desktop notifications.");
+    }
+}
 
 // 2. Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
