@@ -29,6 +29,15 @@
                   Value="0" SubText=" over budget" />
     </div>
 
+    @if (!string.IsNullOrEmpty(_backupMessage))
+    {
+        <div class="backup-toast @(_backupMessageIsError ? "backup-toast-error" : "backup-toast-success")">
+            <i class="bi @(_backupMessageIsError ? "bi-exclamation-circle" : "bi-check-circle")"></i>
+            @_backupMessage
+            <button class="backup-toast-close" @onclick="() => _backupMessage = null">&times;</button>
+        </div>
+    }
+
     <!-- Running VMs -->
     <div class="section-title">RUNNING INSTANCES</div>
 
@@ -58,9 +67,13 @@
                         IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)"
                         IsPaused="@vm.IsPaused"
                         ShowBudget="false"
+                        ShowBackupButton="true"
+                        IsBackupInProgress="@(vm.VolumeSyncStatus is "Syncing" or "Requested")"
+                        LastBackup="@vm.LastBackup"
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
                         OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
-                        OnStop="@(() => HandleStopVm(vm.VmId))" />
+                        OnStop="@(() => HandleStopVm(vm.VmId))"
+                        OnBackup="@(() => HandleBackupVm(vm.VmId))" />
             }
         </div>
     }
@@ -86,7 +99,8 @@
 @code {
     // ── Display models ────────────────────────────────────────────────────────
     record RunningVm(string VmId, string Name, string Os, string Specs,
-                     string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess);
+                     string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
+                     string? VolumeSyncStatus, string LastBackup);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -98,6 +112,9 @@
     private readonly HashSet<string> _resumingVmIds = new();
     private FirestoreChangeListener? _consumerListener;
     private string _currencyCode = "USD";
+    private string? _backupMessage;
+    private bool _backupMessageIsError;
+    private readonly HashSet<string> _backupPendingVmIds = new();
 
     private double _totalSpent => _runningVms.Sum(v => v.Cost);
 
@@ -158,6 +175,26 @@
 
         _ = InvokeAsync(() =>
         {
+            // Detect backup completion/error for VMs we triggered
+            foreach (var vm in all)
+            {
+                if (!_backupPendingVmIds.Contains(vm.VmId))
+                    continue;
+
+                if (vm.VolumeSyncStatus == "Idle" && vm.LastVolumeSyncAt.HasValue)
+                {
+                    _backupPendingVmIds.Remove(vm.VmId);
+                    _backupMessage = $"Backup completed for {(string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name)}.";
+                    _backupMessageIsError = false;
+                }
+                else if (vm.VolumeSyncStatus == "Error")
+                {
+                    _backupPendingVmIds.Remove(vm.VmId);
+                    _backupMessage = $"Backup failed for {(string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name)}.";
+                    _backupMessageIsError = true;
+                }
+            }
+
             _runningVms = all
                 .Where(vm => string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase))
                 .Select(MapRunning)
@@ -183,7 +220,9 @@
         Cost:       vm.CurrentSessionCost,
         Uptime:     FormatUptime(vm.UptimeString),
         IsPaused:   vm.IsPaused,
-        ResumeSuccess: vm.ResumeSuccess
+        ResumeSuccess: vm.ResumeSuccess,
+        VolumeSyncStatus: vm.VolumeSyncStatus,
+        LastBackup: FormatLastBackup(vm.LastVolumeSyncAt)
     );
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
@@ -217,6 +256,16 @@
         if (ts.TotalDays >= 1)  return $"{(int)ts.TotalDays}d {ts.Hours}h";
         if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
         return $"{ts.Minutes}m";
+    }
+
+    private static string FormatLastBackup(DateTime? lastSync)
+    {
+        if (!lastSync.HasValue) return "";
+        var ago = DateTime.UtcNow - lastSync.Value;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalMinutes < 60) return $"{(int)ago.TotalMinutes} min ago";
+        if (ago.TotalHours < 24) return $"{(int)ago.TotalHours}h ago";
+        return $"{(int)ago.TotalDays}d ago";
     }
 
     private string FormatCurrency(double amount)
@@ -262,6 +311,27 @@
         finally
         {
             _resumingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleBackupVm(string vmId)
+    {
+        try
+        {
+            _backupPendingVmIds.Add(vmId);
+            _backupMessage = null;
+            var vmRef = FirestoreDb.Collection("virtual_machines").Document(vmId);
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                { "volume_sync_status", "Requested" }
+            });
+        }
+        catch (Exception ex)
+        {
+            _backupPendingVmIds.Remove(vmId);
+            _backupMessage = $"Failed to request backup: {ex.Message}";
+            _backupMessageIsError = true;
+            Console.WriteLine($"Error requesting backup for VM: {ex.Message}");
         }
     }
 
@@ -329,5 +399,43 @@
         color: var(--uc-text-muted);
         font-size: 0.82rem;
         padding: 1.5rem 0;
+    }
+
+    .backup-toast {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.7rem 1rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.82rem;
+        margin-bottom: 1rem;
+    }
+
+    .backup-toast-success {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #10b981;
+    }
+
+    .backup-toast-error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: var(--uc-red);
+    }
+
+    .backup-toast-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 1.1rem;
+        cursor: pointer;
+        opacity: 0.6;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .backup-toast-close:hover {
+        opacity: 1;
     }
 </style>

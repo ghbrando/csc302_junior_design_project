@@ -21,7 +21,7 @@ public interface IDockerService
     Task<(string ContainerId, string VolumeName)> StartContainerAsync(
         string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
         string? existingVolumeName = null, string? consumerUid = null,
-        CancellationToken ct = default);
+        int? volumeGb = null, CancellationToken ct = default);
 
     /// <summary>
     /// Returns the host port mapped to SSH (port 22) inside the container.
@@ -52,7 +52,7 @@ public interface IDockerService
     /// <summary>
     /// Creates a named Docker volume for persistent storage.
     /// </summary>
-    Task<string> CreateVolumeAsync(string volumeName, CancellationToken ct = default);
+    Task<string> CreateVolumeAsync(string volumeName, int? sizeGb = null, CancellationToken ct = default);
 
     /// <summary>
     /// Removes a named Docker volume.

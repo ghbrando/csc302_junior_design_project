@@ -67,6 +67,16 @@
                         </div>
                     </div>
 
+                    <div class="cvm-field">
+                        <label class="cvm-label">VOLUME SIZE (GB) — optional</label>
+                        <input class="cvm-input" type="number" min="10" max="500" placeholder="e.g. 50"
+                               @bind="_volumeGb" @bind:event="oninput" />
+                        @if (_volumeGb.HasValue && (_volumeGb < 10 || _volumeGb > 500))
+                        {
+                            <span class="cvm-validation-error">Must be between 10 and 500 GB</span>
+                        }
+                    </div>
+
                     <div class="cvm-actions">
                         <button class="cvm-btn-cancel" @onclick="CloseModal">Cancel</button>
                         <button class="cvm-btn-primary" @onclick="FindMatchAsync">
@@ -115,7 +125,7 @@
 
                     <div class="cvm-request-summary">
                         <span class="cvm-label">YOUR REQUEST</span>
-                        <span class="cvm-summary-text">@_cpuCores vCPU / @_ramGb GB RAM &bull; @_selectedImage</span>
+                        <span class="cvm-summary-text">@_cpuCores vCPU / @_ramGb GB RAM@(_volumeGb.HasValue ? $" / {_volumeGb} GB Storage" : "") &bull; @_selectedImage</span>
                     </div>
 
                     <div class="cvm-actions">
@@ -184,6 +194,7 @@
     private string _selectedRegion = "US-West";
     private int _cpuCores = 2;
     private int _ramGb = 4;
+    private int? _volumeGb;
     private MatchmakingResult? _match;
     private string? _errorMessage;
     private FirestoreChangeListener? _requestListener;
@@ -199,6 +210,13 @@
 
     private async Task FindMatchAsync()
     {
+        if (_volumeGb.HasValue && (_volumeGb < 10 || _volumeGb > 500))
+        {
+            _errorMessage = "Volume size must be between 10 and 500 GB.";
+            _step = Step.Error;
+            return;
+        }
+
         _step = Step.Searching;
         StateHasChanged();
 
@@ -250,6 +268,7 @@
                     ["image"]        = _selectedImage,
                     ["cpu_cores"]    = _cpuCores,
                     ["ram_gb"]       = _ramGb,
+                    ["volume_gb"]    = _volumeGb.HasValue ? (object)_volumeGb.Value : null,
                     ["vm_id"]        = "",
                     ["error"]        = "",
                 });
@@ -318,6 +337,7 @@
         _vmName = "";
         _cpuCores = 2;
         _ramGb = 4;
+        _volumeGb = null;
         _selectedRegion = "US-West";
         _selectedImage = "ubuntu:22.04";
     }
@@ -404,6 +424,13 @@
     .cvm-input:focus,
     .cvm-select:focus {
         border-color: rgba(139, 92, 246, 0.5);
+    }
+
+    .cvm-validation-error {
+        display: block;
+        font-size: 0.7rem;
+        color: var(--uc-red);
+        margin-top: 0.25rem;
     }
 
     .cvm-actions {

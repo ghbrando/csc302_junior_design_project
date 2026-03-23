@@ -107,4 +107,37 @@ public class VmsController : ControllerBase
             return StatusCode(500, new { error = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Triggers an on-demand volume backup for a VM.
+    /// Sets volume_sync_status to "Requested" so the provider picks it up.
+    /// </summary>
+    [HttpPost("{vmId}/backup-now")]
+    public async Task<IActionResult> BackupNow(string vmId)
+    {
+        try
+        {
+            var vmRef = _firestoreDb.Collection("virtual_machines").Document(vmId);
+            var doc = await vmRef.GetSnapshotAsync();
+
+            if (!doc.Exists)
+                return NotFound(new { error = $"VM {vmId} not found" });
+
+            var vm = doc.ConvertTo<VirtualMachine>();
+
+            if (vm.VolumeSyncStatus == "Syncing")
+                return BadRequest(new { error = "A backup is already in progress." });
+
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                { "volume_sync_status", "Requested" }
+            });
+
+            return Ok(new { message = "Backup requested." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 }

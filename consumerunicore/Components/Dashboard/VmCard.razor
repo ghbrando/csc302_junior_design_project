@@ -52,6 +52,23 @@
         }
     }
 
+    @if (!string.IsNullOrEmpty(LastBackup) || ShowBackupButton)
+    {
+        <div class="vm-backup-row">
+            @if (!string.IsNullOrEmpty(LastBackup))
+            {
+                <span class="vm-backup-label"><i class="bi bi-cloud-check"></i> Last backup: @LastBackup</span>
+            }
+            @if (ShowBackupButton)
+            {
+                <button class="btn-backup" @onclick="OnBackup" disabled="@IsBackupInProgress">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    @(IsBackupInProgress ? "BACKING UP..." : "BACKUP NOW")
+                </button>
+            }
+        </div>
+    }
+
     <div class="vm-actions">
         <button class="btn-ssh" @onclick="OnSsh" disabled="@(!ResumeSuccess || IsPaused)"><i class="bi bi-terminal"></i>
             SSH</button>
@@ -85,7 +102,11 @@
     [Parameter] public EventCallback OnSsh { get; set; }
     [Parameter] public EventCallback OnPause { get; set; }
     [Parameter] public EventCallback OnStop { get; set; }
+    [Parameter] public EventCallback OnBackup { get; set; }
     [Parameter] public bool ShowBudget { get; set; } = true;
+    [Parameter] public bool ShowBackupButton { get; set; } = false;
+    [Parameter] public bool IsBackupInProgress { get; set; } = false;
+    [Parameter] public string LastBackup { get; set; } = "";
 
     private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
 }
@@ -257,6 +278,51 @@
         display: flex;
         align-items: center;
         gap: 0.5rem;
+    }
+
+    .vm-backup-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+        padding: 0.5rem 0.7rem;
+        background: rgba(59, 130, 246, 0.05);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        border-radius: var(--uc-radius);
+        font-size: 0.75rem;
+    }
+
+    .vm-backup-label {
+        color: var(--uc-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .btn-backup {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: none;
+        padding: 0.3rem 0.7rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: background 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-backup:hover:not(:disabled) {
+        background: rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-backup:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
     }
 
     .vm-actions {

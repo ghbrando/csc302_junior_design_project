@@ -10,6 +10,7 @@
 @inject IProviderService ProviderService
 @inject IMachineService MachineService
 @inject IDockerService DockerService
+@inject IVolumeBackupService VolumeBackupService
 @inject ContainerMonitorService MonitorService
 @inject PauseResumeListenerService PauseResumeListenerService
 @inject IConfiguration Configuration
@@ -447,6 +448,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private FirestoreChangeListener? _providerListener;
     private FirestoreChangeListener? _requestListener;
     private readonly HashSet<string> _processedRequestIds = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _activeBackupVmIds = new();
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -498,6 +500,13 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             // already being monitored, so this is safe to call on every Firestore update.
             foreach (var vm in Vms.Where(v => v.Status == "Running" && !string.IsNullOrEmpty(v.ContainerId)))
                 MonitorService.StartMonitoring(vm.VmId, vm.ContainerId, vm.StartedAt ?? DateTime.UtcNow);
+
+            // Detect on-demand backup requests
+            foreach (var vm in Vms.Where(v => v.VolumeSyncStatus == "Requested"))
+            {
+                if (_activeBackupVmIds.TryAdd(vm.VmId, true))
+                    _ = RunBackupAsync(vm.VmId);
+            }
 
             _ = InvokeAsync(StateHasChanged);
         });
@@ -692,7 +701,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             Console.WriteLine($"[DEBUG] Starting Docker container {vmName} for request {request.RequestId}");
             var (containerId, volumeName) = await DockerService.StartContainerAsync(
                 vmId, vmName, request.Image, relayPort, request.CpuCores, request.RamGb,
-                consumerUid: request.ConsumerUid);
+                consumerUid: request.ConsumerUid, volumeGb: request.VolumeGb);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -711,6 +720,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 SshPort = sshPort,
                 CpuCores = request.CpuCores,
                 RamGB = request.RamGb,
+                VolumeRequestedGb = request.VolumeGb,
+                VolumeSyncStatus = "Idle",
             };
 
             await VmService.CreateVmAsync(vm);
@@ -733,6 +744,23 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 ["error"] = ex.Message,
             });
         }
+    }
+
+    // ── On-demand backup ───────────────────────────────────────────────────────
+
+    private async Task RunBackupAsync(string vmId)
+    {
+        try
+        {
+            await VolumeBackupService.BackupVolumeNowAsync(vmId);
+        }
+        catch { }
+
+        // Always remove so a future "Requested" can be picked up.
+        // The Firestore status (Syncing/Error/Idle) is the source of truth —
+        // _activeBackupVmIds just prevents the same listener snapshot from
+        // spawning duplicate tasks.
+        _activeBackupVmIds.TryRemove(vmId, out _);
     }
 
     // ── Emergency stop modal ──────────────────────────────────────────────────

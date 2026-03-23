@@ -30,6 +30,9 @@ public class VmRequest
     [FirestoreProperty("ram_gb")]
     public int RamGb { get; set; } = 4;
 
+    [FirestoreProperty("volume_gb")]
+    public int? VolumeGb { get; set; }
+
     /// <summary>Filled by provider on success.</summary>
     [FirestoreProperty("vm_id")]
     public string VmId { get; set; } = "";

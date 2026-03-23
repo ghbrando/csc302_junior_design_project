@@ -44,6 +44,9 @@ public class VirtualMachine
     [FirestoreProperty("ram_gb")]
     public int RamGB { get; set; }
 
+    [FirestoreProperty("volume_requested_gb")]
+    public int? VolumeRequestedGb { get; set; }
+
     // Financials
     [FirestoreProperty("cost_per_hour")]
     public double CostPerHour { get; set; }

@@ -66,7 +66,7 @@ public class DockerService : IDockerService, IDisposable
     public async Task<(string ContainerId, string VolumeName)> StartContainerAsync(
         string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
         string? existingVolumeName = null, string? consumerUid = null,
-        CancellationToken ct = default)
+        int? volumeGb = null, CancellationToken ct = default)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
@@ -75,7 +75,7 @@ public class DockerService : IDockerService, IDisposable
         string volumeName = existingVolumeName ?? $"unicore-vol-{vmId}";
         try
         {
-            await CreateVolumeAsync(volumeName, ct);
+            await CreateVolumeAsync(volumeName, volumeGb, ct);
         }
         catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
@@ -366,12 +366,23 @@ public class DockerService : IDockerService, IDisposable
         return (double)usedBytes / hostRamBytes * 100.0;
     }
 
-    public async Task<string> CreateVolumeAsync(string volumeName, CancellationToken ct = default)
+    public async Task<string> CreateVolumeAsync(string volumeName, int? sizeGb = null, CancellationToken ct = default)
     {
         var client = await GetClientAsync();
-        var response = await client.Volumes.CreateAsync(
-            new VolumesCreateParameters { Name = volumeName },
-            ct);
+        var createParams = new VolumesCreateParameters { Name = volumeName };
+
+        // Store requested size as a label so it's visible via docker volume inspect.
+        // The local driver doesn't enforce size limits, but the label makes the
+        // requested allocation discoverable for monitoring and future enforcement.
+        if (sizeGb.HasValue)
+        {
+            createParams.Labels = new Dictionary<string, string>
+            {
+                ["unicore.volume-size-gb"] = sizeGb.Value.ToString()
+            };
+        }
+
+        var response = await client.Volumes.CreateAsync(createParams, ct);
         return response.Name;
     }
 
