@@ -42,9 +42,57 @@
 </head>
 
 <body>
+    <script>
+        (function () {
+            if (localStorage.getItem('uc-theme') === 'light') {
+                document.body.classList.add('light-mode');
+            }
+        })();
+    </script>
+
     <Routes />
 
     <script src="_framework/blazor.web.js"></script>
+
+    <script>
+        let _themeChanging = false;
+        let _themeObserver = null;
+
+        window.themeManager = {
+            apply: function (theme) {
+                _themeChanging = true;
+                if (theme === 'light') {
+                    document.body.classList.add('light-mode');
+                } else {
+                    document.body.classList.remove('light-mode');
+                }
+                localStorage.setItem('uc-theme', theme);
+                setTimeout(() => { _themeChanging = false; }, 50);
+            },
+            toggle: function () {
+                const current = localStorage.getItem('uc-theme') || 'dark';
+                window.themeManager.apply(current === 'dark' ? 'light' : 'dark');
+            },
+            current: function () {
+                return localStorage.getItem('uc-theme') || 'dark';
+            }
+        };
+
+        if (_themeObserver) _themeObserver.disconnect();
+
+        _themeObserver = new MutationObserver(function () {
+            if (_themeChanging) return;
+            const saved = localStorage.getItem('uc-theme') || 'dark';
+            if (saved === 'light' && !document.body.classList.contains('light-mode')) {
+                document.body.classList.add('light-mode');
+            }
+        });
+
+        _themeObserver.observe(document.body, {
+            attributes: true,
+            attributeFilter: ['class']
+        });
+    </script>
 </body>
 
 </html>

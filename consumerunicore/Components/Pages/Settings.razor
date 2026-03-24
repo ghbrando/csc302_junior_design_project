@@ -17,6 +17,12 @@
         <ProfileInformation @bind-FullName="fullName" @bind-Email="email" />
     </SettingsSection>
 
+    <!-- Appearance -->
+            <SettingsSection Title="APPEARANCE" Subtitle="Display and theme preferences" Icon="bi-palette"
+                            IconColor="var(--uc-magenta)" IconBg="rgba(213,0,249,0.15)">
+                <ToggleRow Label="Light Mode" Description="Switch between dark and light interface" @bind-IsOn="IsLightMode" />
+            </SettingsSection>
+
     <!-- Notifications -->
     <SettingsSection Title="NOTIFICATIONS"             Subtitle="Configure alert preferences"                 Icon="bi-bell"
                      IconColor="var(--uc-purple)"                 IconBg="rgba(168,85,247,0.15)">
@@ -77,6 +83,28 @@
     private string timeZone = "UTC-08:00";
     private string currency = "USD";
 
+    // Theme
+    private bool _isLightMode = false;
+    private bool IsLightMode
+    {
+        get => _isLightMode;
+        set
+        {
+            _isLightMode = value;
+            _ = InvokeAsync(async () =>
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("themeManager.apply", value ? "light" : "dark");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Theme toggle failed: {ex.Message}");
+                }
+            });
+        }
+    }
+
     // Payment methods
     private List<PaymentMethods.PaymentMethod> paymentMethods = new()
     {
@@ -106,8 +134,24 @@
     {
         await base.OnAfterRenderAsync(firstRender);
 
-        if (firstRender && !string.IsNullOrWhiteSpace(AuthState.FirebaseUid) && !_profileLoaded)
-            await LoadProfileAsync();
+        if (firstRender)
+        {
+            // Load theme first, independently of auth
+            try
+            {
+                var theme = await JS.InvokeAsync<string>("themeManager.current");
+                _isLightMode = theme == "light";
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Theme load failed: {ex.Message}");
+            }
+
+            // Then load profile if authenticated
+            if (!string.IsNullOrWhiteSpace(AuthState.FirebaseUid) && !_profileLoaded)
+                await LoadProfileAsync();
+        }
     }
 
     private async Task LoadProfileAsync()
