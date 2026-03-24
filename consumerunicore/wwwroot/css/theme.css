@@ -39,6 +39,26 @@
     --uc-font-mono: 'Consolas', 'Monaco', monospace;
 }
 
+body.light-mode {
+    /* Surface colors */
+    --uc-bg-body: #f5f5f5;
+    --uc-bg-card: #ffffff;
+    --uc-bg-elevated: #ffffff;
+    --uc-bg-sidebar: #e0e0e0;
+
+    /* Border colors */
+    --uc-border: #ccc;
+    --uc-border-light: #ddd;
+
+    /* Text colors */
+    --uc-text-primary: #212121;
+    --uc-text-white: #000000;
+    --uc-text-muted: #888;
+    --uc-text-dim: #999;
+    --uc-text-secondary: #555;
+    --uc-text-table: #333;
+}
+
 /* Global base styles */
 html, body {
     margin: 0;

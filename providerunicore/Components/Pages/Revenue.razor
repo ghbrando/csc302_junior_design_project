@@ -14,8 +14,8 @@
     @* Header *@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h5 class="fw-bold text-white mb-0" style="letter-spacing: 0.5px;">Revenue Tracker</h5>
-            <p class="text-muted mb-0 mt-1" style="font-size: 0.8rem;">Monitor earnings and request payouts</p>
+            <h5 class="fw-bold mb-0" style="letter-spacing: 0.5px; color: var(--uc-text-primary);">Revenue Tracker</h5>
+            <p class="mb-0 mt-1" style="font-size: 0.8rem; color: var(--uc-text-secondary);">Monitor earnings and request payouts</p>   
         </div>
         <button class="btn btn-payout rounded-1">
             <i class="bi bi-wallet2 me-2"></i> REQUEST PAYOUT
@@ -25,16 +25,19 @@
     @* Balance Cards *@
     <div class="row mb-3 g-3">
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Total Balance" Value="$583.50" IconClass="bi bi-currency-dollar" IconBgColor="#1a5c3a"
-                         ValueColor="#00e676" />
+            <BalanceCard Title="Total Balance" Value="$583.50" IconClass="bi bi-currency-dollar"
+                        IconBgColor="rgba(0,230,118,0.15)"
+                        ValueColor="var(--uc-green)" />
         </div>
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Available" Value="$464.90" IconClass="bi bi-graph-up-arrow" IconBgColor="#0e4a5c"
-                         ValueColor="#00bcd4" />
+            <BalanceCard Title="Available" Value="$464.90" IconClass="bi bi-graph-up-arrow"
+                        IconBgColor="rgba(0,188,212,0.15)"
+                        ValueColor="var(--uc-cyan)" />
         </div>
         <div class="col-12 col-md-4">
-            <BalanceCard Title="Pending" Value="$118.60" IconClass="bi bi-clock-history" IconBgColor="#5c4a1a"
-                         ValueColor="#ffab00" />
+            <BalanceCard Title="Pending" Value="$118.60" IconClass="bi bi-clock-history"
+                        IconBgColor="rgba(255,171,0,0.15)"
+                        ValueColor="var(--uc-amber)" />
         </div>
     </div>
 
