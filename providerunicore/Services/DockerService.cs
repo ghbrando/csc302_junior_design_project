@@ -433,5 +433,28 @@ public class DockerService : IDockerService, IDisposable
             ct);
     }
 
+    public async Task PullImageAsync(string imageTag, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY") ?? "";
+
+        AuthConfig? authConfig = null;
+        if (!string.IsNullOrEmpty(gcpKeyJson))
+        {
+            authConfig = new AuthConfig
+            {
+                Username = "_json_key",
+                Password = gcpKeyJson
+            };
+        }
+
+        var (imageName, tag) = ParseImage(imageTag);
+        await client.Images.CreateImageAsync(
+            new ImagesCreateParameters { FromImage = imageName, Tag = tag },
+            authConfig,
+            new Progress<JSONMessage>(),
+            ct);
+    }
+
     public void Dispose() => _cachedClient?.Dispose();
 }

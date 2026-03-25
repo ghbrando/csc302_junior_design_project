@@ -13,6 +13,7 @@
 @inject IVolumeBackupService VolumeBackupService
 @inject ContainerMonitorService MonitorService
 @inject PauseResumeListenerService PauseResumeListenerService
+@inject IMigrationService MigrationService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -447,6 +448,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private FirestoreChangeListener? _vmListener;
     private FirestoreChangeListener? _providerListener;
     private FirestoreChangeListener? _requestListener;
+    private FirestoreChangeListener? _migrationListener;
+    private readonly HashSet<string> _processedMigrationIds = new();
     private readonly HashSet<string> _processedRequestIds = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _activeBackupVmIds = new();
 
@@ -561,6 +564,23 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         catch (Exception ex)
         {
             Console.WriteLine($"[ERROR] Failed to start request listener: {ex.Message}");
+        }
+
+        // Migration listener: pick up pending migration requests targeting this provider
+        try
+        {
+            if (_migrationListener != null)
+                await _migrationListener.StopAsync();
+
+            _migrationListener = FirestoreDb
+                .Collection("vm_migration_requests")
+                .WhereEqualTo("target_provider_uid", uid)
+                .WhereEqualTo("status", "pending")
+                .Listen(OnMigrationSnapshot);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to start migration listener: {ex.Message}");
         }
     }
 
@@ -746,6 +766,21 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         }
     }
 
+    // ── Migration request processing ──────────────────────────────────────────
+
+    private void OnMigrationSnapshot(QuerySnapshot snapshot)
+    {
+        foreach (var doc in snapshot.Documents)
+        {
+            var req = doc.ConvertTo<VmMigrationRequest>();
+            if (_processedMigrationIds.Add(req.MigrationRequestId) &&
+                !MigrationService.IsMigrationInProgress(req.MigrationRequestId))
+            {
+                _ = InvokeAsync(() => MigrationService.ProcessMigrationRequestAsync(req));
+            }
+        }
+    }
+
     // ── On-demand backup ───────────────────────────────────────────────────────
 
     private async Task RunBackupAsync(string vmId)
@@ -884,6 +919,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         _ = _vmListener?.StopAsync();
         _ = _providerListener?.StopAsync();
         _ = _requestListener?.StopAsync();
+        _ = _migrationListener?.StopAsync();
         _ = PauseResumeListenerService.StopListening();
         lock (_saveLock)
         {

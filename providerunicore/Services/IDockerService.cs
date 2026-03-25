@@ -75,4 +75,10 @@ public interface IDockerService
     /// Uses the GCP service account credentials loaded at startup.
     /// </summary>
     Task PushImageAsync(string imageTag, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pulls an image from a registry (e.g., GCP Artifact Registry).
+    /// Uses the GCP service account credentials if available.
+    /// </summary>
+    Task PullImageAsync(string imageTag, CancellationToken ct = default);
 }

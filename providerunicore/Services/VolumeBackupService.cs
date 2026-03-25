@@ -3,6 +3,7 @@ using Docker.DotNet.Models;
 using Google.Cloud.Firestore;
 using Google.Cloud.Storage.V1;
 using System.Formats.Tar;
+using System.Runtime.InteropServices;
 
 namespace unicoreprovider.Services;
 
@@ -121,9 +122,116 @@ public class VolumeBackupService : IVolumeBackupService
         }
     }
 
+    public async Task RestoreFromGcsAsync(string sourceVmId, string consumerUid, string targetVolumeName, CancellationToken ct = default)
+    {
+        const string bucketName = "unicore-vm-volumes";
+        var gcsPrefix = $"consumers/{consumerUid}/{sourceVmId}/home/";
+
+        var storageClient = await StorageClient.CreateAsync();
+
+        // Verify the backup prefix exists before starting Docker work
+        bool hasFiles = false;
+        await foreach (var obj in storageClient.ListObjectsAsync(bucketName, gcsPrefix).WithCancellation(ct))
+        {
+            if (!obj.Name.EndsWith("/"))
+            {
+                hasFiles = true;
+                break;
+            }
+        }
+
+        if (!hasFiles)
+            return;
+
+        // Build a tar archive in memory from all GCS objects under the prefix.
+        // Entries retain their relative paths (e.g. "consumer/file.txt") so that
+        // extracting to /restore in the temp container writes to
+        // /restore/consumer/... which is inside the volume (mounted at /restore/consumer).
+        using var tarBuffer = new MemoryStream();
+        await using (var tarWriter = new TarWriter(tarBuffer, TarEntryFormat.Gnu, leaveOpen: true))
+        {
+            await foreach (var obj in storageClient.ListObjectsAsync(bucketName, gcsPrefix).WithCancellation(ct))
+            {
+                if (obj.Name.EndsWith("/")) continue;
+
+                var entryName = obj.Name[gcsPrefix.Length..];
+                if (string.IsNullOrEmpty(entryName)) continue;
+
+                using var dataBuffer = new MemoryStream();
+                await storageClient.DownloadObjectAsync(bucketName, obj.Name, dataBuffer, cancellationToken: ct);
+                dataBuffer.Position = 0;
+
+                var entry = new GnuTarEntry(TarEntryType.RegularFile, entryName)
+                {
+                    DataStream = dataBuffer
+                };
+                await tarWriter.WriteEntryAsync(entry, ct);
+            }
+        }
+
+        if (tarBuffer.Length == 0)
+            return;
+
+        tarBuffer.Position = 0;
+
+        // Start a minimal temp container with the target volume mounted at /restore/consumer.
+        // Extracting the tar at /restore puts "consumer/file.txt" → /restore/consumer/file.txt
+        // which is the volume root — matching the layout expected by the main container.
+        var dockerClient = await GetDockerClientAsync();
+
+        await EnsureImagePulledAsync(dockerClient, "alpine", "latest", ct);
+
+        var createResponse = await dockerClient.Containers.CreateContainerAsync(
+            new CreateContainerParameters
+            {
+                Image = "alpine",
+                Cmd = new List<string> { "sleep", "3600" },
+                HostConfig = new HostConfig
+                {
+                    Binds = new[] { $"{targetVolumeName}:/restore/consumer" }
+                }
+            }, ct);
+
+        var tempId = createResponse.ID;
+        try
+        {
+            await dockerClient.Containers.StartContainerAsync(tempId, new ContainerStartParameters(), ct);
+
+            await dockerClient.Containers.ExtractArchiveToContainerAsync(
+                tempId,
+                new ContainerPathStatParameters { Path = "/restore" },
+                tarBuffer,
+                ct);
+        }
+        finally
+        {
+            try { await dockerClient.Containers.StopContainerAsync(tempId, new ContainerStopParameters { WaitBeforeKillSeconds = 2 }); } catch { }
+            try { await dockerClient.Containers.RemoveContainerAsync(tempId, new ContainerRemoveParameters { Force = true }); } catch { }
+        }
+    }
+
+    private static async Task EnsureImagePulledAsync(DockerClient client, string image, string tag, CancellationToken ct)
+    {
+        var existing = await client.Images.ListImagesAsync(new ImagesListParameters
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["reference"] = new Dictionary<string, bool> { [$"{image}:{tag}"] = true }
+            }
+        });
+
+        if (existing.Count > 0) return;
+
+        await client.Images.CreateImageAsync(
+            new ImagesCreateParameters { FromImage = image, Tag = tag },
+            null,
+            new Progress<JSONMessage>(),
+            ct);
+    }
+
     private async Task<DockerClient> GetDockerClientAsync()
     {
-        var endpoints = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows)
+        var endpoints = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
             ? new[] { new Uri("npipe://./pipe/docker_engine"), new Uri("tcp://127.0.0.1:2375") }
             : new[] { new Uri("unix:///var/run/docker.sock") };
 

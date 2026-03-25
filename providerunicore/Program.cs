@@ -97,6 +97,8 @@ builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
 builder.Services.AddSingleton<PauseResumeListenerService>();
 builder.Services.AddSingleton<IVolumeBackupService, VolumeBackupService>();
+builder.Services.AddSingleton<ISnapshotService, SnapshotService>();
+builder.Services.AddScoped<IMigrationService, MigrationService>();
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
