@@ -33,20 +33,37 @@ catch (Exception ex)
     Console.WriteLine("[WARNING] Falling back to appsettings.json values (if present).");
 }
 
-// Load GCP service account key for container GCS sync and Artifact Registry authentication
+// Load GCP service account keys
+// Provider key: for Artifact Registry uploads (snapshots)
 try
 {
     var secretClient = SecretManagerServiceClient.Create();
-    var gcpKey = secretClient
+    var providerKey = secretClient
         .AccessSecretVersion($"projects/{projectId}/secrets/unicore-provider-gcp-key/versions/latest")
         .Payload.Data.ToStringUtf8()
         .Trim();
-    Environment.SetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY", gcpKey);
+    Environment.SetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY", providerKey);
 }
 catch (Exception ex)
 {
-    Console.WriteLine($"[WARNING] GCP key not loaded from Secret Manager: {ex.Message}");
-    Console.WriteLine("[WARNING] GCS sync and Artifact Registry auth will fail, but VMs will still start.");
+    Console.WriteLine($"[WARNING] Provider GCP key not loaded from Secret Manager: {ex.Message}");
+    Console.WriteLine("[WARNING] Artifact Registry authentication will fail.");
+}
+
+// VM agent key: for container GCS sync (volume backups)
+try
+{
+    var secretClient = SecretManagerServiceClient.Create();
+    var vmAgentKey = secretClient
+        .AccessSecretVersion($"projects/{projectId}/secrets/unicore-vm-agent-gcp-key/versions/latest")
+        .Payload.Data.ToStringUtf8()
+        .Trim();
+    Environment.SetEnvironmentVariable("GCP_VM_AGENT_KEY", vmAgentKey);
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[WARNING] VM agent GCP key not loaded from Secret Manager: {ex.Message}");
+    Console.WriteLine("[WARNING] Container GCS sync will fail, but VMs will still start.");
 }
 
 // Add Authentication Services
@@ -96,7 +113,12 @@ builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
 builder.Services.AddSingleton<PauseResumeListenerService>();
-builder.Services.AddSingleton<IVolumeBackupService, VolumeBackupService>();
+builder.Services.AddSingleton<VolumeBackupService>();
+builder.Services.AddSingleton<IVolumeBackupService>(sp => sp.GetRequiredService<VolumeBackupService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<VolumeBackupService>());
+builder.Services.AddSingleton<SnapshotService>();
+builder.Services.AddSingleton<ISnapshotService>(sp => sp.GetRequiredService<SnapshotService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SnapshotService>());
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
