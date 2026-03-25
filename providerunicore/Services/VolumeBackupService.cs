@@ -61,10 +61,6 @@ public class VolumeBackupService : IVolumeBackupService
 
             // Step 1: Pull a tar archive of /home/consumer from the container
             var dockerClient = await GetDockerClientAsync();
-            var archiveResponse = await dockerClient.Containers.GetArchiveFromContainerAsync(
-                vm.ContainerId,
-                new GetArchiveFromContainerParameters { Path = "/home/consumer" },
-                statOnly: false);
 
             // Step 2: Upload each file to GCS
             var storageClient = await StorageClient.CreateAsync();
@@ -81,14 +77,10 @@ public class VolumeBackupService : IVolumeBackupService
             }
 
             int fileCount = 0;
-            // Buffer the entire tar archive into memory first — Docker's chunked
-            // HTTP stream causes EndOfStreamException when TarReader reads entry data.
-            using var tarBuffer = new MemoryStream();
-            await using (var rawStream = archiveResponse.Stream)
-            {
-                await rawStream.CopyToAsync(tarBuffer);
-            }
-            tarBuffer.Position = 0;
+            // Build the tar from WITHIN the container via exec so that volume-mounted
+            // files are included. GetArchiveFromContainerAsync only reads the overlay
+            // layer on Windows Docker Desktop and misses volume contents.
+            using var tarBuffer = await CreateTarViaExecAsync(dockerClient, vm.ContainerId);
             Console.WriteLine($"[Backup] Tar buffer size: {tarBuffer.Length} bytes");
             var tarReader = new TarReader(tarBuffer);
 
@@ -146,11 +138,6 @@ public class VolumeBackupService : IVolumeBackupService
         const string bucketName = "unicore-vm-volumes";
 
         var dockerClient = await GetDockerClientAsync();
-        var archiveResponse = await dockerClient.Containers.GetArchiveFromContainerAsync(
-            vm.ContainerId,
-            new GetArchiveFromContainerParameters { Path = "/home/consumer" },
-            statOnly: false);
-
         var storageClient = await StorageClient.CreateAsync();
 
         try { await storageClient.GetBucketAsync(bucketName, cancellationToken: ct); }
@@ -159,11 +146,7 @@ public class VolumeBackupService : IVolumeBackupService
             await storageClient.CreateBucketAsync(_firestoreDb.ProjectId, bucketName);
         }
 
-        using var tarBuffer = new MemoryStream();
-        await using (var rawStream = archiveResponse.Stream)
-            await rawStream.CopyToAsync(tarBuffer, ct);
-        tarBuffer.Position = 0;
-
+        using var tarBuffer = await CreateTarViaExecAsync(dockerClient, vm.ContainerId, ct);
         var tarReader = new TarReader(tarBuffer);
         while (await tarReader.GetNextEntryAsync() is { } entry)
         {
@@ -265,6 +248,39 @@ public class VolumeBackupService : IVolumeBackupService
             try { await dockerClient.Containers.StopContainerAsync(tempId, new ContainerStopParameters { WaitBeforeKillSeconds = 2 }); } catch { }
             try { await dockerClient.Containers.RemoveContainerAsync(tempId, new ContainerRemoveParameters { Force = true }); } catch { }
         }
+    }
+
+    /// <summary>
+    /// Runs "tar cf - -C /home consumer" inside the container and returns the stdout
+    /// as a MemoryStream. This captures volume-mounted files that Docker's archive API
+    /// misses on Windows Docker Desktop (it only reads the overlay layer).
+    /// </summary>
+    private static async Task<MemoryStream> CreateTarViaExecAsync(
+        DockerClient dockerClient, string containerId, CancellationToken ct = default)
+    {
+        var execResponse = await dockerClient.Exec.ExecCreateContainerAsync(
+            containerId,
+            new ContainerExecCreateParameters
+            {
+                AttachStdout = true,
+                AttachStderr = true,
+                Cmd = new[] { "tar", "cf", "-", "-C", "/home", "consumer" }
+            }, ct);
+
+        using var execStream = await dockerClient.Exec.StartContainerExecAsync(execResponse.ID, ct);
+
+        var tarBuffer = new MemoryStream();
+        var errBuffer = new MemoryStream();
+        await execStream.CopyOutputToAsync(null, tarBuffer, errBuffer, ct);
+
+        if (errBuffer.Length > 0)
+        {
+            errBuffer.Position = 0;
+            Console.WriteLine($"[Backup] tar stderr: {System.Text.Encoding.UTF8.GetString(errBuffer.ToArray())}");
+        }
+
+        tarBuffer.Position = 0;
+        return tarBuffer;
     }
 
     private static async Task EnsureImagePulledAsync(DockerClient client, string image, string tag, CancellationToken ct)
