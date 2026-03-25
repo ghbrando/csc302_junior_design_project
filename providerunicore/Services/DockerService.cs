@@ -335,8 +335,13 @@ public class DockerService : IDockerService, IDisposable
 
     private static (string ImageName, string Tag) ParseImage(string imageString)
     {
-        var parts = imageString.Split(':', 2);
-        return parts.Length == 2 ? (parts[0], parts[1]) : (imageString, "latest");
+        var lastSlash = imageString.LastIndexOf('/');
+        var lastColon = imageString.LastIndexOf(':');
+
+        if (lastColon > lastSlash)
+            return (imageString[..lastColon], imageString[(lastColon + 1)..]);
+
+        return (imageString, "latest");
     }
 
     // Returns % of total host CPU (0–100 regardless of core count).
@@ -429,6 +434,18 @@ public class DockerService : IDockerService, IDisposable
             imageTag,
             new ImagePushParameters(),
             authConfig,
+            new Progress<JSONMessage>(),
+            ct);
+    }
+
+    public async Task PullImageAsync(string imageTag, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        var (imageName, tag) = ParseImage(imageTag);
+
+        await client.Images.CreateImageAsync(
+            new ImagesCreateParameters { FromImage = imageName, Tag = tag },
+            null,
             new Progress<JSONMessage>(),
             ct);
     }

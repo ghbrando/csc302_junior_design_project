@@ -96,7 +96,12 @@ builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
 builder.Services.AddSingleton<PauseResumeListenerService>();
-builder.Services.AddSingleton<IVolumeBackupService, VolumeBackupService>();
+builder.Services.AddSingleton<VolumeBackupService>();
+builder.Services.AddSingleton<IVolumeBackupService>(sp => sp.GetRequiredService<VolumeBackupService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<VolumeBackupService>());
+builder.Services.AddSingleton<SnapshotService>();
+builder.Services.AddSingleton<ISnapshotService>(sp => sp.GetRequiredService<SnapshotService>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SnapshotService>());
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>

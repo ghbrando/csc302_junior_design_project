@@ -7,4 +7,9 @@ public interface IVolumeBackupService
     /// Updates volume_sync_status in Firestore to track progress.
     /// </summary>
     Task BackupVolumeNowAsync(string vmId);
+
+    /// <summary>
+    /// Restores VM volume data from a GCS path back into the VM container.
+    /// </summary>
+    Task RestoreFromGcsAsync(string vmId, string gcsPath);
 }
