@@ -82,6 +82,24 @@ public class MigrationService : IMigrationService
             var oldVm = await _vmRepo.GetByIdAsync(request.VmId)
                 ?? throw new InvalidOperationException($"Source VM {request.VmId} not found.");
 
+            // ── Step 2.5: Force a live backup of the old VM to GCS ───────────────
+            // This ensures GCS has fresh data before the restore step, regardless of
+            // whether the consumer ever pressed "Backup Now".
+            if (!string.IsNullOrEmpty(oldVm.ContainerId))
+            {
+                _logger.LogInformation("[Migration] Step 2.5 – backing up old VM {VmId} to GCS before restore.", request.VmId);
+                try
+                {
+                    await _volumeBackupService.ForceBackupToGcsAsync(oldVm);
+                }
+                catch (Exception ex)
+                {
+                    // Log but don't abort — restore will still run and will no-op gracefully
+                    // if GCS credentials are not configured in this environment.
+                    _logger.LogWarning("[Migration] GCS backup failed: {Msg}. Restore will use last known backup (if any).", ex.Message);
+                }
+            }
+
             // ── Step 3: Pull snapshot image from Artifact Registry ─────────────
             _logger.LogInformation("[Migration] Step 3 – pulling snapshot image: {Image}", oldVm.SnapshotImage ?? "(none)");
             await _snapshotService.PullSnapshotAsync(oldVm.SnapshotImage);
@@ -112,7 +130,7 @@ public class MigrationService : IMigrationService
                 ? oldVm.SnapshotImage
                 : oldVm.Image;
 
-            var newVmName = $"vm-{newVmId[..8]}";
+            var newVmName = oldVm.Name;
             var startedAt = DateTime.UtcNow;
 
             _logger.LogInformation("[Migration] Step 7 – starting container from {Image}", imageToUse);

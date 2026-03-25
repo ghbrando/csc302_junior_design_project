@@ -122,6 +122,48 @@ public class VolumeBackupService : IVolumeBackupService
         }
     }
 
+    public async Task ForceBackupToGcsAsync(VirtualMachine vm, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(vm.ContainerId))
+            throw new InvalidOperationException($"VM {vm.VmId} has no running container to back up.");
+
+        var consumerContext = string.IsNullOrEmpty(vm.Client) ? "shared" : vm.Client;
+        var gcsPrefix = $"consumers/{consumerContext}/{vm.VmId}/home";
+        const string bucketName = "unicore-vm-volumes";
+
+        var dockerClient = await GetDockerClientAsync();
+        var archiveResponse = await dockerClient.Containers.GetArchiveFromContainerAsync(
+            vm.ContainerId,
+            new GetArchiveFromContainerParameters { Path = "/home/consumer" },
+            statOnly: false);
+
+        var storageClient = await StorageClient.CreateAsync();
+
+        try { await storageClient.GetBucketAsync(bucketName, cancellationToken: ct); }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            await storageClient.CreateBucketAsync(_firestoreDb.ProjectId, bucketName);
+        }
+
+        using var tarBuffer = new MemoryStream();
+        await using (var rawStream = archiveResponse.Stream)
+            await rawStream.CopyToAsync(tarBuffer, ct);
+        tarBuffer.Position = 0;
+
+        var tarReader = new TarReader(tarBuffer);
+        while (await tarReader.GetNextEntryAsync() is { } entry)
+        {
+            if (entry.EntryType != TarEntryType.RegularFile || entry.DataStream == null)
+                continue;
+
+            using var buffer = new MemoryStream();
+            await entry.DataStream.CopyToAsync(buffer, ct);
+            buffer.Position = 0;
+
+            await storageClient.UploadObjectAsync(bucketName, $"{gcsPrefix}/{entry.Name}", null, buffer, cancellationToken: ct);
+        }
+    }
+
     public async Task RestoreFromGcsAsync(string sourceVmId, string consumerUid, string targetVolumeName, CancellationToken ct = default)
     {
         const string bucketName = "unicore-vm-volumes";
