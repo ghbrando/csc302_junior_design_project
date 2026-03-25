@@ -787,9 +787,15 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     {
         try
         {
+            Console.WriteLine($"[Backup] Starting backup for VM {vmId}");
             await VolumeBackupService.BackupVolumeNowAsync(vmId);
+            Console.WriteLine($"[Backup] Completed backup for VM {vmId}");
         }
-        catch { }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Backup] ERROR for VM {vmId}: {ex.Message}");
+            Console.WriteLine($"[Backup] Stack: {ex.StackTrace}");
+        }
 
         // Always remove so a future "Requested" can be picked up.
         // The Firestore status (Syncing/Error/Idle) is the source of truth —

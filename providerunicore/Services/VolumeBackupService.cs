@@ -23,27 +23,35 @@ public class VolumeBackupService : IVolumeBackupService
         // Use a transaction to atomically check status and claim the backup.
         // This prevents duplicate triggers when the listener fires multiple snapshots.
         VirtualMachine vm = null!;
-        await _firestoreDb.RunTransactionAsync(async transaction =>
+        try
         {
-            var doc = await transaction.GetSnapshotAsync(vmRef);
-
-            if (!doc.Exists)
-                throw new InvalidOperationException($"VM {vmId} not found.");
-
-            vm = doc.ConvertTo<VirtualMachine>();
-
-            if (string.IsNullOrEmpty(vm.ContainerId))
-                throw new InvalidOperationException("VM has no running container.");
-
-            // Only proceed if status is still "Requested" — reject duplicates
-            if (vm.VolumeSyncStatus != "Requested")
-                throw new InvalidOperationException("Backup not in Requested state, skipping.");
-
-            transaction.Update(vmRef, new Dictionary<string, object>
+            await _firestoreDb.RunTransactionAsync(async transaction =>
             {
-                ["volume_sync_status"] = "Syncing"
+                var doc = await transaction.GetSnapshotAsync(vmRef);
+
+                if (!doc.Exists)
+                    throw new InvalidOperationException($"VM {vmId} not found.");
+
+                vm = doc.ConvertTo<VirtualMachine>();
+
+                if (string.IsNullOrEmpty(vm.ContainerId))
+                    throw new InvalidOperationException("VM has no running container.");
+
+                // Only proceed if status is still "Requested" — reject duplicates
+                if (vm.VolumeSyncStatus != "Requested")
+                    throw new InvalidOperationException("Backup not in Requested state, skipping.");
+
+                transaction.Update(vmRef, new Dictionary<string, object>
+                {
+                    ["volume_sync_status"] = "Syncing"
+                });
             });
-        });
+        }
+        catch (InvalidOperationException)
+        {
+            // Re-throw cleanly so RunBackupAsync can log it
+            throw;
+        }
 
         try
         {
