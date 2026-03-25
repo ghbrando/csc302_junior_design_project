@@ -489,6 +489,13 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
 
     private async Task StartListeners()
     {
+        // Stop existing VM listener before replacing to prevent duplicate callbacks
+        if (_vmListener != null)
+        {
+            await _vmListener.StopAsync();
+            _vmListener = null;
+        }
+
         // Always set up VM listener (doesn't need auth)
         _vmListener = VmService.ListenAllVms(vms =>
         {

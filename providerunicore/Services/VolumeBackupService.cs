@@ -89,12 +89,16 @@ public class VolumeBackupService : IVolumeBackupService
                 await rawStream.CopyToAsync(tarBuffer);
             }
             tarBuffer.Position = 0;
+            Console.WriteLine($"[Backup] Tar buffer size: {tarBuffer.Length} bytes");
             var tarReader = new TarReader(tarBuffer);
 
             while (await tarReader.GetNextEntryAsync() is { } entry)
             {
-                // Skip directories and non-file entries
-                if (entry.EntryType != TarEntryType.RegularFile)
+                Console.WriteLine($"[Backup] Entry: type={entry.EntryType} name={entry.Name} dataStream={entry.DataStream != null}");
+
+                // Docker exports regular files as either RegularFile ('0') or V7RegularFile ('\0')
+                bool isRegularFile = entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile;
+                if (!isRegularFile)
                     continue;
 
                 // entry.Name is like "consumer/file.txt" (relative to parent of /home/consumer)
@@ -112,6 +116,8 @@ public class VolumeBackupService : IVolumeBackupService
                     fileCount++;
                 }
             }
+
+            Console.WriteLine($"[Backup] Uploaded {fileCount} files to GCS prefix {gcsPrefix}");
 
             // Mark as complete with timestamp
             await vmRef.UpdateAsync(new Dictionary<string, object>
@@ -161,7 +167,8 @@ public class VolumeBackupService : IVolumeBackupService
         var tarReader = new TarReader(tarBuffer);
         while (await tarReader.GetNextEntryAsync() is { } entry)
         {
-            if (entry.EntryType != TarEntryType.RegularFile || entry.DataStream == null)
+            bool isRegularFile = entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile;
+            if (!isRegularFile || entry.DataStream == null)
                 continue;
 
             using var buffer = new MemoryStream();
