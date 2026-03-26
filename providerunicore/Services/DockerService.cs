@@ -412,6 +412,17 @@ public class DockerService : IDockerService, IDisposable
         return response.ID;
     }
 
+    public async Task TagImageAsync(string sourceTag, string targetTag, CancellationToken ct = default)
+    {
+        var client = await GetClientAsync();
+        var (repo, tag) = ParseImage(targetTag);
+        await client.Images.TagImageAsync(sourceTag, new ImageTagParameters
+        {
+            RepositoryName = repo,
+            Tag = tag,
+        }, ct);
+    }
+
     public async Task PushImageAsync(string imageTag, CancellationToken ct = default)
     {
         var client = await GetClientAsync();
@@ -436,6 +447,19 @@ public class DockerService : IDockerService, IDisposable
     public async Task PullImageAsync(string imageTag, CancellationToken ct = default)
     {
         var client = await GetClientAsync();
+
+        // Skip pull if the image already exists locally (e.g. local snapshot)
+        var (imageName, tag) = ParseImage(imageTag);
+        var existing = await client.Images.ListImagesAsync(new ImagesListParameters
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["reference"] = new Dictionary<string, bool> { [$"{imageName}:{tag}"] = true }
+            }
+        }, ct);
+        if (existing.Count > 0)
+            return;
+
         var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY") ?? "";
 
         AuthConfig? authConfig = null;
@@ -448,7 +472,6 @@ public class DockerService : IDockerService, IDisposable
             };
         }
 
-        var (imageName, tag) = ParseImage(imageTag);
         await client.Images.CreateImageAsync(
             new ImagesCreateParameters { FromImage = imageName, Tag = tag },
             authConfig,

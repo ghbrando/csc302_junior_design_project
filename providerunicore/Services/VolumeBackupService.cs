@@ -1,5 +1,6 @@
 using Docker.DotNet;
 using Docker.DotNet.Models;
+using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using Google.Cloud.Storage.V1;
 using System.Formats.Tar;
@@ -14,6 +15,21 @@ public class VolumeBackupService : IVolumeBackupService
     public VolumeBackupService(FirestoreDb firestoreDb)
     {
         _firestoreDb = firestoreDb;
+    }
+
+    /// <summary>
+    /// Creates a StorageClient using the GCP service account key if available,
+    /// falling back to default credentials (ADC) otherwise.
+    /// </summary>
+    private static async Task<StorageClient> CreateStorageClientAsync()
+    {
+        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY");
+        if (!string.IsNullOrEmpty(gcpKeyJson))
+        {
+            var credential = GoogleCredential.FromJson(gcpKeyJson);
+            return await StorageClient.CreateAsync(credential);
+        }
+        return await StorageClient.CreateAsync();
     }
 
     public async Task BackupVolumeNowAsync(string vmId)
@@ -67,7 +83,7 @@ public class VolumeBackupService : IVolumeBackupService
                 statOnly: false);
 
             // Step 2: Upload each file to GCS
-            var storageClient = await StorageClient.CreateAsync();
+            var storageClient = await CreateStorageClientAsync();
 
             // Ensure bucket exists
             try
@@ -151,7 +167,7 @@ public class VolumeBackupService : IVolumeBackupService
             new GetArchiveFromContainerParameters { Path = "/home/consumer" },
             statOnly: false);
 
-        var storageClient = await StorageClient.CreateAsync();
+        var storageClient = await CreateStorageClientAsync();
 
         try { await storageClient.GetBucketAsync(bucketName, cancellationToken: ct); }
         catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
@@ -184,7 +200,7 @@ public class VolumeBackupService : IVolumeBackupService
         const string bucketName = "unicore-vm-volumes";
         var gcsPrefix = $"consumers/{consumerUid}/{sourceVmId}/home/";
 
-        var storageClient = await StorageClient.CreateAsync();
+        var storageClient = await CreateStorageClientAsync();
 
         // Verify the backup prefix exists before starting Docker work
         bool hasFiles = false;

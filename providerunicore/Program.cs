@@ -98,6 +98,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorSe
 builder.Services.AddSingleton<PauseResumeListenerService>();
 builder.Services.AddSingleton<IVolumeBackupService, VolumeBackupService>();
 builder.Services.AddSingleton<ISnapshotService, SnapshotService>();
+builder.Services.AddSingleton<SnapshotSchedulerService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SnapshotSchedulerService>());
 builder.Services.AddScoped<IMigrationService, MigrationService>();
 
 

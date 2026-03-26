@@ -71,6 +71,11 @@ public interface IDockerService
     Task<string> CommitContainerAsync(string containerId, string repository, string tag, CancellationToken ct = default);
 
     /// <summary>
+    /// Tags a local image with a new name (e.g., for Artifact Registry).
+    /// </summary>
+    Task TagImageAsync(string sourceTag, string targetTag, CancellationToken ct = default);
+
+    /// <summary>
     /// Pushes an image to a registry (e.g., GCP Artifact Registry).
     /// Uses the GCP service account credentials loaded at startup.
     /// </summary>

@@ -42,6 +42,7 @@ builder.Services.AddFirestoreRepository<VmMigrationRequest>(
     documentIdSelector: r => r.MigrationRequestId);
 
 builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
+builder.Services.AddScoped<IMigrationRequestService, MigrationRequestService>();
 builder.Services.AddScoped<IWebShellService, WebShellService>();
 // Register ConsumerVmService through HttpClientFactory so it gets configured client
 // instead of a plain scoped registration which would bypass the typed client.

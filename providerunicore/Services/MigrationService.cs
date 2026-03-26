@@ -82,20 +82,38 @@ public class MigrationService : IMigrationService
             var oldVm = await _vmRepo.GetByIdAsync(request.VmId)
                 ?? throw new InvalidOperationException($"Source VM {request.VmId} not found.");
 
-            // ── Step 2.5: Force a live backup of the old VM to GCS ───────────────
-            // This ensures GCS has fresh data before the restore step, regardless of
-            // whether the consumer ever pressed "Backup Now".
+            // ── Step 2.5: Force a fresh snapshot of the running container ────────
+            // This captures the full OS state (installed packages, configs, etc.)
+            // so the target provider gets the exact current state, not a stale
+            // 2-hour-old snapshot.
             if (!string.IsNullOrEmpty(oldVm.ContainerId))
             {
-                _logger.LogInformation("[Migration] Step 2.5 – backing up old VM {VmId} to GCS before restore.", request.VmId);
+                _logger.LogInformation("[Migration] Step 2.5 – taking fresh snapshot of VM {VmId} before migration.", request.VmId);
+                try
+                {
+                    await _snapshotService.TakeSnapshotAsync(request.VmId, oldVm.ContainerId);
+                    // Re-fetch the VM to get the updated snapshot_image tag
+                    oldVm = await _vmRepo.GetByIdAsync(request.VmId)
+                        ?? throw new InvalidOperationException($"Source VM {request.VmId} not found after snapshot.");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("[Migration] Fresh snapshot failed: {Msg}. Will use last known snapshot (if any).", ex.Message);
+                }
+            }
+
+            // ── Step 2.6: Force a live backup of the old VM to GCS ───────────────
+            // This ensures GCS has fresh user data (/home/consumer) before the
+            // restore step, regardless of whether the consumer ever pressed "Backup Now".
+            if (!string.IsNullOrEmpty(oldVm.ContainerId))
+            {
+                _logger.LogInformation("[Migration] Step 2.6 – backing up old VM {VmId} to GCS before restore.", request.VmId);
                 try
                 {
                     await _volumeBackupService.ForceBackupToGcsAsync(oldVm);
                 }
                 catch (Exception ex)
                 {
-                    // Log but don't abort — restore will still run and will no-op gracefully
-                    // if GCS credentials are not configured in this environment.
                     _logger.LogWarning("[Migration] GCS backup failed: {Msg}. Restore will use last known backup (if any).", ex.Message);
                 }
             }
@@ -124,6 +142,23 @@ public class MigrationService : IMigrationService
             // ── Step 6: Allocate relay port ────────────────────────────────────
             _logger.LogInformation("[Migration] Step 6 – allocating relay port.");
             var relayPort = await AllocateRelayPortAsync();
+
+            // ── Step 6.5: Stop the old container ────────────────────────────────
+            // Snapshot and backup are done — stop the old container to free
+            // resources and release the container name for the new one.
+            if (!string.IsNullOrEmpty(oldVm.ContainerId))
+            {
+                _logger.LogInformation("[Migration] Step 6.5 – stopping old container {ContainerId}", oldVm.ContainerId);
+                try
+                {
+                    _monitorService.StopMonitoring(request.VmId);
+                    await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("[Migration] Could not stop old container: {Msg}", ex.Message);
+                }
+            }
 
             // ── Step 7: Start container from snapshot (or base image) ──────────
             var imageToUse = !string.IsNullOrWhiteSpace(oldVm.SnapshotImage)
@@ -168,22 +203,8 @@ public class MigrationService : IMigrationService
             };
             await _vmService.CreateVmAsync(newVm);
 
-            // ── Step 9: Stop old VM and mark as Migrated ──────────────────────
-            _logger.LogInformation("[Migration] Step 9 – stopping old VM {VmId}", request.VmId);
-            if (!string.IsNullOrEmpty(oldVm.ContainerId))
-            {
-                try
-                {
-                    await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName);
-                }
-                catch (Exception ex)
-                {
-                    // Best-effort: the old container may already be gone
-                    _logger.LogWarning("[Migration] Could not stop old container {Id}: {Msg}", oldVm.ContainerId, ex.Message);
-                }
-            }
-
-            _monitorService.StopMonitoring(request.VmId);
+            // ── Step 9: Mark old VM as Migrated via Firestore ────────────────
+            _logger.LogInformation("[Migration] Step 9 – marking old VM {VmId} as Migrated in Firestore", request.VmId);
 
             await oldVmRef.UpdateAsync(new Dictionary<string, object>
             {
@@ -205,6 +226,21 @@ public class MigrationService : IMigrationService
                 ["completed_at"] = DateTime.UtcNow,
                 ["new_vm_id"] = newVmId,
             });
+
+            // ── Step 12: Delete old VM document ─────────────────────────────
+            // The old VM is fully migrated and its container will be cleaned up
+            // by the source provider's PauseResumeListenerService. Remove the
+            // Firestore document so it doesn't linger in the consumer's stopped list.
+            _logger.LogInformation("[Migration] Step 12 – deleting old VM document {VmId}", request.VmId);
+            try
+            {
+                await oldVmRef.DeleteAsync();
+            }
+            catch (Exception delEx)
+            {
+                _logger.LogWarning(delEx, "[Migration] Could not delete old VM doc {VmId}: {Msg}",
+                    request.VmId, delEx.Message);
+            }
         }
         catch (Exception ex)
         {

@@ -116,6 +116,26 @@
         outline: none;
         border-color: rgba(0, 230, 118, 0.5);
     }
+
+    .btn-confirm-migrate {
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: var(--uc-blue);
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 1px;
+        padding: 0.5rem 1rem;
+        transition: all 0.2s;
+    }
+
+    .btn-confirm-migrate:hover:not(:disabled) {
+        background-color: rgba(59, 130, 246, 0.15);
+        color: var(--uc-blue);
+    }
+
+    .btn-confirm-migrate:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 
 <div class="container-fluid px-4 py-3">
@@ -210,7 +230,8 @@
 
     <div class="row g-3">
         <div class="col-12">
-            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)" />
+            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)"
+                    OnMigrateClicked="OpenMigrateModal" />
         </div>
     </div>
 
@@ -397,6 +418,74 @@
     </div>
 }
 
+<!-- Migrate VM confirmation modal -->
+@if (_showMigrateModal && _migrateVm != null)
+{
+    <div class="uc-modal-backdrop" @onclick="CloseMigrateModal">
+        <div class="uc-modal" @onclick:stopPropagation="true">
+            <div class="uc-modal-title">
+                <i class="bi bi-arrow-left-right me-2" style="color: var(--uc-blue);"></i>
+                Migrate Virtual Machine
+            </div>
+
+            <p style="font-size: 0.82rem; color: var(--uc-text-secondary); margin-bottom: 0.75rem;">
+                This will migrate the VM to another available provider. The VM's data will be backed up,
+                transferred, and restored on the target machine.
+            </p>
+
+            <div class="mb-3 p-2 rounded-1"
+                 style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                <div style="font-size: 0.8rem; color: #e2e8f0; font-weight: 600;">@_migrateVm.Name</div>
+                <div style="font-size: 0.7rem; color: #64748b;">
+                    @_migrateVm.CpuCores core@(_migrateVm.CpuCores == 1 ? "" : "s") &nbsp;·&nbsp;
+                    @_migrateVm.RamGB GB RAM &nbsp;·&nbsp;
+                    @_migrateVm.Image
+                </div>
+                @if (!string.IsNullOrEmpty(_migrateVm.Client))
+                {
+                    <div style="font-size: 0.7rem; color: #64748b;">
+                        Client: @_migrateVm.Client
+                    </div>
+                }
+            </div>
+
+            <div class="alert py-2 mb-3"
+                 style="font-size: 0.75rem; background: rgba(255, 171, 0, 0.08); border: 1px solid rgba(255, 171, 0, 0.25); color: #ffab00;">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                A target provider will be automatically selected based on availability and reliability.
+                The VM will be unavailable during migration.
+            </div>
+
+            @if (_migrateError != null)
+            {
+                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                    <i class="bi bi-exclamation-circle me-1"></i>@_migrateError
+                </div>
+            }
+
+            <div class="d-flex justify-content-end gap-2 mt-3">
+                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseMigrateModal"
+                        disabled="@_isMigrating">
+                    Cancel
+                </button>
+                <button class="btn btn-sm btn-confirm-migrate rounded-1" @onclick="MigrateVmAsync"
+                        disabled="@_isMigrating">
+                    @if (_isMigrating)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        <span>Migrating...</span>
+                    }
+                    else
+                    {
+                        <i class="bi bi-arrow-left-right me-1"></i>
+                        <span>Confirm Migration</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     // ── Available images ──────────────────────────────────────────────────────
 
@@ -439,6 +528,11 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     Math.Max(0,
     (int)Math.Floor(CurrentProvider?.RamLimitGB ?? 0)
     - Vms.Where(v => v.Status == "Running").Sum(v => v.RamGB));
+
+    private bool _showMigrateModal = false;
+    private bool _isMigrating = false;
+    private string? _migrateError = null;
+    private VirtualMachine? _migrateVm = null;
 
     private bool _showStopModal = false;
     private bool _isStopping = false;
@@ -872,6 +966,88 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             _showStopModal = false;
 
         StateHasChanged();
+    }
+
+    // ── Migrate modal ──────────────────────────────────────────────────────────
+
+    private void OpenMigrateModal(string vmId)
+    {
+        _migrateVm = Vms.FirstOrDefault(v => v.VmId == vmId);
+        if (_migrateVm == null) return;
+        _migrateError = null;
+        _showMigrateModal = true;
+    }
+
+    private void CloseMigrateModal()
+    {
+        if (!_isMigrating)
+        {
+            _showMigrateModal = false;
+            _migrateVm = null;
+        }
+    }
+
+    private async Task MigrateVmAsync()
+    {
+        if (_migrateVm == null) return;
+
+        _isMigrating = true;
+        _migrateError = null;
+        StateHasChanged();
+
+        try
+        {
+            var providerUid = AuthState.FirebaseUid
+                ?? throw new InvalidOperationException("No provider logged in.");
+
+            // Auto-select target: find healthiest online provider that isn't us
+            var providersSnapshot = await FirestoreDb
+                .Collection("providers")
+                .WhereEqualTo("node_status", "Online")
+                .GetSnapshotAsync();
+
+            var targetProvider = providersSnapshot.Documents
+                .Select(doc => doc.ConvertTo<Provider>())
+                .Where(p => p.FirebaseUid != providerUid)
+                .OrderByDescending(p => p.ConsistencyScore)
+                .FirstOrDefault();
+
+            if (targetProvider == null)
+                throw new InvalidOperationException("No available target providers found. At least one other provider must be online.");
+
+            // Create migration request in Firestore — the target provider's listener picks it up
+            var requestId = Guid.NewGuid().ToString();
+            await FirestoreDb.Collection("vm_migration_requests").Document(requestId).SetAsync(
+                new Dictionary<string, object>
+                {
+                    ["migration_request_id"] = requestId,
+                    ["vm_id"]                = _migrateVm.VmId,
+                    ["consumer_uid"]         = _migrateVm.Client ?? "",
+                    ["source_provider_uid"]  = providerUid,
+                    ["target_provider_uid"]  = targetProvider.FirebaseUid,
+                    ["status"]               = "pending",
+                    ["requested_at"]         = DateTime.UtcNow,
+                    ["completed_at"]         = (object?)null,
+                    ["new_vm_id"]            = "",
+                    ["error"]                = (object?)null,
+                });
+
+            // Mark the VM so the UI shows "Requested" immediately
+            await FirestoreDb.Collection("virtual_machines").Document(_migrateVm.VmId)
+                .UpdateAsync("migration_status", "Requested");
+
+            _showMigrateModal = false;
+            _migrateVm = null;
+        }
+        catch (Exception ex)
+        {
+            _migrateError = ex.Message;
+        }
+        finally
+        {
+            _isMigrating = false;
+            StateHasChanged();
+        }
     }
 
     // ── Resource sliders ──────────────────────────────────────────────────────

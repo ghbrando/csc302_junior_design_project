@@ -201,7 +201,8 @@
                 .ToList();
 
             _stoppedVms = all
-                .Where(vm => !string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase))
+                .Where(vm => !string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase)
+                           && vm.MigrationStatus != "Migrated")
                 .Select(MapStopped)
                 .ToList();
 

@@ -22,6 +22,63 @@
         border: 1px solid var(--uc-border) !important;
         border-radius: var(--uc-radius) !important;
     }
+
+    .btn-migrate {
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: var(--uc-blue);
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+        padding: 0.3rem 0.7rem;
+        transition: all 0.2s;
+        background: transparent;
+    }
+
+    .btn-migrate:hover:not(:disabled) {
+        background-color: rgba(59, 130, 246, 0.15);
+        color: var(--uc-blue);
+    }
+
+    .btn-migrate:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .badge-migration-pending {
+        background-color: rgba(255, 171, 0, 0.1);
+        color: var(--uc-amber);
+        border: 1px solid rgba(255, 171, 0, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-restoring {
+        background-color: rgba(59, 130, 246, 0.1);
+        color: var(--uc-blue);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-done {
+        background-color: rgba(0, 230, 118, 0.1);
+        color: var(--uc-green);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-failed {
+        background-color: rgba(255, 82, 82, 0.1);
+        color: var(--uc-red);
+        border: 1px solid rgba(255, 82, 82, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
 </style>
 
 <div class="card vm-list-card h-100 p-3">
@@ -43,7 +100,8 @@
                     <th class="pb-2" style="width: 20%;">CPU</th>
                     <th class="pb-2" style="width: 10%;">RAM</th>
                     <th class="pb-2" style="width: 10%;">Duration</th>
-                    <th class="pb-2 text-end pe-0" style="width: 5%;">Revenue</th>
+                    <th class="pb-2" style="width: 10%;">Status</th>
+                    <th class="pb-2 text-end pe-0" style="width: 10%;">Revenue</th>
                 </tr>
             </thead>
             <tbody>
@@ -82,6 +140,23 @@
                                     @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
                                 </td>
 
+                                <td class="py-3">
+                                    @if (!string.IsNullOrEmpty(vm.MigrationStatus))
+                                    {
+                                        <span class="badge rounded-pill @MigrationBadgeClass(vm.MigrationStatus)">
+                                            @vm.MigrationStatus
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-migrate btn-sm rounded-1"
+                                                @onclick="() => OnMigrateClicked.InvokeAsync(vm.VmId)"
+                                                disabled="@(vm.IsPaused)">
+                                            <i class="bi bi-arrow-left-right me-1"></i>Migrate
+                                        </button>
+                                    }
+                                </td>
+
                                 <td class="py-3 text-end pe-0 fw-bold"
                                     style="color: var(--uc-green); font-family: var(--uc-font-mono); font-size: 0.95rem;">
                                     @vm.CurrentSessionCost.ToString("C")
@@ -96,9 +171,19 @@
 @code {
     [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
     [Parameter] public int HostCpuCores { get; set; }
+    [Parameter] public EventCallback<string> OnMigrateClicked { get; set; }
 
     String isPaused(VirtualMachine vm)
     {
         return vm.IsPaused ? " (Paused)" : "";
     }
+
+    private string MigrationBadgeClass(string? status) => status switch
+    {
+        "Requested" => "badge-migration-pending",
+        "Restoring" => "badge-migration-restoring",
+        "Migrated"  => "badge-migration-done",
+        "Failed"    => "badge-migration-failed",
+        _           => "badge-migration-pending",
+    };
 }

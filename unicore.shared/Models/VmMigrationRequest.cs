@@ -20,7 +20,7 @@ public class VmMigrationRequest
     public string TargetProviderUid { get; set; } = String.Empty;
 
     [FirestoreProperty("status")]
-    public string Status { get; set; } = "Pending"; // "Pending", "InProgress", "Completed", "Failed"
+    public string Status { get; set; } = "pending"; // "pending", "restoring", "Completed", "Failed"
 
     [FirestoreProperty("requested_at")]
     public DateTime RequestedAt { get; set; } = DateTime.UtcNow;
