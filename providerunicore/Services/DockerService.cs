@@ -82,9 +82,9 @@ public class DockerService : IDockerService, IDisposable
             // Volume already exists, which is fine
         }
 
-        // Load GCP service account key from environment
-        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_SERVICE_ACCOUNT_KEY") ?? "";
-        var gcpKeyContent = gcpKeyJson.Replace("\"", "\\\"").Replace("\n", "\\n");
+        // Load GCP VM agent key from environment (for container GCS sync)
+        var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_VM_AGENT_KEY") ?? "";
+        var gcpKeyBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(gcpKeyJson));
 
         // Determine the consumer context for GCS path
         var consumerContext = consumerUid ?? "shared";
@@ -112,13 +112,53 @@ public class DockerService : IDockerService, IDisposable
             $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
             $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
 
-        // GCP key setup: write service account key to /tmp/gcp-key.json with restricted permissions
-        var gcpKeySetup = $"echo '{gcpKeyContent}' | sed 's/\\\\n/\\n/g' > /tmp/gcp-key.json && chmod 600 /tmp/gcp-key.json && ";
+        // GCP key setup: decode base64 to get valid JSON, write to /tmp/gcp-key.json with restricted permissions
+        var gcpKeySetup = $"echo '{gcpKeyBase64}' | base64 -d > /tmp/gcp-key.json && chmod 600 /tmp/gcp-key.json && ";
 
-        // Google Cloud SDK setup and cron job for GCS sync
+        // Google Cloud SDK setup and cron job for GCS sync using Python
+        var gcsPath = $"consumers/{consumerContext}/{vmId}/home/";
+        var pythonScript = new System.Text.StringBuilder()
+            .AppendLine("#!/usr/bin/env python3")
+            .AppendLine("import os, sys, logging")
+            .AppendLine("from pathlib import Path")
+            .AppendLine("from google.cloud import storage")
+            .AppendLine("from google.oauth2 import service_account")
+            .AppendLine("log_dir = Path('/var/log/unicore')")
+            .AppendLine("log_dir.mkdir(parents=True, exist_ok=True)")
+            .AppendLine("logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s', handlers=[logging.FileHandler(log_dir / 'backup.log'), logging.StreamHandler(sys.stdout)])")
+            .AppendLine("logger = logging.getLogger(__name__)")
+            .AppendLine("try:")
+            .AppendLine("  creds = service_account.Credentials.from_service_account_file('/tmp/gcp-key.json')")
+            .AppendLine("  client = storage.Client(credentials=creds, project=creds.project_id)")
+            .AppendLine("  bucket = client.bucket('unicore-vm-volumes')")
+            .AppendLine("  local_dir = Path('/home/consumer')")
+            .AppendLine("  if not local_dir.exists():")
+            .AppendLine("    sys.exit(0)")
+            .AppendLine("  synced = 0")
+            .AppendLine("  for local_file in local_dir.rglob('*'):")
+            .AppendLine("    if local_file.is_file():")
+            .AppendLine($"      blob_path = '{gcsPath}' + local_file.relative_to(local_dir.parent).as_posix()")
+            .AppendLine("      try:")
+            .AppendLine("        bucket.blob(blob_path).upload_from_filename(str(local_file))")
+            .AppendLine("        synced += 1")
+            .AppendLine("      except Exception as e:")
+            .AppendLine("        logger.warning(f'Failed to upload: {e}')")
+            .AppendLine("  logger.info(f'Synced {synced} files to gs://unicore-vm-volumes')")
+            .AppendLine("except Exception as e:")
+            .AppendLine("  logger.error(f'Sync failed: {e}')")
+            .AppendLine("  sys.exit(1)")
+            .ToString();
+
+        // Normalize to Unix line endings for the container
+        var pythonScriptUnix = pythonScript.Replace("\r\n", "\n");
+
         var gcsSetup =
-            "apt-get install -y cron > /dev/null 2>&1 && " +
-            "echo '*/5 * * * * root /usr/bin/gsutil -m rsync -r /home/consumer gs://unicore-vm-volumes/consumers/" + consumerContext + "/" + vmId + "/home/' > /etc/cron.d/unicore-backup-volume && " +
+            "apt-get install -y cron curl python3-pip > /dev/null 2>&1 && " +
+            "pip3 install --quiet google-cloud-storage > /dev/null 2>&1 && " +
+            "mkdir -p /var/log/unicore && " +
+            $"cat > /usr/local/bin/unicore-backup.py << 'ENDPY'\n{pythonScriptUnix}ENDPY\n" +
+            "chmod 755 /usr/local/bin/unicore-backup.py && " +
+            "echo '*/5 * * * * root /usr/local/bin/unicore-backup.py >> /var/log/unicore/backup.log 2>&1' > /etc/cron.d/unicore-backup-volume && " +
             "chmod 0644 /etc/cron.d/unicore-backup-volume && " +
             "/etc/init.d/cron start > /dev/null 2>&1 && ";
 
@@ -164,7 +204,7 @@ public class DockerService : IDockerService, IDisposable
                 NanoCPUs = (long)(cpuCores * 1_000_000_000L),
                 Memory = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
-                PidsLimit = 200   // prevent fork bombs from exhausting the host process table
+                PidsLimit = 512   // allow cron, sshd children, frpc, and gsutil to coexist
             }
         });
 
@@ -335,8 +375,13 @@ public class DockerService : IDockerService, IDisposable
 
     private static (string ImageName, string Tag) ParseImage(string imageString)
     {
-        var parts = imageString.Split(':', 2);
-        return parts.Length == 2 ? (parts[0], parts[1]) : (imageString, "latest");
+        var lastSlash = imageString.LastIndexOf('/');
+        var lastColon = imageString.LastIndexOf(':');
+
+        if (lastColon > lastSlash)
+            return (imageString[..lastColon], imageString[(lastColon + 1)..]);
+
+        return (imageString, "latest");
     }
 
     // Returns % of total host CPU (0–100 regardless of core count).

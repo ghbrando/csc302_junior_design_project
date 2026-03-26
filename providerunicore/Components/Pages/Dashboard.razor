@@ -11,6 +11,7 @@
 @inject IMachineService MachineService
 @inject IDockerService DockerService
 @inject IVolumeBackupService VolumeBackupService
+@inject ISnapshotService SnapshotService
 @inject ContainerMonitorService MonitorService
 @inject PauseResumeListenerService PauseResumeListenerService
 @inject IMigrationService MigrationService
@@ -230,8 +231,10 @@
 
     <div class="row g-3">
         <div class="col-12">
-            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)"
-                    OnMigrateClicked="OpenMigrateModal" />
+            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()"
+                    HostCpuCores="@(_specs?.CpuThreads ?? 0)"
+                    OnMigrateClicked="OpenMigrateModal"
+                    OnSnapshotRequested="@TriggerSnapshotAsync" />
         </div>
     </div>
 
@@ -903,6 +906,18 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         // _activeBackupVmIds just prevents the same listener snapshot from
         // spawning duplicate tasks.
         _activeBackupVmIds.TryRemove(vmId, out _);
+    }
+
+    private async Task TriggerSnapshotAsync(string vmId)
+    {
+        try
+        {
+            await SnapshotService.TriggerSnapshotAsync(vmId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to queue snapshot for VM {vmId}: {ex.Message}");
+        }
     }
 
     // ── Emergency stop modal ──────────────────────────────────────────────────

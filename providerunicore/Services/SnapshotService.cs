@@ -1,20 +1,86 @@
 using Google.Cloud.Firestore;
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 namespace unicoreprovider.Services;
 
-public class SnapshotService : ISnapshotService
+public class SnapshotService : BackgroundService, ISnapshotService
 {
-    private const string RegistryBase = "us-central1-docker.pkg.dev/unicore-junior-design/unicore-vm-snapshots";
+    private static readonly TimeSpan SnapshotInterval = TimeSpan.FromHours(2);
+    private static readonly TimeSpan LoopInterval = TimeSpan.FromSeconds(5);
 
-    private readonly IDockerService _dockerService;
     private readonly FirestoreDb _firestoreDb;
+    private readonly IDockerService _dockerService;
+    private readonly IConfiguration _configuration;
     private readonly ILogger<SnapshotService> _logger;
 
-    public SnapshotService(IDockerService dockerService, FirestoreDb firestoreDb, ILogger<SnapshotService> logger)
+    private readonly Channel<string> _onDemandQueue = Channel.CreateUnbounded<string>();
+    private readonly ConcurrentDictionary<string, bool> _queuedVmIds = new();
+
+    public SnapshotService(
+        FirestoreDb firestoreDb,
+        IDockerService dockerService,
+        IConfiguration configuration,
+        ILogger<SnapshotService> logger)
     {
-        _dockerService = dockerService ?? throw new ArgumentNullException(nameof(dockerService));
-        _firestoreDb = firestoreDb ?? throw new ArgumentNullException(nameof(firestoreDb));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _firestoreDb = firestoreDb;
+        _dockerService = dockerService;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("SnapshotService started.");
+
+        var nextScheduledRunAt = DateTime.UtcNow.Add(SnapshotInterval);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                while (_onDemandQueue.Reader.TryRead(out var vmId))
+                {
+                    try
+                    {
+                        await SnapshotVmByIdAsync(vmId, stoppingToken);
+                    }
+                    finally
+                    {
+                        _queuedVmIds.TryRemove(vmId, out _);
+                    }
+                }
+
+                if (DateTime.UtcNow >= nextScheduledRunAt)
+                {
+                    await RunScheduledSnapshotsAsync(stoppingToken);
+                    nextScheduledRunAt = DateTime.UtcNow.Add(SnapshotInterval);
+                }
+
+                await Task.Delay(LoopInterval, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Snapshot service loop failed.");
+            }
+        }
+
+        _logger.LogInformation("SnapshotService stopped.");
+    }
+
+    public async Task TriggerSnapshotAsync(string vmId)
+    {
+        if (string.IsNullOrWhiteSpace(vmId))
+            throw new ArgumentException("VM ID is required.", nameof(vmId));
+
+        if (_queuedVmIds.TryAdd(vmId, true))
+        {
+            await _onDemandQueue.Writer.WriteAsync(vmId);
+        }
     }
 
     public async Task PullSnapshotAsync(string? imageTag, CancellationToken ct = default)
@@ -22,47 +88,133 @@ public class SnapshotService : ISnapshotService
         if (string.IsNullOrWhiteSpace(imageTag))
             return;
 
-        await _dockerService.PullImageAsync(imageTag, ct);
+        await ExecuteWithRetryAsync(
+            () => _dockerService.PullImageAsync(imageTag, ct),
+            operationName: $"pull snapshot {imageTag}");
     }
 
-    public async Task TakeSnapshotAsync(string vmId, string containerId, CancellationToken ct = default)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        var vmRef = _firestoreDb.Collection("virtual_machines").Document(vmId);
+        _onDemandQueue.Writer.TryComplete();
+        await base.StopAsync(cancellationToken);
+    }
+
+    private async Task RunScheduledSnapshotsAsync(CancellationToken ct)
+    {
+        var runningVms = await _firestoreDb
+            .Collection("virtual_machines")
+            .WhereEqualTo("status", "Running")
+            .GetSnapshotAsync();
+
+        foreach (var vmDoc in runningVms.Documents)
+        {
+            var vm = vmDoc.ConvertTo<VirtualMachine>();
+            if (string.IsNullOrWhiteSpace(vm.ContainerId))
+                continue;
+
+            await SnapshotVmAsync(vm, ct);
+        }
+    }
+
+    private async Task SnapshotVmByIdAsync(string vmId, CancellationToken ct)
+    {
+        var vmDoc = await _firestoreDb.Collection("virtual_machines").Document(vmId).GetSnapshotAsync();
+        if (!vmDoc.Exists)
+            return;
+
+        var vm = vmDoc.ConvertTo<VirtualMachine>();
+        if (!string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(vm.ContainerId))
+            return;
+
+        await SnapshotVmAsync(vm, ct);
+    }
+
+    private async Task SnapshotVmAsync(VirtualMachine vm, CancellationToken ct)
+    {
+        var vmRef = _firestoreDb.Collection("virtual_machines").Document(vm.VmId);
         var timestamp = DateTime.UtcNow.ToString("yyyyMMddHHmmss");
-
-        // Commit locally first with a local tag
-        var localRepo = $"unicore-snapshot-{vmId}";
-        var tag = $"snap-{timestamp}";
-
-        await vmRef.UpdateAsync("snapshot_status", "Committing");
-        _logger.LogInformation("[Snapshot] Committing container {ContainerId} for VM {VmId}", containerId, vmId);
-
-        await _dockerService.CommitContainerAsync(containerId, localRepo, tag, ct);
-
-        // Tag for Artifact Registry and push so other providers can pull during migration
-        var registryTag = $"{RegistryBase}/{localRepo}:{tag}";
-
-        await vmRef.UpdateAsync("snapshot_status", "Pushing");
-        _logger.LogInformation("[Snapshot] Pushing {RegistryTag} to Artifact Registry", registryTag);
+        var imageTag = BuildImageTag(vm.VmId, timestamp);
 
         try
         {
-            await _dockerService.TagImageAsync($"{localRepo}:{tag}", registryTag, ct);
-            await _dockerService.PushImageAsync(registryTag, ct);
-            _logger.LogInformation("[Snapshot] Push complete for VM {VmId}", vmId);
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["snapshot_status"] = "Committing"
+            });
+
+            var (repository, tag) = SplitImageTag(imageTag);
+
+            await ExecuteWithRetryAsync(
+                () => _dockerService.CommitContainerAsync(vm.ContainerId, repository, tag, ct),
+                operationName: $"commit snapshot for VM {vm.VmId}");
+
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["snapshot_status"] = "Pushing"
+            });
+
+            await ExecuteWithRetryAsync(
+                () => _dockerService.PushImageAsync(imageTag, ct),
+                operationName: $"push snapshot for VM {vm.VmId}");
+
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["snapshot_status"] = "Idle",
+                ["last_snapshot_at"] = DateTime.UtcNow,
+                ["snapshot_image"] = imageTag
+            });
         }
         catch (Exception ex)
         {
-            // Push failure is non-fatal — local snapshot still exists for same-machine migration.
-            // Cross-network migration will fall back to the base image + GCS restore.
-            _logger.LogWarning("[Snapshot] Push to registry failed for VM {VmId}: {Msg}. Local snapshot retained.", vmId, ex.Message);
-        }
+            _logger.LogWarning(ex, "Snapshot failed for VM {VmId}", vm.VmId);
 
-        await vmRef.UpdateAsync(new Dictionary<string, object>
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["snapshot_status"] = "Error"
+            });
+        }
+    }
+
+    private string BuildImageTag(string vmId, string timestamp)
+    {
+        var registry = _configuration["ArtifactRegistry:Repository"]
+            ?? "us-central1-docker.pkg.dev/unicore-junior-design/unicore-vm-snapshots";
+
+        return $"{registry.TrimEnd('/')}/{vmId}:{timestamp}";
+    }
+
+    private static (string Repository, string Tag) SplitImageTag(string imageTag)
+    {
+        var lastSlash = imageTag.LastIndexOf('/');
+        var lastColon = imageTag.LastIndexOf(':');
+
+        if (lastColon <= lastSlash)
+            throw new InvalidOperationException($"Invalid image tag: {imageTag}");
+
+        return (imageTag[..lastColon], imageTag[(lastColon + 1)..]);
+    }
+
+    private static async Task ExecuteWithRetryAsync(Func<Task> operation, string operationName, int maxAttempts = 3)
+    {
+        var attempt = 0;
+
+        while (true)
         {
-            ["snapshot_status"] = "Idle",
-            ["snapshot_image"] = registryTag,
-            ["last_snapshot_at"] = DateTime.UtcNow,
-        });
+            attempt++;
+            try
+            {
+                await operation();
+                return;
+            }
+            catch when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                await Task.Delay(delay);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"{operationName} failed after {attempt} attempt(s).", ex);
+            }
+        }
     }
 }

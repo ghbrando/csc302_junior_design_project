@@ -38,7 +38,7 @@ public class SnapshotTestController : ControllerBase
         if (string.IsNullOrEmpty(vm.ContainerId))
             return BadRequest(new { error = "VM has no running container." });
 
-        await _snapshotService.TakeSnapshotAsync(vmId, vm.ContainerId);
+        await _snapshotService.TriggerSnapshotAsync(vmId);
 
         // Re-read to get updated snapshot fields
         vm = await _vmRepo.GetByIdAsync(vmId);

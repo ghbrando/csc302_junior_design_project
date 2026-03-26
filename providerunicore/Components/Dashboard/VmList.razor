@@ -94,14 +94,18 @@
             <thead>
                 <tr class="text-uppercase"
                     style="font-size: 0.7rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
-                    <th class="pb-2 ps-0" style="width: 10%;">VM ID</th>
-                    <th class="pb-2" style="width: 25%;">Name</th>
-                    <th class="pb-2" style="width: 20%;">Client</th>
-                    <th class="pb-2" style="width: 20%;">CPU</th>
-                    <th class="pb-2" style="width: 10%;">RAM</th>
-                    <th class="pb-2" style="width: 10%;">Duration</th>
-                    <th class="pb-2" style="width: 10%;">Status</th>
-                    <th class="pb-2 text-end pe-0" style="width: 10%;">Revenue</th>
+                    <th class="pb-2 ps-0" style="width: 5%;">VM ID</th>
+                    <th class="pb-2" style="width: 12%;">Name</th>
+                    <th class="pb-2" style="width: 10%;">Client</th>
+                    <th class="pb-2" style="width: 10%;">CPU</th>
+                    <th class="pb-2" style="width: 6%;">RAM</th>
+                    <th class="pb-2" style="width: 7%;">Duration</th>
+                    <th class="pb-2" style="width: 8%;">Vol Sync</th>
+                    <th class="pb-2" style="width: 8%;">Last Sync</th>
+                    <th class="pb-2" style="width: 8%;">Snapshot</th>
+                    <th class="pb-2" style="width: 8%;">Last Snap</th>
+                    <th class="pb-2" style="width: 8%;">Status</th>
+                    <th class="pb-2 text-end pe-0" style="width: 10%;">Action</th>
                 </tr>
             </thead>
             <tbody>
@@ -140,6 +144,11 @@
                                     @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
                                 </td>
 
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayStatus(vm.VolumeSyncStatus)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayTime(vm.LastVolumeSyncAt)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayStatus(vm.SnapshotStatus)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayTime(vm.LastSnapshotAt)</td>
+
                                 <td class="py-3">
                                     @if (!string.IsNullOrEmpty(vm.MigrationStatus))
                                     {
@@ -157,9 +166,13 @@
                                     }
                                 </td>
 
-                                <td class="py-3 text-end pe-0 fw-bold"
-                                    style="color: var(--uc-green); font-family: var(--uc-font-mono); font-size: 0.95rem;">
-                                    @vm.CurrentSessionCost.ToString("C")
+                                <td class="py-3 text-end pe-0">
+                                    <button class="btn btn-sm btn-outline-light rounded-1"
+                                            style="font-size: 0.7rem;"
+                                            disabled="@(OnSnapshotRequested is null || vm.SnapshotStatus == "Committing" || vm.SnapshotStatus == "Pushing")"
+                                            @onclick="() => RequestSnapshotAsync(vm.VmId)">
+                                        Snapshot Now
+                                    </button>
                                 </td>
                             </tr>
                         }
@@ -172,6 +185,7 @@
     [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
     [Parameter] public int HostCpuCores { get; set; }
     [Parameter] public EventCallback<string> OnMigrateClicked { get; set; }
+    [Parameter] public Func<string, Task>? OnSnapshotRequested { get; set; }
 
     String isPaused(VirtualMachine vm)
     {
@@ -186,4 +200,16 @@
         "Failed"    => "badge-migration-failed",
         _           => "badge-migration-pending",
     };
+
+    private static string DisplayStatus(string? value) => string.IsNullOrWhiteSpace(value) ? "Idle" : value;
+
+    private static string DisplayTime(DateTime? value) => value.HasValue
+        ? value.Value.ToLocalTime().ToString("MM/dd HH:mm")
+        : "—";
+
+    private async Task RequestSnapshotAsync(string vmId)
+    {
+        if (OnSnapshotRequested is not null)
+            await OnSnapshotRequested(vmId);
+    }
 }

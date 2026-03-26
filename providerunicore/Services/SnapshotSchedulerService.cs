@@ -57,7 +57,7 @@ public class SnapshotSchedulerService : IHostedService, IDisposable
                 try
                 {
                     _logger.LogInformation("Scheduling snapshot for VM {VmId} (container {ContainerId})", vm.VmId, vm.ContainerId);
-                    await _snapshotService.TakeSnapshotAsync(vm.VmId, vm.ContainerId);
+                    await _snapshotService.TriggerSnapshotAsync(vm.VmId);
                     _logger.LogInformation("Snapshot completed for VM {VmId}", vm.VmId);
                 }
                 catch (Exception ex)

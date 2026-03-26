@@ -91,7 +91,7 @@ public class MigrationService : IMigrationService
                 _logger.LogInformation("[Migration] Step 2.5 – taking fresh snapshot of VM {VmId} before migration.", request.VmId);
                 try
                 {
-                    await _snapshotService.TakeSnapshotAsync(request.VmId, oldVm.ContainerId);
+                    await _snapshotService.TriggerSnapshotAsync(request.VmId);
                     // Re-fetch the VM to get the updated snapshot_image tag
                     oldVm = await _vmRepo.GetByIdAsync(request.VmId)
                         ?? throw new InvalidOperationException($"Source VM {request.VmId} not found after snapshot.");

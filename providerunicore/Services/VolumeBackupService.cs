@@ -3,18 +3,53 @@ using Docker.DotNet.Models;
 using Google.Apis.Auth.OAuth2;
 using Google.Cloud.Firestore;
 using Google.Cloud.Storage.V1;
+using System.Diagnostics;
 using System.Formats.Tar;
 using System.Runtime.InteropServices;
 
 namespace unicoreprovider.Services;
 
-public class VolumeBackupService : IVolumeBackupService
+public class VolumeBackupService : BackgroundService, IVolumeBackupService
 {
-    private readonly FirestoreDb _firestoreDb;
+    private static readonly TimeSpan MonitorInterval = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan DefaultStaleThreshold = TimeSpan.FromMinutes(10);
 
-    public VolumeBackupService(FirestoreDb firestoreDb)
+    private readonly FirestoreDb _firestoreDb;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<VolumeBackupService> _logger;
+
+    public VolumeBackupService(
+        FirestoreDb firestoreDb,
+        IConfiguration configuration,
+        ILogger<VolumeBackupService> logger)
     {
         _firestoreDb = firestoreDb;
+        _configuration = configuration;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("VolumeBackupService started.");
+
+        using var timer = new PeriodicTimer(MonitorInterval);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            try
+            {
+                await MonitorVolumeSyncAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Volume sync monitor loop failed.");
+            }
+        }
+
+        _logger.LogInformation("VolumeBackupService stopped.");
     }
 
     /// <summary>
@@ -36,8 +71,6 @@ public class VolumeBackupService : IVolumeBackupService
     {
         var vmRef = _firestoreDb.Collection("virtual_machines").Document(vmId);
 
-        // Use a transaction to atomically check status and claim the backup.
-        // This prevents duplicate triggers when the listener fires multiple snapshots.
         VirtualMachine vm = null!;
         try
         {
@@ -71,71 +104,10 @@ public class VolumeBackupService : IVolumeBackupService
 
         try
         {
-            var consumerContext = string.IsNullOrEmpty(vm.Client) ? "shared" : vm.Client;
-            var gcsPrefix = $"consumers/{consumerContext}/{vmId}/home";
-            const string bucketName = "unicore-vm-volumes";
+            await ExecuteWithRetryAsync(
+                () => BackupContainerToGcsAsync(vm),
+                operationName: $"backup VM {vmId}");
 
-            // Step 1: Pull a tar archive of /home/consumer from the container
-            var dockerClient = await GetDockerClientAsync();
-            var archiveResponse = await dockerClient.Containers.GetArchiveFromContainerAsync(
-                vm.ContainerId,
-                new GetArchiveFromContainerParameters { Path = "/home/consumer" },
-                statOnly: false);
-
-            // Step 2: Upload each file to GCS
-            var storageClient = await CreateStorageClientAsync();
-
-            // Ensure bucket exists
-            try
-            {
-                await storageClient.GetBucketAsync(bucketName);
-            }
-            catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                var projectId = _firestoreDb.ProjectId;
-                await storageClient.CreateBucketAsync(projectId, bucketName);
-            }
-
-            int fileCount = 0;
-            // Buffer the entire tar archive into memory first — Docker's chunked
-            // HTTP stream causes EndOfStreamException when TarReader reads entry data.
-            using var tarBuffer = new MemoryStream();
-            await using (var rawStream = archiveResponse.Stream)
-            {
-                await rawStream.CopyToAsync(tarBuffer);
-            }
-            tarBuffer.Position = 0;
-            Console.WriteLine($"[Backup] Tar buffer size: {tarBuffer.Length} bytes");
-            var tarReader = new TarReader(tarBuffer);
-
-            while (await tarReader.GetNextEntryAsync() is { } entry)
-            {
-                Console.WriteLine($"[Backup] Entry: type={entry.EntryType} name={entry.Name} dataStream={entry.DataStream != null}");
-
-                // Docker exports regular files as either RegularFile ('0') or V7RegularFile ('\0')
-                bool isRegularFile = entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile;
-                if (!isRegularFile)
-                    continue;
-
-                // entry.Name is like "consumer/file.txt" (relative to parent of /home/consumer)
-                // Map to GCS: consumers/{uid}/{vmId}/home/{path}
-                var objectName = $"{gcsPrefix}/{entry.Name}";
-
-                if (entry.DataStream != null)
-                {
-                    // Buffer into MemoryStream — GCS resumable upload needs a seekable stream
-                    using var buffer = new MemoryStream();
-                    await entry.DataStream.CopyToAsync(buffer);
-                    buffer.Position = 0;
-
-                    await storageClient.UploadObjectAsync(bucketName, objectName, null, buffer);
-                    fileCount++;
-                }
-            }
-
-            Console.WriteLine($"[Backup] Uploaded {fileCount} files to GCS prefix {gcsPrefix}");
-
-            // Mark as complete with timestamp
             await vmRef.UpdateAsync(new Dictionary<string, object>
             {
                 ["volume_sync_status"] = "Idle",
@@ -148,7 +120,8 @@ public class VolumeBackupService : IVolumeBackupService
             {
                 ["volume_sync_status"] = "Error"
             });
-            throw new InvalidOperationException($"Backup failed: {ex.Message}", ex);
+
+            throw new InvalidOperationException($"Backup failed for VM {vmId}: {ex.Message}", ex);
         }
     }
 
@@ -248,7 +221,7 @@ public class VolumeBackupService : IVolumeBackupService
         tarBuffer.Position = 0;
 
         // Start a minimal temp container with the target volume mounted at /restore/consumer.
-        // Extracting the tar at /restore puts "consumer/file.txt" → /restore/consumer/file.txt
+        // Extracting the tar at /restore puts "consumer/file.txt" -> /restore/consumer/file.txt
         // which is the volume root — matching the layout expected by the main container.
         var dockerClient = await GetDockerClientAsync();
 
@@ -283,6 +256,256 @@ public class VolumeBackupService : IVolumeBackupService
         }
     }
 
+    public async Task RestoreFromGcsAsync(string vmId, string gcsPath)
+    {
+        var vmRef = _firestoreDb.Collection("virtual_machines").Document(vmId);
+        var snapshot = await vmRef.GetSnapshotAsync();
+
+        if (!snapshot.Exists)
+            throw new InvalidOperationException($"VM {vmId} not found.");
+
+        var vm = snapshot.ConvertTo<VirtualMachine>();
+        if (string.IsNullOrWhiteSpace(vm.ContainerId))
+            throw new InvalidOperationException("VM has no running container.");
+
+        await vmRef.UpdateAsync(new Dictionary<string, object>
+        {
+            ["volume_sync_status"] = "Syncing"
+        });
+
+        var tempDir = Path.Combine(Path.GetTempPath(), $"unicore-restore-{vmId}-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(tempDir);
+            var (bucket, prefix) = ParseGcsPath(gcsPath, vm);
+
+            await ExecuteWithRetryAsync(async () =>
+            {
+                var storage = await CreateStorageClientAsync();
+
+                await foreach (var obj in storage.ListObjectsAsync(bucket, prefix))
+                {
+                    if (string.IsNullOrEmpty(obj.Name) || obj.Name.EndsWith('/'))
+                        continue;
+
+                    var relativePath = obj.Name.StartsWith(prefix)
+                        ? obj.Name[prefix.Length..].TrimStart('/')
+                        : obj.Name;
+
+                    var filePath = Path.Combine(tempDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+                    var directory = Path.GetDirectoryName(filePath);
+                    if (!string.IsNullOrWhiteSpace(directory))
+                        Directory.CreateDirectory(directory);
+
+                    await using var output = File.Create(filePath);
+                    await storage.DownloadObjectAsync(obj, output);
+                }
+            }, operationName: $"download restore data for VM {vmId}");
+
+            await ExecuteWithRetryAsync(
+                () => RunProcessAsync("docker", $"cp \"{tempDir}/.\" \"{vm.ContainerId}:/home/consumer\""),
+                operationName: $"restore files into VM {vmId}");
+
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["volume_sync_status"] = "Idle",
+                ["last_volume_sync_at"] = DateTime.UtcNow
+            });
+        }
+        catch
+        {
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                ["volume_sync_status"] = "Error"
+            });
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempDir))
+                    Directory.Delete(tempDir, recursive: true);
+            }
+            catch (Exception cleanupEx)
+            {
+                _logger.LogWarning(cleanupEx, "Failed to clean temporary restore directory: {TempDir}", tempDir);
+            }
+        }
+    }
+
+    private async Task MonitorVolumeSyncAsync(CancellationToken ct)
+    {
+        var staleThresholdMinutes = _configuration.GetValue<int?>("Backups:VolumeSyncStaleMinutes") ?? 10;
+        var staleThreshold = staleThresholdMinutes > 0
+            ? TimeSpan.FromMinutes(staleThresholdMinutes)
+            : DefaultStaleThreshold;
+
+        var storageClient = await CreateStorageClientAsync();
+
+        var snapshot = await _firestoreDb
+            .Collection("virtual_machines")
+            .WhereEqualTo("status", "Running")
+            .GetSnapshotAsync();
+
+        var now = DateTime.UtcNow;
+
+        foreach (var vmDoc in snapshot.Documents)
+        {
+            var vm = vmDoc.ConvertTo<VirtualMachine>();
+            var updates = new Dictionary<string, object>();
+            var currentLastSync = vm.LastVolumeSyncAt;
+
+            var latestGcsSync = await TryGetLatestSyncTimestampAsync(storageClient, vm);
+            if (latestGcsSync.HasValue && (!currentLastSync.HasValue || latestGcsSync > currentLastSync))
+            {
+                updates["last_volume_sync_at"] = latestGcsSync.Value;
+                currentLastSync = latestGcsSync;
+
+                if (!string.Equals(vm.VolumeSyncStatus, "Syncing", StringComparison.OrdinalIgnoreCase))
+                    updates["volume_sync_status"] = "Idle";
+            }
+
+            if (string.IsNullOrWhiteSpace(vm.VolumeSyncStatus))
+                updates["volume_sync_status"] = "Idle";
+
+            if (currentLastSync.HasValue)
+            {
+                var age = now - currentLastSync.Value;
+                var stale = age > staleThreshold;
+
+                if (stale && !string.Equals(vm.VolumeSyncStatus, "Syncing", StringComparison.OrdinalIgnoreCase))
+                {
+                    updates["volume_sync_status"] = "Error";
+                }
+                else if (!stale && !string.Equals(vm.VolumeSyncStatus, "Syncing", StringComparison.OrdinalIgnoreCase))
+                {
+                    updates["volume_sync_status"] = "Idle";
+                }
+            }
+
+            if (updates.Count > 0)
+                await vmDoc.Reference.UpdateAsync(updates);
+        }
+    }
+
+    private async Task<DateTime?> TryGetLatestSyncTimestampAsync(StorageClient storageClient, VirtualMachine vm)
+    {
+        var (bucket, prefix) = GetVmSyncLocation(vm);
+        DateTime? latest = null;
+
+        try
+        {
+            await foreach (var obj in storageClient.ListObjectsAsync(bucket, prefix))
+            {
+                if (string.IsNullOrEmpty(obj.Name) || obj.Name.EndsWith('/'))
+                    continue;
+
+                if (obj.UpdatedDateTimeOffset.HasValue)
+                {
+                    var updatedUtc = obj.UpdatedDateTimeOffset.Value.UtcDateTime;
+                    if (!latest.HasValue || updatedUtc > latest.Value)
+                        latest = updatedUtc;
+                }
+            }
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug("GCS bucket or prefix not found for VM {VmId}: {Bucket}/{Prefix}", vm.VmId, bucket, prefix);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to query GCS sync state for VM {VmId}", vm.VmId);
+        }
+
+        return latest;
+    }
+
+    private (string Bucket, string Prefix) GetVmSyncLocation(VirtualMachine vm)
+    {
+        if (!string.IsNullOrWhiteSpace(vm.GcsPath))
+            return ParseGcsPath(vm.GcsPath, vm);
+
+        var bucket = vm.GcsBucket
+            ?? _configuration["Backups:VolumeBucket"]
+            ?? "unicore-vm-volumes";
+
+        var consumerContext = string.IsNullOrWhiteSpace(vm.Client) ? "shared" : vm.Client;
+        var prefix = $"consumers/{consumerContext}/{vm.VmId}/home";
+        return (bucket, prefix);
+    }
+
+    private async Task BackupContainerToGcsAsync(VirtualMachine vm)
+    {
+        var consumerContext = string.IsNullOrEmpty(vm.Client) ? "shared" : vm.Client;
+        var gcsPrefix = $"consumers/{consumerContext}/{vm.VmId}/home";
+        var bucketName = _configuration["Backups:VolumeBucket"] ?? "unicore-vm-volumes";
+
+        using var dockerClient = await GetDockerClientAsync();
+        var archiveResponse = await dockerClient.Containers.GetArchiveFromContainerAsync(
+            vm.ContainerId,
+            new GetArchiveFromContainerParameters { Path = "/home/consumer" },
+            statOnly: false);
+
+        var storageClient = await CreateStorageClientAsync();
+
+        try
+        {
+            await storageClient.GetBucketAsync(bucketName);
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            await storageClient.CreateBucketAsync(_firestoreDb.ProjectId, bucketName);
+        }
+
+        using var tarBuffer = new MemoryStream();
+        await using (var rawStream = archiveResponse.Stream)
+        {
+            await rawStream.CopyToAsync(tarBuffer);
+        }
+
+        tarBuffer.Position = 0;
+        var tarReader = new TarReader(tarBuffer);
+
+        while (await tarReader.GetNextEntryAsync() is { } entry)
+        {
+            bool isRegularFile = entry.EntryType is TarEntryType.RegularFile or TarEntryType.V7RegularFile;
+            if (!isRegularFile || entry.DataStream == null)
+                continue;
+
+            var objectName = $"{gcsPrefix}/{entry.Name}";
+            using var buffer = new MemoryStream();
+            await entry.DataStream.CopyToAsync(buffer);
+            buffer.Position = 0;
+            await storageClient.UploadObjectAsync(bucketName, objectName, null, buffer);
+        }
+    }
+
+    private static async Task ExecuteWithRetryAsync(Func<Task> operation, string operationName, int maxAttempts = 3)
+    {
+        var attempt = 0;
+
+        while (true)
+        {
+            attempt++;
+            try
+            {
+                await operation();
+                return;
+            }
+            catch when (attempt < maxAttempts)
+            {
+                var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                await Task.Delay(delay);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"{operationName} failed after {attempt} attempt(s).", ex);
+            }
+        }
+    }
+
     private static async Task EnsureImagePulledAsync(DockerClient client, string image, string tag, CancellationToken ct)
     {
         var existing = await client.Images.ListImagesAsync(new ImagesListParameters
@@ -302,6 +525,54 @@ public class VolumeBackupService : IVolumeBackupService
             ct);
     }
 
+    private (string Bucket, string Prefix) ParseGcsPath(string gcsPath, VirtualMachine vm)
+    {
+        if (gcsPath.StartsWith("gs://", StringComparison.OrdinalIgnoreCase))
+        {
+            var pathWithoutScheme = gcsPath[5..];
+            var slashIndex = pathWithoutScheme.IndexOf('/');
+            if (slashIndex < 0)
+                return (pathWithoutScheme, string.Empty);
+
+            var bucket = pathWithoutScheme[..slashIndex];
+            var prefix = pathWithoutScheme[(slashIndex + 1)..].Trim('/');
+            return (bucket, prefix);
+        }
+
+        var bucketName = vm.GcsBucket
+            ?? _configuration["Backups:VolumeBucket"]
+            ?? "unicore-vm-volumes";
+
+        return (bucketName, gcsPath.Trim('/'));
+    }
+
+    private static async Task RunProcessAsync(string fileName, string arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start process: {fileName}");
+
+        var stdOutTask = process.StandardOutput.ReadToEndAsync();
+        var stdErrTask = process.StandardError.ReadToEndAsync();
+
+        await process.WaitForExitAsync();
+
+        var stdout = await stdOutTask;
+        var stderr = await stdErrTask;
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException($"Process '{fileName} {arguments}' failed ({process.ExitCode}): {stderr}{stdout}");
+    }
+
     private async Task<DockerClient> GetDockerClientAsync()
     {
         var endpoints = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
@@ -317,7 +588,9 @@ public class VolumeBackupService : IVolumeBackupService
                 await client.System.PingAsync(cts.Token);
                 return client;
             }
-            catch { }
+            catch
+            {
+            }
         }
 
         throw new InvalidOperationException("Docker daemon is not reachable.");

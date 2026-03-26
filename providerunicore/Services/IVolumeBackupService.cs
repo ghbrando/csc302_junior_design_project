@@ -22,4 +22,9 @@ public interface IVolumeBackupService
     /// No-ops gracefully if no backup exists for the source VM.
     /// </summary>
     Task RestoreFromGcsAsync(string sourceVmId, string consumerUid, string targetVolumeName, CancellationToken ct = default);
+
+    /// <summary>
+    /// Restores VM volume data from a GCS path back into the VM container.
+    /// </summary>
+    Task RestoreFromGcsAsync(string vmId, string gcsPath);
 }
