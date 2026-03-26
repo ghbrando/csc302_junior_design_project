@@ -1,6 +1,7 @@
 @page "/dashboard"
 @using unicoreconsumer.Services
 @using unicoreconsumer.Components
+@using UniCore.Shared.Models
 @using Google.Cloud.Firestore
 @implements IAsyncDisposable
 @inject IConsumerService ConsumerService
@@ -70,10 +71,14 @@
                         ShowBackupButton="true"
                         IsBackupInProgress="@(vm.VolumeSyncStatus is "Syncing" or "Requested")"
                         LastBackup="@vm.LastBackup"
+                        ShowMigrateButton="@(vm.ProviderUnhealthy && vm.MigrationStatus is not ("Requested" or "Restoring"))"
+                        IsMigrating="@(vm.MigrationStatus is "Requested" or "Restoring" || _activeMigrations.ContainsKey(vm.VmId))"
+                        MigrationStatusText="@(GetMigrationStatusText(vm.VmId, vm.MigrationStatus))"
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
                         OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
                         OnStop="@(() => HandleStopVm(vm.VmId))"
-                        OnBackup="@(() => HandleBackupVm(vm.VmId))" />
+                        OnBackup="@(() => HandleBackupVm(vm.VmId))"
+                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))" />
             }
         </div>
     }
@@ -96,11 +101,18 @@
                ConsumerUid="@(AuthState.FirebaseUid ?? "")"
                OnClose="@(() => _showCreateModal = false)" />
 
+<MigrationDialog IsOpen="@_showMigrateDialog"
+                 VmId="@_migrateVmId"
+                 ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+                 SourceProviderUid="@_migrateSourceProvider"
+                 OnClose="@(() => _showMigrateDialog = false)" />
+
 @code {
     // ── Display models ────────────────────────────────────────────────────────
     record RunningVm(string VmId, string Name, string Os, string Specs,
                      string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
-                     string? VolumeSyncStatus, string LastBackup);
+                     string? VolumeSyncStatus, string LastBackup,
+                     string? MigrationStatus, string ProviderId, bool ProviderUnhealthy);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -111,10 +123,17 @@
     private readonly HashSet<string> _stoppingVmIds = new();
     private readonly HashSet<string> _resumingVmIds = new();
     private FirestoreChangeListener? _consumerListener;
+    private FirestoreChangeListener? _providerListener;
+    private FirestoreChangeListener? _migrationListener;
     private string _currencyCode = "USD";
     private string? _backupMessage;
     private bool _backupMessageIsError;
     private readonly HashSet<string> _backupPendingVmIds = new();
+    private Dictionary<string, string> _providerStatuses = new(); // providerId -> NodeStatus
+    private Dictionary<string, VmMigrationRequest> _activeMigrations = new(); // vmId -> request
+    private bool _showMigrateDialog;
+    private string _migrateVmId = "";
+    private string _migrateSourceProvider = "";
 
     private double _totalSpent => _runningVms.Sum(v => v.Cost);
 
@@ -154,6 +173,18 @@
 
         _vmListener = query.Listen(OnVmSnapshot);
         _consumerListener = ConsumerService.ListenByFirebaseUid(uid, OnConsumerChanged);
+
+        // Listen for provider status changes
+        _providerListener = FirestoreDb
+            .Collection("providers")
+            .Listen(OnProviderSnapshot);
+
+        // Listen for migration request updates
+        var migrationQuery = FirestoreDb
+            .Collection("vm_migration_requests")
+            .WhereEqualTo("consumer_uid", uid);
+        _migrationListener = migrationQuery.Listen(OnMigrationSnapshot);
+
         return Task.CompletedTask;
     }
 
@@ -211,20 +242,77 @@
         });
     }
 
+    private void OnProviderSnapshot(QuerySnapshot snapshot)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _providerStatuses = snapshot.Documents
+                .ToDictionary(
+                    d => d.GetValue<string>("firebase_uid"),
+                    d => d.ContainsField("node_status") ? d.GetValue<string>("node_status") : "Offline"
+                );
+            StateHasChanged();
+        });
+    }
+
+    private void OnMigrationSnapshot(QuerySnapshot snapshot)
+    {
+        var allMigrations = snapshot.Documents
+            .Select(d => d.ConvertTo<VmMigrationRequest>())
+            .ToList();
+
+        _ = InvokeAsync(() =>
+        {
+            // Detect completion/failure for active migrations
+            foreach (var m in allMigrations)
+            {
+                var wasActive = _activeMigrations.ContainsKey(m.VmId);
+
+                if (wasActive && m.Status is "Completed" or "completed")
+                {
+                    _backupMessage = $"Migration complete! Your VM has been migrated successfully.";
+                    _backupMessageIsError = false;
+                }
+                else if (wasActive && m.Status is "Failed" or "failed")
+                {
+                    _backupMessage = $"Migration failed: {m.Error ?? "Unknown error"}";
+                    _backupMessageIsError = true;
+                }
+            }
+
+            _activeMigrations = allMigrations
+                .Where(m => m.Status is "pending" or "restoring" or "Requested")
+                .GroupBy(m => m.VmId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.RequestedAt).First());
+
+            StateHasChanged();
+        });
+    }
+
     // ── Mapping ───────────────────────────────────────────────────────────────
-    private static RunningVm MapRunning(VirtualMachine vm) => new(
-        VmId:       vm.VmId,
-        Name:       string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
-        Os:         FormatImage(vm.Image),
-        Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
-        Connection: FormatConnection(vm),
-        Cost:       vm.CurrentSessionCost,
-        Uptime:     FormatUptime(vm.UptimeString),
-        IsPaused:   vm.IsPaused,
-        ResumeSuccess: vm.ResumeSuccess,
-        VolumeSyncStatus: vm.VolumeSyncStatus,
-        LastBackup: FormatLastBackup(vm.LastVolumeSyncAt)
-    );
+    private RunningVm MapRunning(VirtualMachine vm)
+    {
+        var providerUnhealthy = !string.IsNullOrEmpty(vm.ProviderId)
+            && _providerStatuses.TryGetValue(vm.ProviderId, out var status)
+            && !string.Equals(status, "Online", StringComparison.OrdinalIgnoreCase);
+
+        return new(
+            VmId:       vm.VmId,
+            Name:       string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+            Os:         FormatImage(vm.Image),
+            Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+            Connection: FormatConnection(vm),
+            Cost:       vm.CurrentSessionCost,
+            Uptime:     FormatUptime(vm.UptimeString),
+            IsPaused:   vm.IsPaused,
+            ResumeSuccess: vm.ResumeSuccess,
+            VolumeSyncStatus: vm.VolumeSyncStatus,
+            LastBackup: FormatLastBackup(vm.LastVolumeSyncAt),
+            MigrationStatus: vm.MigrationStatus,
+            ProviderId: vm.ProviderId,
+            ProviderUnhealthy: providerUnhealthy
+        );
+    }
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
     {
@@ -356,6 +444,21 @@
         }
     }
 
+    // ── Migration ─────────────────────────────────────────────────────────
+    private void OpenMigrationDialog(string vmId, string providerId)
+    {
+        _migrateVmId = vmId;
+        _migrateSourceProvider = providerId;
+        _showMigrateDialog = true;
+    }
+
+    private string GetMigrationStatusText(string vmId, string? vmMigrationStatus)
+    {
+        if (_activeMigrations.TryGetValue(vmId, out var req))
+            return req.Status;
+        return vmMigrationStatus ?? "pending";
+    }
+
     // ── Cleanup ───────────────────────────────────────────────────────────────
     public async ValueTask DisposeAsync()
     {
@@ -364,6 +467,10 @@
             await _vmListener.StopAsync();
         if (_consumerListener != null)
             await _consumerListener.StopAsync();
+        if (_providerListener != null)
+            await _providerListener.StopAsync();
+        if (_migrationListener != null)
+            await _migrationListener.StopAsync();
     }
 }
 
