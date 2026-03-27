@@ -5,6 +5,7 @@
 @inject NavigationManager Nav
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JS
+@implements IDisposable
 
 <nav class="sidebar d-flex flex-column">
     <!-- Removed default bottom margin from logo container -->
@@ -60,6 +61,16 @@
     private string UserName => AuthState.Name ?? "Provider";
     private string UserEmail => AuthState.Email ?? "";
 
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender && string.IsNullOrEmpty(AuthState.FirebaseUid))
@@ -88,6 +99,11 @@
         public string? uid { get; set; }
         public string? email { get; set; }
         public string? name { get; set; }
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
     }
 }
 

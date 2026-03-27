@@ -9,6 +9,17 @@ public interface IProviderService
     Task<Provider> UpdateLastLoginAsync(string firebaseUid);
     Task<Provider> UpdateNodeStatusAsync(string status, string firebaseUid);
     Task<Provider> UpdateResourceLimitsAsync(double cpuLimitPercent, double ramLimitGB, string firebaseUid);
+    Task<Provider> UpdateProfileAsync(string firebaseUid, string name, string email);
+    Task<Provider> UpdateSettingsAsync(string firebaseUid,
+        string name,
+        string email,
+        bool notifyVmStarted,
+        bool notifyVmCompleted,
+        bool notifyBudgetAlert,
+        bool notifyPayoutReady,
+        bool notifySystemUpdates,
+        string timeZone,
+        string currency);
     Task IncrementConsistencyScoreAsync(string firebaseUid, double incrementBy);
     FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged);
 }
@@ -124,5 +135,67 @@ public class ProviderService : IProviderService
     public FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged)
     {
         return _repository.Listen(firebaseUid, onChanged);
+    }
+
+    // Update provider profile information
+    public async Task<Provider> UpdateProfileAsync(string firebaseUid, string name, string email)
+    {
+        if (String.IsNullOrWhiteSpace(firebaseUid))
+            throw new ArgumentException("Firebase UID cannot be empty.", nameof(firebaseUid));
+        if (String.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name cannot be empty.", nameof(name));
+        if (String.IsNullOrWhiteSpace(email))
+            throw new ArgumentException("Email cannot be empty.", nameof(email));
+        var provider = await _repository.GetByIdAsync(firebaseUid);
+
+        if (provider == null)
+            throw new InvalidOperationException($"Provider {firebaseUid} not found");
+
+        provider.Name = name;
+        provider.Email = email;
+
+        await _repository.UpdateAsync(firebaseUid, provider);
+        return provider;
+    }
+
+    public async Task<Provider> UpdateSettingsAsync(string firebaseUid,
+        string name,
+        string email,
+        bool notifyVmStarted,
+        bool notifyVmCompleted,
+        bool notifyBudgetAlert,
+        bool notifyPayoutReady,
+        bool notifySystemUpdates,
+        string timeZone,
+        string currency)
+    {
+        if (String.IsNullOrWhiteSpace(firebaseUid))
+            throw new ArgumentException("Firebase UID cannot be empty.", nameof(firebaseUid));
+        if (String.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name cannot be empty.", nameof(name));
+        if (String.IsNullOrWhiteSpace(email))
+            throw new ArgumentException("Email cannot be empty.", nameof(email));
+        if (String.IsNullOrWhiteSpace(timeZone))
+            throw new ArgumentException("Time Zone cannot be empty.", nameof(timeZone));
+        if (String.IsNullOrWhiteSpace(currency))
+            throw new ArgumentException("Currency cannot be empty.", nameof(currency));
+
+        var provider = await _repository.GetByIdAsync(firebaseUid);
+
+        if (provider == null)
+            throw new InvalidOperationException($"Provider {firebaseUid} not found");
+
+        provider.Name = name;
+        provider.Email = email;
+        provider.NotifyVmStarted = notifyVmStarted;
+        provider.NotifyVmCompleted = notifyVmCompleted;
+        provider.NotifyBudgetAlert = notifyBudgetAlert;
+        provider.NotifyPayoutReady = notifyPayoutReady;
+        provider.NotifySystemUpdates = notifySystemUpdates;
+        provider.TimeZone = string.IsNullOrWhiteSpace(timeZone) ? "UTC-08:00" : timeZone.Trim();
+        provider.Currency = string.IsNullOrWhiteSpace(currency) ? "USD" : currency.Trim();
+
+        await _repository.UpdateAsync(firebaseUid, provider);
+        return provider;
     }
 }

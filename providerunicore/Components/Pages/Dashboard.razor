@@ -144,350 +144,349 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <div class="d-flex align-items-center gap-3">
-                <h5 class="fw-bold mb-0" style="letter-spacing: 0.5px; color: var(--uc-text-primary);">Provider Node</h5>
+                <h5 class="fw-bold mb-0" style="letter-spacing: 0.5px; color: var(--uc-text-primary);">Provider Node
+                </h5>
                 <span class="badge rounded-pill badge-online">ONLINE</span>
             </div>
-            <p class="mb-0 mt-1" style="font-size: 0.8rem; color: var(--uc-text-secondary);">Real-time resource monitoring & control</p>
-        </div>
-
-        <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-launch-vm rounded-1" @onclick="OpenLaunchModal">
-                <i class="bi bi-play-circle me-2"></i> LAUNCH VM
-            </button>
-            <button class="btn btn-emergency rounded-1" @onclick="OpenStopModal">
-                <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
-            </button>
-        </div>
-    </div>
-
-    <div class="row mb-3 g-3">
-        @{
-            var runningCount = Vms.Count(v => v.Status == "Running");
-            var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
-            var longestUptime = Vms
-            .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
-            .OrderByDescending(v => v.Uptime)
-            .Select(v => v.UptimeString)
-            .FirstOrDefault();
-            var uptime = longestUptime ?? "N/A";
-        }
-
-        <div class="col-12 col-md-6 col-lg-3">
-            <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
-        </div>
-        <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
-                      Color="#3b82f6" />
-        </div>
-        <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
-                      IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
-        </div>
-        <div class="col-12 col-md-6 col-lg-3">
-            <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
-                      Color="#ffeb3b" />
-        </div>
-    </div>
-
-    <div class="row mb-3 g-3">
-        <div class="col-md-6">
-            <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
-                            IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
-        </div>
-        <div class="col-md-6">
-            <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
-                            Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
-                            IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
-        </div>
-    </div>
-
-    <div class="row mb-3 g-3">
-        <div class="col-12">
-            <h6 class="text-uppercase"
-                style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px; color: var(--uc-text-secondary);">
-                Real-Time Monitoring
-            </h6>
-        </div>
-        @{
-            var activeVms = Vms.Where(v => v.Status == "Running").ToList();
-            var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
-            var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
-            var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
-            var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
-        }
-        <div class="col-md-4">
-            <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6"
-                        DataPoints="@demoVm.CpuHistory" />
-        </div>
-        <div class="col-md-4">
-            <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981"
-                        DataPoints="@demoVm.GpuHistory" />
-        </div>
-        <div class="col-md-4">
-            <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
-                        Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
-        </div>
-    </div>
-
-    <div class="row g-3">
-        <div class="col-12">
-            <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()"
-                    HostCpuCores="@(_specs?.CpuThreads ?? 0)"
-                    OnMigrateClicked="OpenMigrateModal"
-                    OnSnapshotRequested="@TriggerSnapshotAsync" />
-        </div>
-    </div>
-
-</div>
-
-<!-- Launch VM modal -->
-@if (_showLaunchModal)
-{
-    <div class="uc-modal-backdrop" @onclick="CloseLaunchModal">
-        <div class="uc-modal" @onclick:stopPropagation="true">
-            <div class="uc-modal-title">
-                <i class="bi bi-play-circle me-2" style="color: var(--uc-green);"></i>
-                Launch Virtual Machine
+            <p class="mb-0 mt-1" style="font-size: 0.8rem; color: var(--uc-text-secondary);">Real-time resource
+                monitoring & control</p>
             </div>
 
-            <div class="mb-3">
-                <div class="uc-label">Container Image</div>
-                <select class="uc-select" @bind="_selectedImage">
-                    @foreach (var img in AvailableImages)
-                    {
-                        <option value="@img.Value">@img.Label</option>
-                    }
-                </select>
-            </div>
-
-            @{
-                var availCores = AvailableCpuCores;
-                var availRam = AvailableRamGB;
-            }
-
-            <div class="mb-2" style="font-size: 0.72rem; color: #64748b; letter-spacing: 0.5px;">
-                AVAILABLE BUDGET &nbsp;—&nbsp;
-                <span style="color: @(availCores > 0 ? "#00e676" : "var(--uc-red)");">@availCores core@(availCores == 1 ? "" : "s")</span>
-                &nbsp;/&nbsp;
-                <span style="color: @(availRam > 0 ? "#00e676" : "var(--uc-red)");">@availRam GB RAM</span>
-            </div>
-
-            @if (availCores == 0 || availRam == 0)
-            {
-                <div class="alert py-2 mb-3"
-                     style="font-size: 0.78rem; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); color: #ef9a9a;">
-                    <i class="bi bi-exclamation-triangle me-1"></i>
-                    No resources available. Raise your CPU or RAM limit, or stop a running VM first.
-                </div>
-            }
-
-            <div class="row g-2 mb-3">
-                <div class="col-6">
-                    <div class="uc-label">CPU Cores</div>
-                    <select class="uc-select" @bind="_selectedCpuCores" disabled="@(availCores == 0)">
-                        @for (int c = 1; c <= availCores; c++)
-                        {
-                            var val = c;
-                            <option value="@val">@val core@(val == 1 ? "" : "s")</option>
-                        }
-                        @if (availCores == 0)
-                        {
-                            <option value="0">— none available —</option>
-                        }
-                    </select>
-                </div>
-                <div class="col-6">
-                    <div class="uc-label">RAM</div>
-                    <select class="uc-select" @bind="_selectedRamGB" disabled="@(availRam == 0)">
-                        @for (int r = 1; r <= availRam; r++)
-                        {
-                            var val = r;
-                            <option value="@val">@val GB</option>
-                        }
-                        @if (availRam == 0)
-                        {
-                            <option value="0">— none available —</option>
-                        }
-                    </select>
-                </div>
-            </div>
-
-            @if (_launchError != null)
-            {
-                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
-                    <i class="bi bi-exclamation-circle me-1"></i>@_launchError
-                </div>
-            }
-
-            <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseLaunchModal"
-                        disabled="@_isLaunching">
-                    Cancel
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-launch-vm rounded-1" @onclick="OpenLaunchModal">
+                    <i class="bi bi-play-circle me-2"></i> LAUNCH VM
                 </button>
-                <button class="btn btn-sm btn-launch-vm rounded-1" @onclick="LaunchVmAsync"
-                        disabled="@(_isLaunching || AvailableCpuCores == 0 || AvailableRamGB == 0)">
-                    @if (_isLaunching)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                        <span>Launching...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-play-circle me-1"></i>
-                        <span>Launch</span>
-                    }
+                <button class="btn btn-emergency rounded-1" @onclick="OpenStopModal">
+                    <i class="bi bi-exclamation-octagon-fill me-2"></i> EMERGENCY STOP
                 </button>
             </div>
         </div>
-    </div>
-}
 
-<!-- Emergency Stop modal -->
-@if (_showStopModal)
-{
-    <div class="uc-modal-backdrop" @onclick="CloseStopModal">
-        <div class="uc-modal" style="max-width: 520px;" @onclick:stopPropagation="true">
-            <div class="uc-modal-title">
-                <i class="bi bi-exclamation-octagon-fill me-2" style="color: var(--uc-red);"></i>
-                Emergency Stop
-            </div>
-
+        <div class="row mb-3 g-3">
             @{
-                var runningVms = Vms.Where(v => v.Status == "Running").ToList();
+                var runningCount = Vms.Count(v => v.Status == "Running");
+                var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
+                var longestUptime = Vms
+                .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
+                .OrderByDescending(v => v.Uptime)
+                .Select(v => v.UptimeString)
+                .FirstOrDefault();
+                var uptime = longestUptime ?? "N/A";
             }
 
-            @if (!runningVms.Any())
-            {
-                <p class="text-muted" style="font-size: 0.82rem;">No running VMs to stop.</p>
-            }
-            else
-            {
-                <p class="text-muted mb-2" style="font-size: 0.78rem;">Select which VMs to stop:</p>
+            <div class="col-12 col-md-6 col-lg-3">
+                <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+                <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
+                          Color="#3b82f6" />
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+                <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
+                          IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
+            </div>
+            <div class="col-12 col-md-6 col-lg-3">
+                <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
+                          Color="#ffeb3b" />
+            </div>
+        </div>
 
-                <div class="mb-2 d-flex gap-2">
-                    <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
-                            @onclick="SelectAllVms">
-                        All
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
-                            @onclick="DeselectAllVms">
-                        None
-                    </button>
+        <div class="row mb-3 g-3">
+            <div class="col-md-6">
+                <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
+                                IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
+            </div>
+            <div class="col-md-6">
+                <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
+                                Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
+                                IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
+            </div>
+        </div>
+
+        <div class="row mb-3 g-3">
+            <div class="col-12">
+                <h6 class="text-uppercase"
+                    style="font-size: 0.7rem; letter-spacing: 1px; margin-left: 4px; margin-bottom: 8px; color: var(--uc-text-secondary);">
+                    Real-Time Monitoring
+                </h6>
+            </div>
+            @{
+                var activeVms = Vms.Where(v => v.Status == "Running").ToList();
+                var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
+                var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
+                var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
+                var demoVm = activeVms.FirstOrDefault() ?? new VirtualMachine();
+            }
+            <div class="col-md-4">
+                <MetricCard Title="CPU" Value="@avgCpu.ToString("0")" Percent="@((double)avgCpu)" Color="#3b82f6"
+                            DataPoints="@demoVm.CpuHistory" />
+            </div>
+            <div class="col-md-4">
+                <MetricCard Title="GPU" Value="@avgGpu.ToString("0")" Percent="@((double)avgGpu)" Color="#10b981"
+                            DataPoints="@demoVm.GpuHistory" />
+            </div>
+            <div class="col-md-4">
+                <MetricCard Title="RAM" Value="@((activeVms.Sum(v => v.RamGB) * (avgRam / 100)).ToString("0.0"))" Unit="GB"
+                            Percent="@((double)avgRam)" Color="#a855f7" DataPoints="@demoVm.RamHistory" />
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-12">
+                <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)"
+                        OnMigrateClicked="OpenMigrateModal" OnSnapshotRequested="@TriggerSnapshotAsync" />
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Launch VM modal -->
+    @if (_showLaunchModal)
+    {
+        <div class="uc-modal-backdrop" @onclick="CloseLaunchModal">
+            <div class="uc-modal" @onclick:stopPropagation="true">
+                <div class="uc-modal-title">
+                    <i class="bi bi-play-circle me-2" style="color: var(--uc-green);"></i>
+                    Launch Virtual Machine
                 </div>
 
-                <div class="mb-3" style="max-height: 200px; overflow-y: auto;">
-                    @foreach (var vm in runningVms)
-                    {
-                        <div class="d-flex align-items-center gap-2 py-1 px-2 mb-1 rounded-1"
-                             style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-                            <input type="checkbox" class="form-check-input mt-0" checked="@_selectedVmIds.Contains(vm.VmId)"
-                                   @onchange="@(e => ToggleVmSelection(vm.VmId, (bool)(e.Value ?? false)))" />
-                            <div>
-                                <div style="font-size: 0.8rem; color: #e2e8f0;">@vm.Name</div>
-                                <div style="font-size: 0.7rem; color: #64748b;">@vm.Image &nbsp;·&nbsp; @vm.UptimeString</div>
+                <div class="mb-3">
+                    <div class="uc-label">Container Image</div>
+                    <select class="uc-select" @bind="_selectedImage">
+                        @foreach (var img in AvailableImages)
+                        {
+                            <option value="@img.Value">@img.Label</option>
+                        }
+                    </select>
+                </div>
+
+                @{
+                    var availCores = AvailableCpuCores;
+                    var availRam = AvailableRamGB;
+                }
+
+                <div class="mb-2" style="font-size: 0.72rem; color: #64748b; letter-spacing: 0.5px;">
+                    AVAILABLE BUDGET &nbsp;—&nbsp;
+                    <span style="color: @(availCores > 0 ? "#00e676" : "var(--uc-red)");">@availCores core@(availCores == 1 ? "" : "s")</span>
+                    &nbsp;/&nbsp;
+                    <span style="color: @(availRam > 0 ? "#00e676" : "var(--uc-red)");">@availRam GB RAM</span>
+                </div>
+
+                @if (availCores == 0 || availRam == 0)
+                {
+                    <div class="alert py-2 mb-3"
+                         style="font-size: 0.78rem; background: rgba(244,67,54,0.1); border: 1px solid rgba(244,67,54,0.3); color: #ef9a9a;">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        No resources available. Raise your CPU or RAM limit, or stop a running VM first.
+                    </div>
+                }
+
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <div class="uc-label">CPU Cores</div>
+                        <select class="uc-select" @bind="_selectedCpuCores" disabled="@(availCores == 0)">
+                            @for (int c = 1; c <= availCores; c++)
+                            {
+                                var val = c;
+                                <option value="@val">@val core@(val == 1 ? "" : "s")</option>
+                            }
+                            @if (availCores == 0)
+                            {
+                                <option value="0">— none available —</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <div class="uc-label">RAM</div>
+                        <select class="uc-select" @bind="_selectedRamGB" disabled="@(availRam == 0)">
+                            @for (int r = 1; r <= availRam; r++)
+                            {
+                                var val = r;
+                                <option value="@val">@val GB</option>
+                            }
+                            @if (availRam == 0)
+                            {
+                                <option value="0">— none available —</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                @if (_launchError != null)
+                {
+                    <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                        <i class="bi bi-exclamation-circle me-1"></i>@_launchError
+                    </div>
+                }
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseLaunchModal"
+                            disabled="@_isLaunching">
+                        Cancel
+                    </button>
+                    <button class="btn btn-sm btn-launch-vm rounded-1" @onclick="LaunchVmAsync"
+                            disabled="@(_isLaunching || AvailableCpuCores == 0 || AvailableRamGB == 0)">
+                        @if (_isLaunching)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Launching...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-circle me-1"></i>
+                            <span>Launch</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Emergency Stop modal -->
+    @if (_showStopModal)
+    {
+        <div class="uc-modal-backdrop" @onclick="CloseStopModal">
+            <div class="uc-modal" style="max-width: 520px;" @onclick:stopPropagation="true">
+                <div class="uc-modal-title">
+                    <i class="bi bi-exclamation-octagon-fill me-2" style="color: var(--uc-red);"></i>
+                    Emergency Stop
+                </div>
+
+                @{
+                    var runningVms = Vms.Where(v => v.Status == "Running").ToList();
+                }
+
+                @if (!runningVms.Any())
+                {
+                    <p class="text-muted" style="font-size: 0.82rem;">No running VMs to stop.</p>
+                }
+                else
+                {
+                    <p class="text-muted mb-2" style="font-size: 0.78rem;">Select which VMs to stop:</p>
+
+                    <div class="mb-2 d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
+                                @onclick="SelectAllVms">
+                            All
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary rounded-1" style="font-size: 0.7rem;"
+                                @onclick="DeselectAllVms">
+                            None
+                        </button>
+                    </div>
+
+                    <div class="mb-3" style="max-height: 200px; overflow-y: auto;">
+                        @foreach (var vm in runningVms)
+                        {
+                            <div class="d-flex align-items-center gap-2 py-1 px-2 mb-1 rounded-1"
+                                 style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                                <input type="checkbox" class="form-check-input mt-0" checked="@_selectedVmIds.Contains(vm.VmId)"
+                                       @onchange="@(e => ToggleVmSelection(vm.VmId, (bool)(e.Value ?? false)))" />
+                                <div>
+                                    <div style="font-size: 0.8rem; color: #e2e8f0;">@vm.Name</div>
+                                    <div style="font-size: 0.7rem; color: #64748b;">@vm.Image &nbsp;·&nbsp; @vm.UptimeString</div>
+                                </div>
                             </div>
+                        }
+                    </div>
+                }
+
+                @if (_stopError != null)
+                {
+                    <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                        <i class="bi bi-exclamation-circle me-1"></i>@_stopError
+                    </div>
+                }
+
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseStopModal"
+                            disabled="@_isStopping">
+                        Cancel
+                    </button>
+                    <button class="btn btn-sm btn-emergency rounded-1" @onclick="StopSelectedVmsAsync"
+                            disabled="@(_isStopping || !_selectedVmIds.Any())">
+                        @if (_isStopping)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Stopping...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-stop-circle me-1"></i>
+                            <span>Stop Selected (@_selectedVmIds.Count)</span>
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Migrate VM confirmation modal -->
+    @if (_showMigrateModal && _migrateVm != null)
+    {
+        <div class="uc-modal-backdrop" @onclick="CloseMigrateModal">
+            <div class="uc-modal" @onclick:stopPropagation="true">
+                <div class="uc-modal-title">
+                    <i class="bi bi-arrow-left-right me-2" style="color: var(--uc-blue);"></i>
+                    Migrate Virtual Machine
+                </div>
+
+                <p style="font-size: 0.82rem; color: var(--uc-text-secondary); margin-bottom: 0.75rem;">
+                    This will migrate the VM to another available provider. The VM's data will be backed up,
+                    transferred, and restored on the target machine.
+                </p>
+
+                <div class="mb-3 p-2 rounded-1"
+                     style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
+                    <div style="font-size: 0.8rem; color: #e2e8f0; font-weight: 600;">@_migrateVm.Name</div>
+                    <div style="font-size: 0.7rem; color: #64748b;">
+                        @_migrateVm.CpuCores core@(_migrateVm.CpuCores == 1 ? "" : "s") &nbsp;·&nbsp;
+                        @_migrateVm.RamGB GB RAM &nbsp;·&nbsp;
+                        @_migrateVm.Image
+                    </div>
+                    @if (!string.IsNullOrEmpty(_migrateVm.Client))
+                    {
+                        <div style="font-size: 0.7rem; color: #64748b;">
+                            Client: @_migrateVm.Client
                         </div>
                     }
                 </div>
-            }
 
-            @if (_stopError != null)
-            {
-                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
-                    <i class="bi bi-exclamation-circle me-1"></i>@_stopError
+                <div class="alert py-2 mb-3"
+                     style="font-size: 0.75rem; background: rgba(255, 171, 0, 0.08); border: 1px solid rgba(255, 171, 0, 0.25); color: #ffab00;">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    A target provider will be automatically selected based on availability and reliability.
+                    The VM will be unavailable during migration.
                 </div>
-            }
 
-            <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseStopModal"
-                        disabled="@_isStopping">
-                    Cancel
-                </button>
-                <button class="btn btn-sm btn-emergency rounded-1" @onclick="StopSelectedVmsAsync"
-                        disabled="@(_isStopping || !_selectedVmIds.Any())">
-                    @if (_isStopping)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                        <span>Stopping...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-stop-circle me-1"></i>
-                        <span>Stop Selected (@_selectedVmIds.Count)</span>
-                    }
-                </button>
-            </div>
-        </div>
-    </div>
-}
-
-<!-- Migrate VM confirmation modal -->
-@if (_showMigrateModal && _migrateVm != null)
-{
-    <div class="uc-modal-backdrop" @onclick="CloseMigrateModal">
-        <div class="uc-modal" @onclick:stopPropagation="true">
-            <div class="uc-modal-title">
-                <i class="bi bi-arrow-left-right me-2" style="color: var(--uc-blue);"></i>
-                Migrate Virtual Machine
-            </div>
-
-            <p style="font-size: 0.82rem; color: var(--uc-text-secondary); margin-bottom: 0.75rem;">
-                This will migrate the VM to another available provider. The VM's data will be backed up,
-                transferred, and restored on the target machine.
-            </p>
-
-            <div class="mb-3 p-2 rounded-1"
-                 style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);">
-                <div style="font-size: 0.8rem; color: #e2e8f0; font-weight: 600;">@_migrateVm.Name</div>
-                <div style="font-size: 0.7rem; color: #64748b;">
-                    @_migrateVm.CpuCores core@(_migrateVm.CpuCores == 1 ? "" : "s") &nbsp;·&nbsp;
-                    @_migrateVm.RamGB GB RAM &nbsp;·&nbsp;
-                    @_migrateVm.Image
-                </div>
-                @if (!string.IsNullOrEmpty(_migrateVm.Client))
+                @if (_migrateError != null)
                 {
-                    <div style="font-size: 0.7rem; color: #64748b;">
-                        Client: @_migrateVm.Client
+                    <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
+                        <i class="bi bi-exclamation-circle me-1"></i>@_migrateError
                     </div>
                 }
-            </div>
 
-            <div class="alert py-2 mb-3"
-                 style="font-size: 0.75rem; background: rgba(255, 171, 0, 0.08); border: 1px solid rgba(255, 171, 0, 0.25); color: #ffab00;">
-                <i class="bi bi-exclamation-triangle me-1"></i>
-                A target provider will be automatically selected based on availability and reliability.
-                The VM will be unavailable during migration.
-            </div>
-
-            @if (_migrateError != null)
-            {
-                <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
-                    <i class="bi bi-exclamation-circle me-1"></i>@_migrateError
+                <div class="d-flex justify-content-end gap-2 mt-3">
+                    <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseMigrateModal"
+                            disabled="@_isMigrating">
+                        Cancel
+                    </button>
+                    <button class="btn btn-sm btn-confirm-migrate rounded-1" @onclick="MigrateVmAsync" disabled="@_isMigrating">
+                        @if (_isMigrating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                            <span>Migrating...</span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-arrow-left-right me-1"></i>
+                            <span>Confirm Migration</span>
+                        }
+                    </button>
                 </div>
-            }
-
-            <div class="d-flex justify-content-end gap-2 mt-3">
-                <button class="btn btn-sm btn-outline-secondary rounded-1" @onclick="CloseMigrateModal"
-                        disabled="@_isMigrating">
-                    Cancel
-                </button>
-                <button class="btn btn-sm btn-confirm-migrate rounded-1" @onclick="MigrateVmAsync"
-                        disabled="@_isMigrating">
-                    @if (_isMigrating)
-                    {
-                        <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
-                        <span>Migrating...</span>
-                    }
-                    else
-                    {
-                        <i class="bi bi-arrow-left-right me-1"></i>
-                        <span>Confirm Migration</span>
-                    }
-                </button>
             </div>
         </div>
-    </div>
-}
+    }
 
 @code {
     // ── Available images ──────────────────────────────────────────────────────
@@ -545,6 +544,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private FirestoreChangeListener? _vmListener;
     private FirestoreChangeListener? _providerListener;
     private FirestoreChangeListener? _requestListener;
+    private string _currencyCode = "USD";
     private FirestoreChangeListener? _migrationListener;
     private readonly HashSet<string> _processedMigrationIds = new();
     private readonly HashSet<string> _processedRequestIds = new();
@@ -1036,15 +1036,15 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 new Dictionary<string, object>
                 {
                     ["migration_request_id"] = requestId,
-                    ["vm_id"]                = _migrateVm.VmId,
-                    ["consumer_uid"]         = _migrateVm.Client ?? "",
-                    ["source_provider_uid"]  = providerUid,
-                    ["target_provider_uid"]  = targetProvider.FirebaseUid,
-                    ["status"]               = "pending",
-                    ["requested_at"]         = DateTime.UtcNow,
-                    ["completed_at"]         = (object?)null,
-                    ["new_vm_id"]            = "",
-                    ["error"]                = (object?)null,
+                    ["vm_id"] = _migrateVm.VmId,
+                    ["consumer_uid"] = _migrateVm.Client ?? "",
+                    ["source_provider_uid"] = providerUid,
+                    ["target_provider_uid"] = targetProvider.FirebaseUid,
+                    ["status"] = "pending",
+                    ["requested_at"] = DateTime.UtcNow,
+                    ["completed_at"] = (object?)null,
+                    ["new_vm_id"] = "",
+                    ["error"] = (object?)null,
                 });
 
             // Mark the VM so the UI shows "Requested" immediately
