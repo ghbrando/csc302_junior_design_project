@@ -78,7 +78,8 @@
                         OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
                         OnStop="@(() => HandleStopVm(vm.VmId))"
                         OnBackup="@(() => HandleBackupVm(vm.VmId))"
-                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))" />
+                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))"
+                        ServiceUrl="@vm.ServiceUrl" />
             }
         </div>
     }
@@ -112,7 +113,8 @@
     record RunningVm(string VmId, string Name, string Os, string Specs,
                      string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
                      string? VolumeSyncStatus, string LastBackup,
-                     string? MigrationStatus, string ProviderId, bool ProviderUnhealthy);
+                     string? MigrationStatus, string ProviderId, bool ProviderUnhealthy,
+                     string? ServiceUrl);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -310,7 +312,8 @@
             LastBackup: FormatLastBackup(vm.LastVolumeSyncAt),
             MigrationStatus: vm.MigrationStatus,
             ProviderId: vm.ProviderId,
-            ProviderUnhealthy: providerUnhealthy
+            ProviderUnhealthy: providerUnhealthy,
+            ServiceUrl: vm.ServiceUrl
         );
     }
 

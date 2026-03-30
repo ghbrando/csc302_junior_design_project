@@ -134,4 +134,17 @@ public class VirtualMachine
 
     [FirestoreProperty("original_vm_id")]
     public string? OriginalVmId { get; set; }
+
+    // Service exposure via Caddy + FRP TCP tunnel
+    // The container-internal port the consumer's web server listens on (default 8080)
+    [FirestoreProperty("service_port")]
+    public int? ServicePort { get; set; }
+
+    // The relay VM port FRP tunnels to the container's ServicePort
+    [FirestoreProperty("service_relay_port")]
+    public int? ServiceRelayPort { get; set; }
+
+    // Public HTTPS URL served by Caddy: https://<vmid>.services.unicore.io
+    [FirestoreProperty("service_url")]
+    public string? ServiceUrl { get; set; }
 }
