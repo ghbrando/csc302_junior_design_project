@@ -66,7 +66,7 @@ public class DockerService : IDockerService, IDisposable
     public async Task<(string ContainerId, string VolumeName)> StartContainerAsync(
         string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
         string? existingVolumeName = null, string? consumerUid = null,
-        int? volumeGb = null, CancellationToken ct = default)
+        int? volumeGb = null, int? serviceRelayPort = null, CancellationToken ct = default)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
@@ -111,6 +111,32 @@ public class DockerService : IDockerService, IDisposable
             $"echo 'localPort = 22' >> {frpCfg} && " +
             $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
             $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
+
+        // Append a second [[proxies]] block for the HTTP service tunnel when a service relay port is provided
+        if (serviceRelayPort.HasValue)
+        {
+            frpSetup =
+                $"(curl -sL -o {frpTar} {frpUrl} && " +
+                $"tar -xzf {frpTar} -C /tmp && " +
+                $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
+                $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
+                $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+                $"echo '' >> {frpCfg} && " +
+                $"echo '[[proxies]]' >> {frpCfg} && " +
+                $"echo 'name = \"{name}\"' >> {frpCfg} && " +
+                $"echo 'type = \"tcp\"' >> {frpCfg} && " +
+                $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
+                $"echo 'localPort = 22' >> {frpCfg} && " +
+                $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
+                $"echo '' >> {frpCfg} && " +
+                $"echo '[[proxies]]' >> {frpCfg} && " +
+                $"echo 'name = \"{name}-svc\"' >> {frpCfg} && " +
+                $"echo 'type = \"tcp\"' >> {frpCfg} && " +
+                $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
+                $"echo 'localPort = 8080' >> {frpCfg} && " +
+                $"echo 'remotePort = {serviceRelayPort.Value}' >> {frpCfg} && " +
+                $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
+        }
 
         // GCP key setup: decode base64 to get valid JSON, write to /tmp/gcp-key.json with restricted permissions
         var gcpKeySetup = $"echo '{gcpKeyBase64}' | base64 -d > /tmp/gcp-key.json && chmod 600 /tmp/gcp-key.json && ";
