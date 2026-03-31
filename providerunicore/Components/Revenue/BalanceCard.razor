@@ -1,12 +1,14 @@
 @namespace unicoreprovider.Components
 
-<div class="card h-100 p-3" style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+<div class="card h-100 p-3"
+     style="background-color: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
     <div class="d-flex align-items-center gap-3">
         <div class="balance-icon-box" style="background-color: @IconBgColor;">
             <i class="@IconClass" style="color: var(--uc-text-white); font-size: 1.1rem;"></i>
         </div>
         <div>
-            <span class="text-uppercase fw-bold d-block" style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
+            <span class="text-uppercase fw-bold d-block"
+                  style="font-size: 0.65rem; letter-spacing: 1.2px; color: var(--uc-text-muted);">
                 @Title
             </span>
             <h3 class="fw-bold mb-0 mt-1" style="color: @ValueColor; font-family: var(--uc-font-mono);">
@@ -34,4 +36,20 @@
     [Parameter] public string IconClass { get; set; } = "bi bi-currency-dollar";
     [Parameter] public string IconBgColor { get; set; } = "#1a5c3a";
     [Parameter] public string ValueColor { get; set; } = "#00e676";
+
+    String _currencyCode = "USD";
+    private string FormatCurrency(double amount)
+    {
+        var symbol = _currencyCode switch
+        {
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "CAD" => "C$",
+            "AUD" => "A$",
+            _ => "$"
+        };
+
+        return $"{symbol}{amount:F2}";
+    }
 }

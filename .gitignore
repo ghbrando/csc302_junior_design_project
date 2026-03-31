@@ -43,3 +43,5 @@ appsettings
 
 CLAUDE.md
 agent_docs/
+
+.sfdx/

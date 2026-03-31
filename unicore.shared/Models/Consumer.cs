@@ -43,4 +43,7 @@ public class Consumer
 
     [FirestoreProperty("currency")]
     public string Currency { get; set; } = "USD";
+
+    [FirestoreProperty("terms_accepted")]
+    public bool TermsAccepted { get; set; } = false;
 }
