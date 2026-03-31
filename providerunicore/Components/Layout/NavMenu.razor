@@ -1,5 +1,6 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using providerunicore.Components.Dashboard
+@using Google.Cloud.Firestore
 @inject IAuthStateService AuthState
 @inject IProviderService ProviderService
 @inject NavigationManager Nav
@@ -23,7 +24,7 @@
         </li>
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="revenue" Match="NavLinkMatch.Prefix">
-                <i class="bi bi-currency-dollar"></i>
+                <span class="currency-symbol">@CurrencySymbol</span>
                 <span>REVENUE</span>
             </NavLink>
         </li>
@@ -60,6 +61,8 @@
 @code {
     private string UserName => AuthState.Name ?? "Provider";
     private string UserEmail => AuthState.Email ?? "";
+    private string CurrencySymbol { get; set; } = "$";
+    private FirestoreChangeListener? _providerListener;
 
     protected override void OnInitialized()
     {
@@ -68,7 +71,11 @@
 
     private void OnAuthStateChanged()
     {
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            await StartProviderCurrencyListenerAsync();
+            StateHasChanged();
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -82,6 +89,35 @@
                 StateHasChanged();
             }
         }
+
+        if (firstRender)
+            await StartProviderCurrencyListenerAsync();
+    }
+
+    private async Task StartProviderCurrencyListenerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid)) return;
+
+        if (_providerListener != null)
+        {
+            await _providerListener.StopAsync();
+            _providerListener = null;
+        }
+
+        _providerListener = ProviderService.ListenByFirebaseUid(AuthState.FirebaseUid, provider =>
+        {
+            var currencyCode = provider?.Currency ?? "USD";
+            CurrencySymbol = currencyCode switch
+            {
+                "EUR" => "€",
+                "GBP" => "£",
+                "JPY" => "¥",
+                "CAD" => "C$",
+                "AUD" => "A$",
+                _ => "$"
+            };
+            _ = InvokeAsync(StateHasChanged);
+        });
     }
 
     private async Task HandleLogout()
@@ -104,6 +140,7 @@
     public void Dispose()
     {
         AuthState.OnChange -= OnAuthStateChanged;
+        _ = _providerListener?.StopAsync();
     }
 }
 
@@ -149,7 +186,7 @@
     .sidebar-link {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 9px;
         padding: 0.7rem 1rem;
         border-radius: var(--uc-radius);
         color: var(--uc-text-muted) !important;
@@ -162,6 +199,16 @@
 
     .sidebar-link i {
         font-size: 1.05rem;
+    }
+
+    .currency-symbol {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        min-width: 1.2rem;
+        text-align: center;
+        color: inherit;
+        transform: translateY(-2px);
     }
 
     .sidebar-link:hover {

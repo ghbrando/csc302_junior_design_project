@@ -182,7 +182,7 @@
                           Color="#3b82f6" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
-                <InfoCard Title="Hourly Rate" Value="@totalHourlyRate.ToString("C")" Unit="/hr"
+                <InfoCard Title="Hourly Rate" Value="@FormatCurrency(totalHourlyRate)" Unit="/hr"
                           IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
@@ -640,6 +640,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         {
             CurrentProvider = provider;
             CurrentNodeStatus = provider?.NodeStatus ?? "Offline";
+            _currencyCode = provider?.Currency ?? "USD";
 
             if (_limitsLoaded)
             {
@@ -686,6 +687,21 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         {
             Console.WriteLine($"[ERROR] Failed to start migration listener: {ex.Message}");
         }
+    }
+
+    private string FormatCurrency(double amount)
+    {
+        var symbol = _currencyCode switch
+        {
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "CAD" => "C$",
+            "AUD" => "A$",
+            _ => "$"
+        };
+
+        return $"{symbol}{amount:F2}";
     }
 
     private void OnAuthStateChanged()

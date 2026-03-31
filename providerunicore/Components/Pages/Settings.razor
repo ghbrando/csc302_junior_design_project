@@ -567,8 +567,8 @@ new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
             timeZone = updated.TimeZone;
             currency = updated.Currency;
 
-            AuthState.SetAuthState(AuthState.FirebaseUid, fullName, email);
-            await JS.InvokeVoidAsync("authStorage.save", updated.FirebaseUid, fullName, email);
+            AuthState.SetAuthState(AuthState.FirebaseUid, email, fullName);
+            await JS.InvokeVoidAsync("authStorage.save", updated.FirebaseUid, email, fullName);
             ShowStatus("Profile updated successfully!", false);
         }
         catch (Exception ex)
