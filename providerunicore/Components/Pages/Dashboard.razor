@@ -740,8 +740,15 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
             .First(p => !usedPorts.Contains(p));
 
+            var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
+            var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
+            var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
+            var serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
+                .First(p => !usedSvcPorts.Contains(p));
+
             var (containerId, volumeName) = await DockerService.StartContainerAsync(
-                vmId, name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB);
+                vmId, name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB,
+                serviceRelayPort: serviceRelayPort);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -759,6 +766,9 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 SshPort = sshPort,
                 CpuCores = _selectedCpuCores,
                 RamGB = _selectedRamGB,
+                ServiceRelayPort = serviceRelayPort,
+                ServicePort = 8080,
+                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
             };
 
             await VmService.CreateVmAsync(vm);
@@ -818,6 +828,12 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
             .First(p => !usedPorts.Contains(p));
 
+            var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
+            var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
+            var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
+            var serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
+                .First(p => !usedSvcPorts.Contains(p));
+
             var vmId = Guid.NewGuid().ToString();
             var vmName = string.IsNullOrWhiteSpace(request.VmName) ? $"vm-{vmId[..8]}" : request.VmName;
             var startedAt = DateTime.UtcNow;
@@ -825,7 +841,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             Console.WriteLine($"[DEBUG] Starting Docker container {vmName} for request {request.RequestId}");
             var (containerId, volumeName) = await DockerService.StartContainerAsync(
                 vmId, vmName, request.Image, relayPort, request.CpuCores, request.RamGb,
-                consumerUid: request.ConsumerUid, volumeGb: request.VolumeGb);
+                consumerUid: request.ConsumerUid, volumeGb: request.VolumeGb,
+                serviceRelayPort: serviceRelayPort);
 
             var sshPort = await DockerService.GetContainerSshPortAsync(containerId);
 
@@ -846,6 +863,9 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 RamGB = request.RamGb,
                 VolumeRequestedGb = request.VolumeGb,
                 VolumeSyncStatus = "Idle",
+                ServiceRelayPort = serviceRelayPort,
+                ServicePort = 8080,
+                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
             };
 
             await VmService.CreateVmAsync(vm);

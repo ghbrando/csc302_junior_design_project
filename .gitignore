@@ -8,6 +8,7 @@
 
 ## User-specific / Sensitive files
 .vs/
+caddy-dns-sa.json
 .vscode/
 appsettings.Development.json
 *.user
@@ -41,3 +42,4 @@ seed/
 appsettings
 
 CLAUDE.md
+agent_docs/
