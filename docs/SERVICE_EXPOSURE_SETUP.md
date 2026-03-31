@@ -1,22 +1,22 @@
 # Service Exposure Setup Guide (Caddy + FRP + Cloud DNS)
 
-**Feature:** Public HTTPS subdomains for consumer VMs (`https://<vmid>.services.unicore.io`)
+**Feature:** Public HTTPS subdomains for consumer VMs (`https://<vmid>.services.cbu-unicore.com`)
 **Relay VM IP:** `136.116.172.0`
-**DNS Zone:** `services.unicore.io` (must exist in Cloud DNS)
+**DNS Zone:** `services.cbu-unicore.com` (must exist in Cloud DNS)
 
 ---
 
 ## Architecture Recap
 
 ```
-Browser → https://<vmid>.services.unicore.io:443
+Browser → https://<vmid>.services.cbu-unicore.com:443
   → Caddy (relay VM) → localhost:<serviceRelayPort>  (port 8000–8200)
     → FRP TCP tunnel → Provider → Docker container:8080
 ```
 
 - FRP already handles the tunnel (same pattern as SSH on 2222–2300)
 - Caddy terminates HTTPS and reverse-proxies to `localhost:<serviceRelayPort>`
-- One wildcard cert `*.services.unicore.io` covers all VM subdomains via DNS-01 challenge
+- One wildcard cert `*.services.cbu-unicore.com` covers all VM subdomains via DNS-01 challenge
 - A cron job regenerates the Caddyfile every minute from Firestore state
 
 ---
@@ -29,7 +29,7 @@ Browser → https://<vmid>.services.unicore.io:443
 - `gcloud` CLI authenticated with the `unicore-junior-design` project
 - `xcaddy` installed on the relay VM (see Step 1)
 - FRP server (`frps`) already running and managing SSH tunnels on the relay VM (ports 2222–2300)
-- Cloud DNS zone for `services.unicore.io` already exists (create it if not; see Step 3 note)
+- Cloud DNS zone for `services.cbu-unicore.com` already exists (create it if not; see Step 3 note)
 
 ---
 
@@ -70,7 +70,7 @@ export PROJECT_ID=unicore-junior-design
 
 # Create the service account
 gcloud iam service-accounts create caddy-dns-sa \
-    --description="Caddy ACME DNS-01 challenge SA for services.unicore.io" \
+    --description="Caddy ACME DNS-01 challenge SA for services.cbu-unicore.com" \
     --display-name="Caddy DNS SA" \
     --project=$PROJECT_ID
 
@@ -107,14 +107,14 @@ Run from your **local machine**:
 
 ```bash
 export PROJECT_ID=unicore-junior-design
-export DNS_ZONE=services-unicore-io   # your Cloud DNS zone name for services.unicore.io
+export DNS_ZONE=services-cbu-unicore-com   # your Cloud DNS zone name for services.cbu-unicore.com
 export RELAY_IP=136.116.172.0
 
-# Wildcard record: *.services.unicore.io → relay VM
+# Wildcard record: *.services.cbu-unicore.com → relay VM
 gcloud dns record-sets transaction start --zone=$DNS_ZONE --project=$PROJECT_ID
 
 gcloud dns record-sets transaction add $RELAY_IP \
-    --name="*.services.unicore.io." \
+    --name="*.services.cbu-unicore.com." \
     --ttl=300 \
     --type=A \
     --zone=$DNS_ZONE \
@@ -126,14 +126,14 @@ gcloud dns record-sets transaction execute --zone=$DNS_ZONE --project=$PROJECT_I
 gcloud dns record-sets list --zone=$DNS_ZONE --project=$PROJECT_ID
 ```
 
-> **Note:** If the `services.unicore.io` Cloud DNS zone doesn't exist yet, create it first:
+> **Note:** If the `services.cbu-unicore.com` Cloud DNS zone doesn't exist yet, create it first:
 > ```bash
-> gcloud dns managed-zones create services-unicore-io \
+> gcloud dns managed-zones create services-cbu-unicore-com \
 >     --description="UniCore service exposure subdomain zone" \
->     --dns-name="services.unicore.io." \
+>     --dns-name="services.cbu-unicore.com." \
 >     --project=$PROJECT_ID
 > ```
-> Then update your domain registrar / parent DNS zone to delegate `services.unicore.io` NS records to Cloud DNS.
+> Then update your domain registrar / parent DNS zone to delegate `services.cbu-unicore.com` NS records to Cloud DNS.
 
 ---
 
@@ -191,7 +191,7 @@ from google.cloud import firestore
 
 PROJECT_ID = "unicore-junior-design"
 CADDYFILE_PATH = "/etc/caddy/Caddyfile"
-DOMAIN_SUFFIX = "services.unicore.io"
+DOMAIN_SUFFIX = "services.cbu-unicore.com"
 GCP_PROJECT = PROJECT_ID
 
 def main():
@@ -353,7 +353,7 @@ The regen script only generates a Caddy block for VMs that have `service_relay_p
 |-------------|----------------|---------|
 | `ServicePort` | `service_port` | Port inside the Docker container the web server listens on (typically 8080) |
 | `ServiceRelayPort` | `service_relay_port` | Port on the relay VM that FRP tunnels to `ServicePort` — must be in range 8000–8200 |
-| `ServiceUrl` | `service_url` | Computed public URL: `https://<vm_id>.services.unicore.io` |
+| `ServiceUrl` | `service_url` | Computed public URL: `https://<vm_id>.services.cbu-unicore.com` |
 
 **Port allocation strategy** (to implement in `VmService` during VM creation):
 
@@ -385,7 +385,7 @@ After setup, run through this checklist:
 
 ```bash
 # 1. Confirm wildcard DNS resolves to the relay VM
-dig +short "*.services.unicore.io"
+dig +short "*.services.cbu-unicore.com"
 # Expected: 136.116.172.0
 
 # 2. Confirm Caddy is running
@@ -405,7 +405,7 @@ journalctl -u caddy -n 50 --no-pager
 tail -f /var/log/caddy/regen.log
 
 # 7. Manually test a running VM's service URL
-# curl https://<vmid>.services.unicore.io
+# curl https://<vmid>.services.cbu-unicore.com
 ```
 
 ---
@@ -415,7 +415,7 @@ tail -f /var/log/caddy/regen.log
 | Symptom | Likely Cause | Fix |
 |---------|-------------|-----|
 | Cert issuance fails (`SERVFAIL` / `DNS problem`) | Service account lacks `dns.admin` on the correct project | Re-run Step 2; verify `--project` flag matches the Cloud DNS zone's project |
-| `*.services.unicore.io` doesn't resolve | Wildcard record not created, or DNS delegation missing | Re-run Step 3; check NS records on parent zone |
+| `*.services.cbu-unicore.com` doesn't resolve | Wildcard record not created, or DNS delegation missing | Re-run Step 3; check NS records on parent zone |
 | 502 Bad Gateway | FRP tunnel not connected yet (VM still booting) | Wait ~30s for container to download frpc and register |
 | Caddyfile not updating | Cron not running, or Python script error | Check `/var/log/caddy/regen.log`; run script manually |
 | `caddy reload` fails | Syntax error in generated Caddyfile | Run `caddy validate --config /etc/caddy/Caddyfile` |
