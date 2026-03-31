@@ -1,148 +1,69 @@
-@* TermsModal.razor *@
+@* UniCoreTermsModal.razor *@
 @* Usage: <UniCoreTermsModal IsVisible="true" OnContinue="HandleContinue" OnClose="HandleClose" /> *@
 
-@if (IsVisible)
+@if(IsVisible)
 {
-    <div class="uc-overlay" role="dialog" aria-modal="true" aria-labelledby="uc-title">
+    <div class="uc-screen">
         <div class="uc-modal">
 
             @* ── Header ───────────────────────────────────────── *@
             <div class="uc-header">
-                <div class="uc-header-icon">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6l-8-4z"
-                              stroke="#00e5a0" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9 12l2 2 4-4" stroke="#00e5a0" stroke-width="1.6"
-                              stroke-linecap="round" stroke-linejoin="round"/>
+                <div class="uc-header-inner">
+                    <div class="uc-header-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                             class="uc-icon-shield">
+                            <path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6l7-3z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 class="uc-title">Welcome to UniCore</h2>
+                        <p class="uc-subtitle">Provider Account · Decentralized Cloud Infrastructure</p>
+                    </div>
+                </div>
+                <button class="uc-close-btn" @onclick="HandleClose" aria-label="Close modal">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="uc-icon-sm">
+                        <path d="M6 6l12 12M18 6L6 18" />
                     </svg>
-                </div>
-                <div class="uc-header-text">
-                    <h1 id="uc-title">Welcome to UniCore</h1>
-                    <span class="uc-subtitle">Provider Account &nbsp;·&nbsp; Decentralized Cloud Infrastructure</span>
-                </div>
-                <button class="uc-close-btn" @onclick="HandleClose" aria-label="Close">✕</button>
+                </button>
             </div>
 
             @* ── Scrollable Body ──────────────────────────────── *@
             <div class="uc-body">
 
-                @* Security & Trust *@
-                <section>
-                    <div class="uc-section-label">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2L4 6v6c0 5.25 3.4 10.15 8 11.35C16.6 22.15 20 17.25 20 12V6l-8-4z"
-                                  stroke="#5a7a92" stroke-width="1.8" stroke-linejoin="round"/>
-                        </svg>
-                        Security &amp; Trust
-                    </div>
-                    <div class="uc-feature-cards">
-
-                        <div class="uc-card uc-card--green">
-                            <div class="uc-card-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="#00e5a0" stroke-width="1.7"/>
-                                    <path d="M7 11V7a5 5 0 0110 0v4" stroke="#00e5a0" stroke-width="1.7" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <div class="uc-card-content">
-                                <h3>Automated Docker Sandboxing</h3>
-                                <p>All VMs run in isolated Docker containers with restricted permissions. Your personal files and system resources are protected at all times.</p>
-                            </div>
-                        </div>
-
-                        <div class="uc-card uc-card--blue">
-                            <div class="uc-card-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <circle cx="12" cy="12" r="9" stroke="#3fa8e0" stroke-width="1.7"/>
-                                    <path d="M12 8v4l3 3" stroke="#3fa8e0" stroke-width="1.7" stroke-linecap="round"/>
-                                </svg>
-                            </div>
-                            <div class="uc-card-content">
-                                <h3>Compute Control Authorization</h3>
-                                <p>You maintain full control over your hardware. Set resource limits, schedule quiet hours, and use the emergency kill switch to stop all activity instantly.</p>
-                            </div>
-                        </div>
-
-                        <div class="uc-card uc-card--purple">
-                            <div class="uc-card-icon">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                                    <path d="M9 12l2 2 4-4" stroke="#8b6fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <circle cx="12" cy="12" r="9" stroke="#8b6fff" stroke-width="1.7"/>
-                                </svg>
-                            </div>
-                            <div class="uc-card-content">
-                                <h3>VM Result Verification</h3>
-                                <p>All VM operations undergo cryptographic verification to ensure proof-of-work. You get paid only for legitimate, verified work.</p>
-                            </div>
-                        </div>
-
-                    </div>
-                </section>
-
-                @* Important Guidelines *@
-                <section>
-                    <div class="uc-section-label uc-section-label--amber">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                            <path d="M12 2L2 21h20L12 2z" stroke="#f5a623" stroke-width="1.8" stroke-linejoin="round"/>
-                            <path d="M12 9v5M12 17h.01" stroke="#f5a623" stroke-width="1.8" stroke-linecap="round"/>
-                        </svg>
-                        Important Guidelines
-                    </div>
-                    <div class="uc-guidelines">
-                        <ul class="uc-guidelines-list">
-                            <li><span class="uc-gl-dot"></span><span><strong>Resource Limits:</strong> Set appropriate CPU and RAM limits based on your usage patterns. Leave headroom for your personal computing needs.</span></li>
-                            <li><span class="uc-gl-dot"></span><span><strong>Quiet Hours:</strong> Configure your schedule to block off times when you need full access to your machine (gaming, work, etc.).</span></li>
-                            <li><span class="uc-gl-dot"></span><span><strong>Emergency Stop:</strong> The kill switch is available on every provider screen. Use it if you need immediate full control of your hardware.</span></li>
-                            <li><span class="uc-gl-dot"></span><span><strong>Fair Usage:</strong> Ensure stable power and internet connectivity. Frequent disconnections may affect your provider reputation.</span></li>
-                        </ul>
-                    </div>
-                </section>
-
                 @* Terms of Service *@
                 <section class="uc-tos-wrapper">
                     <div class="uc-tos-header">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"
-                                  stroke="#5a7a92" stroke-width="1.7" stroke-linejoin="round"/>
-                            <path d="M14 2v6h6M8 13h8M8 17h6" stroke="#5a7a92" stroke-width="1.7" stroke-linecap="round"/>
-                        </svg>
-                        <span class="uc-tos-header-label">Terms of Service Agreement</span>
-                        <div class="uc-tos-dot"></div>
+                        <h3 class="uc-label-text">Terms of Service Agreement</h3>
                     </div>
-
-                    <div class="uc-tos-scroll">
-                        <div class="uc-tos-clause"><strong>1. Service Description:</strong> UniCore provides a decentralized compute marketplace where users can offer or consume computational resources.</div>
-                        <div class="uc-tos-clause"><strong>2. Provider Obligations:</strong> Providers must maintain reasonable uptime, provide accurate hardware specifications, and allow VMs to run within scheduled periods.</div>
-                        <div class="uc-tos-clause"><strong>3. Client Obligations:</strong> Clients must submit legitimate workloads, respect provider resource limits, and pay for consumed resources promptly.</div>
-                        <div class="uc-tos-clause"><strong>4. Security &amp; Privacy:</strong> All VMs are sandboxed. UniCore does not access your personal data. Providers are responsible for their own system security.</div>
-                        <div class="uc-tos-clause"><strong>5. Payment Terms:</strong> Payments are processed through verified methods. Clients are charged based on actual resource usage. Providers receive payouts after verification.</div>
-                        <div class="uc-tos-clause"><strong>6. Liability:</strong> UniCore is not liable for hardware damage, data loss, or service interruptions. Use at your own risk.</div>
-                    </div>
-
-                    <div class="uc-agree-row">
-                        <input type="checkbox" id="uc-agree" @bind="_hasAgreed" />
-                        <label for="uc-agree" class="uc-agree-label">
-                            I have read and agree to the Terms of Service, including the automated sandboxing and compute control authorization policies.
+                    <div class="uc-tos-body">
+                        <div class="uc-tos-scroll">
+                            <div class="uc-tos-clauses">
+                                <p><span class="uc-tos-bold">1. Service Description:</span> UniCore provides a decentralized compute marketplace where users can offer or consume computational resources.</p>
+                                <p><span class="uc-tos-bold">2. Provider Obligations:</span> Providers must maintain reasonable uptime, provide accurate hardware specifications, and allow VMs to run within scheduled periods.</p>
+                                <p><span class="uc-tos-bold">3. Client Obligations:</span> Clients must submit legitimate workloads, respect provider resource limits, and pay for consumed resources promptly.</p>
+                                <p><span class="uc-tos-bold">4. Security &amp; Privacy:</span> All VMs are sandboxed. UniCore does not access your personal data. Providers are responsible for their own system security.</p>
+                                <p><span class="uc-tos-bold">5. Payment Terms:</span> Payments are processed through verified methods. Clients are charged based on actual resource usage. Providers receive payouts after verification.</p>
+                                <p><span class="uc-tos-bold">6. Liability:</span> UniCore is not liable for hardware damage, data loss, or service interruptions. Use at your own risk.</p>
+                            </div>
+                        </div>
+                        <label class="uc-agree-row">
+                            <input type="checkbox" class="uc-checkbox" @bind="_hasAgreed" />
+                            <span class="uc-agree-label">
+                                I have read and agree to the Terms of Service, including the automated sandboxing and compute control authorization policies.
+                            </span>
                         </label>
                     </div>
                 </section>
+                
 
             </div>@* /.uc-body *@
 
             @* ── Footer ───────────────────────────────────────── *@
             <div class="uc-footer">
-                @if (!_hasAgreed)
-                {
-                    <span class="uc-footer-hint">Please agree to the terms to continue</span>
-                }
-                else
-                {
-                    <span class="uc-footer-hint" style="opacity:0;"><!-- spacer --></span>
-                }
-                <button class="uc-btn-continue @(_hasAgreed ? "uc-btn-continue--active" : "uc-btn-continue--locked")"
+                <button class="uc-btn @(_hasAgreed ? "uc-btn--active" : "uc-btn--locked")"
                         disabled="@(!_hasAgreed)"
                         @onclick="HandleContinue">
-                    Continue →
+                    @(_hasAgreed ? "Continue →" : "Please Agree to the Terms to Continue")
                 </button>
             </div>
 
@@ -151,7 +72,7 @@
 }
 
 @* ═══════════════════════════════════════════════════════════
-   Code-behind
+   Code-behind — unchanged
    ═══════════════════════════════════════════════════════════ *@
 @code {
     /// <summary>Controls modal visibility.</summary>
@@ -179,303 +100,262 @@
 }
 
 @* ═══════════════════════════════════════════════════════════
-   Scoped styles  (requires <Isolated CSS> or paste into
-   app.css / unicore.css and remove the <style> wrapper)
+   Styles — move to app.css / unicore.css if preferred
    ═══════════════════════════════════════════════════════════ *@
 <style>
-    /* ── Variables ──────────────────────────────────────── */
-    .uc-overlay {
-        --bg-panel:      #0d1117;
-        --bg-card:       #111820;
-        --bg-card-alt:   #0f1922;
-        --bg-tos:        #0a0f14;
-        --border-dim:    #1e2d3d;
-        --border-glow:   #1e3a4f;
-        --accent-green:  #00e5a0;
-        --accent-blue:   #3fa8e0;
-        --accent-purple: #8b6fff;
-        --accent-amber:  #f5a623;
-        --text-primary:  #d6e4f0;
-        --text-muted:    #5a7a92;
-        --text-label:    #8aacbf;
-        --text-mono:     #a8c4d4;
-        --danger:        #ff4d6d;
-        --glow-green:    0 0 12px rgba(0,229,160,.25);
-        --glow-blue:     0 0 12px rgba(63,168,224,.22);
-        --glow-purple:   0 0 12px rgba(139,111,255,.22);
-        --radius:        6px;
-        --font-mono:     'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
-        --font-display:  'Syne', 'Segoe UI', sans-serif;
-    }
+    /* ── Reset ──────────────────────────────────────────── */
+    .uc-screen *,
+    .uc-screen *::before,
+    .uc-screen *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Overlay ────────────────────────────────────────── */
-    .uc-overlay {
-        position: fixed; inset: 0; z-index: 9999;
-        display: flex; align-items: center; justify-content: center;
-        background: rgba(4,8,12,.88);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        font-family: var(--font-mono);
+    /* ── Full-screen wrapper ────────────────────────────── */
+    .uc-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        min-height: 100dvh;
+        background: rgba(0, 0, 0, 0.68);
+        backdrop-filter: blur(2px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        overflow: hidden;
+        overscroll-behavior: contain;
+        font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+        color: #f4f4f5;
     }
 
     /* ── Modal shell ────────────────────────────────────── */
     .uc-modal {
-        width: 780px; max-width: 96vw; max-height: 92vh;
-        background: var(--bg-panel);
-        border: 1px solid var(--border-dim);
-        border-radius: 10px;
-        display: flex; flex-direction: column;
+        width: 100%;
+        max-width: 52rem;
+        height: min(56rem, calc(100dvh - 24px));
+        border-radius: 0.875rem;
+        border: 1px solid #27272a;
+        background: #050608;
+        box-shadow: 0 25px 60px rgba(0,0,0,.8);
+        display: flex;
+        flex-direction: column;
         overflow: hidden;
-        box-shadow:
-            0 0 0 1px rgba(0,229,160,.06),
-            0 32px 80px rgba(0,0,0,.7),
-            0 0 60px rgba(0,229,160,.04);
-        animation: ucModalIn .35s cubic-bezier(.16,1,.3,1) both;
-    }
-
-    @@keyframes ucModalIn {
-        from { opacity: 0; transform: scale(.94) translateY(18px); }
-        to   { opacity: 1; transform: scale(1)   translateY(0); }
     }
 
     /* ── Header ─────────────────────────────────────────── */
     .uc-header {
-        display: flex; align-items: center; gap: 14px;
-        padding: 22px 28px 20px;
-        border-bottom: 1px solid var(--border-dim);
-        background: linear-gradient(180deg, rgba(0,229,160,.04) 0%, transparent 100%);
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        padding: 22px 26px;
+        border-bottom: 1px solid #18181b;
         flex-shrink: 0;
     }
+    .uc-header-inner { display: flex; align-items: flex-start; gap: 12px; }
 
     .uc-header-icon {
-        width: 42px; height: 42px; flex-shrink: 0;
-        background: linear-gradient(135deg,#0d2a1e,#0a1f15);
-        border: 1px solid rgba(0,229,160,.3);
-        border-radius: 8px;
         display: flex; align-items: center; justify-content: center;
-        box-shadow: var(--glow-green), inset 0 1px 0 rgba(0,229,160,.15);
+        width: 42px; height: 42px; flex-shrink: 0;
+        border-radius: 10px;
+        border: 1px solid rgba(52,211,153,.2);
+        background: rgba(52,211,153,.1);
     }
-    .uc-header-icon svg { width: 22px; height: 22px; }
+    .uc-icon-shield { width: 20px; height: 20px; color: #6ee7b7; }
 
-    .uc-header-text { flex: 1; }
-    .uc-header-text h1 {
-        font-family: var(--font-display);
-        font-size: 1.35rem; font-weight: 700;
-        color: var(--text-primary);
-        letter-spacing: .01em; line-height: 1.2;
-        margin: 0;
+    .uc-title {
+        font-size: 1.55rem; font-weight: 600;
+        letter-spacing: -.025em; color: #fafafa; line-height: 1.2;
     }
     .uc-subtitle {
-        display: block;
-        font-size: .72rem; color: var(--text-muted);
-        letter-spacing: .12em; text-transform: uppercase;
-        margin-top: 3px;
+        margin-top: 3px; font-size: .6875rem;
+        letter-spacing: .2em; text-transform: uppercase; color: #71717a;
     }
+
+
 
     .uc-close-btn {
-        margin-left: auto;
-        width: 32px; height: 32px;
-        border: 1px solid var(--border-dim); border-radius: 5px;
-        background: transparent; color: var(--text-muted);
-        cursor: pointer; font-size: 1rem;
+        padding: 6px; border-radius: 7px;
+        background: transparent; border: none;
+        color: #71717a; cursor: pointer;
+        transition: background .15s, color .15s;
         display: flex; align-items: center; justify-content: center;
-        transition: all .15s;
+        flex-shrink: 0;
     }
-    .uc-close-btn:hover {
-        background: rgba(255,77,109,.1);
-        border-color: rgba(255,77,109,.4);
-        color: var(--danger);
-    }
+    .uc-close-btn:hover { background: #18181b; color: #e4e4e7; }
+    .uc-icon-sm { width: 18px; height: 18px; }
 
-    /* ── Body ───────────────────────────────────────────── */
+    /* ── Scrollable body ────────────────────────────────── */
     .uc-body {
-        overflow-y: auto; flex: 1;
-        padding: 28px;
-        display: flex; flex-direction: column; gap: 28px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        padding: 18px 24px 22px;
+        display: flex; flex-direction: column; gap: 20px;
+        -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
-        scrollbar-color: #1e3a4f #0d1117;
+        scrollbar-color: #3f3f46 #09090b;
     }
     .uc-body::-webkit-scrollbar { width: 6px; }
-    .uc-body::-webkit-scrollbar-track { background: #0d1117; }
-    .uc-body::-webkit-scrollbar-thumb { background: #1e3a4f; border-radius: 3px; }
+    .uc-body::-webkit-scrollbar-track { background: #09090b; }
+    .uc-body::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
 
     /* ── Section labels ─────────────────────────────────── */
     .uc-section-label {
-        display: flex; align-items: center; gap: 10px;
-        font-size: .7rem; font-weight: 600;
-        letter-spacing: .18em; text-transform: uppercase;
-        color: var(--text-label);
-        margin-bottom: 14px;
+        display: flex; align-items: center; gap: 12px;
+        margin-bottom: 12px;
     }
-    .uc-section-label--amber { color: var(--accent-amber); }
+    .uc-label-text {
+        font-size: .6875rem; font-weight: 600;
+        letter-spacing: .18em; text-transform: uppercase; color: #e4e4e7;
+    }
+    .uc-icon-md { width: 18px; height: 18px; }
+    .uc-icon-xs { width: 14px; height: 14px; }
 
-    /* ── Feature cards ──────────────────────────────────── */
-    .uc-feature-cards { display: flex; flex-direction: column; gap: 10px; }
+    /* ── Color tokens ───────────────────────────────────── */
+    .uc-emerald { color: #6ee7b7; }
+    .uc-blue    { color: #93c5fd; }
+    .uc-violet  { color: #c4b5fd; }
+    .uc-amber   { color: #fcd34d; }
+
+    /* ── Info cards ─────────────────────────────────────── */
+    .uc-cards { display: flex; flex-direction: column; gap: 12px; }
 
     .uc-card {
-        background: var(--bg-card);
-        border: 1px solid var(--border-dim);
-        border-radius: var(--radius);
-        padding: 16px 18px;
-        display: flex; align-items: flex-start; gap: 14px;
-        position: relative; overflow: hidden;
-        transition: border-color .2s, box-shadow .2s;
+        border-radius: 0.875rem; border: 1px solid; padding: 16px;
     }
-    .uc-card::before {
-        content: ''; position: absolute;
-        left: 0; top: 0; bottom: 0;
-        width: 2px; border-radius: 2px 0 0 2px;
-    }
-    .uc-card:hover { border-color: var(--border-glow); }
+    .uc-card--emerald { border-color: rgba(52,211,153,.2);  background: rgba(52,211,153,.05); }
+    .uc-card--blue    { border-color: rgba(96,165,250,.2);  background: rgba(96,165,250,.05); }
+    .uc-card--violet  { border-color: rgba(167,139,250,.2); background: rgba(167,139,250,.05); }
 
-    .uc-card--green::before { background: var(--accent-green); box-shadow: 0 0 8px rgba(0,229,160,.5); }
-    .uc-card--green:hover    { box-shadow: var(--glow-green); }
-    .uc-card--blue::before   { background: var(--accent-blue);  box-shadow: 0 0 8px rgba(63,168,224,.5); }
-    .uc-card--blue:hover     { box-shadow: var(--glow-blue); }
-    .uc-card--purple::before { background: var(--accent-purple); box-shadow: 0 0 8px rgba(139,111,255,.5); }
-    .uc-card--purple:hover   { box-shadow: var(--glow-purple); }
-
-    .uc-card-icon {
-        width: 32px; height: 32px; flex-shrink: 0; margin-top: 1px;
-        border-radius: 6px;
-        display: flex; align-items: center; justify-content: center;
+    .uc-card-title-row {
+        display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
     }
-    .uc-card--green .uc-card-icon  { background: rgba(0,229,160,.08); }
-    .uc-card--blue  .uc-card-icon  { background: rgba(63,168,224,.08); }
-    .uc-card--purple .uc-card-icon { background: rgba(139,111,255,.08); }
-
-    .uc-card-content h3 {
-        font-size: .82rem; font-weight: 600;
-        margin: 0 0 5px; letter-spacing: .02em;
+    .uc-card-check {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; flex-shrink: 0;
+        border-radius: 50%; border: 1px solid currentColor;
     }
-    .uc-card--green  h3 { color: var(--accent-green); }
-    .uc-card--blue   h3 { color: var(--accent-blue); }
-    .uc-card--purple h3 { color: var(--accent-purple); }
+    .uc-card-check--emerald { color: #6ee7b7; }
+    .uc-card-check--blue    { color: #93c5fd; }
+    .uc-card-check--violet  { color: #c4b5fd; }
 
-    .uc-card-content p {
-        font-size: .76rem; color: var(--text-mono);
-        line-height: 1.65; font-weight: 300; margin: 0;
-    }
+    .uc-card-title { font-size: .95rem; font-weight: 500; line-height: 1.3; }
+    .uc-card-desc  { padding-left: 28px; font-size: .875rem; line-height: 1.6; color: #a1a1aa; }
 
     /* ── Guidelines ─────────────────────────────────────── */
     .uc-guidelines {
-        background: var(--bg-card-alt);
-        border: 1px solid rgba(245,166,35,.2);
-        border-radius: var(--radius);
-        padding: 18px 20px;
-        box-shadow: 0 0 24px rgba(245,166,35,.04);
+        border-radius: 0.875rem;
+        border: 1px solid rgba(245,158,11,.2);
+        background: rgba(245,158,11,.05);
+        padding: 16px 18px;
     }
     .uc-guidelines-list {
-        list-style: none; padding: 0; margin: 0;
+        list-style: none;
         display: flex; flex-direction: column; gap: 12px;
+        font-size: .875rem; line-height: 1.6; color: #d4d4d8;
     }
-    .uc-guidelines-list li {
-        display: flex; align-items: flex-start; gap: 10px;
-        font-size: .76rem; color: var(--text-mono);
-        line-height: 1.65; font-weight: 300;
-    }
-    .uc-gl-dot {
-        width: 5px; height: 5px; flex-shrink: 0; margin-top: 7px;
-        background: var(--accent-amber); border-radius: 50%;
-        box-shadow: 0 0 6px rgba(245,166,35,.6);
-    }
-    .uc-guidelines-list strong { color: var(--text-primary); font-weight: 600; }
+    .uc-gl-bold { font-weight: 600; color: #fafafa; }
 
     /* ── Terms of Service ───────────────────────────────── */
     .uc-tos-wrapper {
-        background: var(--bg-tos);
-        border: 1px solid var(--border-dim);
-        border-radius: var(--radius);
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        border-radius: 0.875rem;
+        border: 1px solid #27272a;
+        background: rgba(9,9,11,.7);
         overflow: hidden;
     }
-
     .uc-tos-header {
-        padding: 13px 18px;
-        border-bottom: 1px solid var(--border-dim);
-        background: rgba(255,255,255,.02);
-        display: flex; align-items: center; gap: 8px;
+        border-bottom: 1px solid #27272a; padding: 12px 18px;
     }
-    .uc-tos-header-label {
-        font-size: .65rem; letter-spacing: .2em;
-        text-transform: uppercase; color: var(--text-muted); font-weight: 600;
-    }
-    .uc-tos-dot {
-        width: 5px; height: 5px; border-radius: 50%;
-        background: var(--accent-blue); margin-left: auto;
-        box-shadow: 0 0 6px rgba(63,168,224,.8);
+    .uc-tos-body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 14px 18px;
     }
 
     .uc-tos-scroll {
-        max-height: 190px; overflow-y: auto;
-        padding: 18px 18px 4px;
-        display: flex; flex-direction: column; gap: 0;
+        flex: 1;
+        min-height: 0;
+        max-height: none;
+        overflow-y: auto;
+        border-radius: 10px; border: 1px solid #27272a;
+        background: rgba(0,0,0,.5);
+        padding: 14px 12px 14px 14px;
+        -webkit-overflow-scrolling: touch;
         scrollbar-width: thin;
-        scrollbar-color: #1e3a4f #0a0f14;
+        scrollbar-color: #3f3f46 #09090b;
     }
-    .uc-tos-scroll::-webkit-scrollbar { width: 6px; }
-    .uc-tos-scroll::-webkit-scrollbar-track { background: #0a0f14; }
-    .uc-tos-scroll::-webkit-scrollbar-thumb { background: #1e3a4f; border-radius: 3px; }
 
-    .uc-tos-clause {
-        font-size: .74rem; color: var(--text-mono);
-        line-height: 1.7; font-weight: 300;
-        padding: 0 0 14px;
-        border-bottom: 1px solid rgba(255,255,255,.04);
-        margin-bottom: 14px;
+    .uc-tos-scroll::-webkit-scrollbar { width: 6px; }
+    .uc-tos-scroll::-webkit-scrollbar-track { background: #09090b; }
+    .uc-tos-scroll::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+
+    .uc-tos-clauses {
+        display: flex; flex-direction: column; gap: 14px;
+        font-size: .875rem; line-height: 1.6; color: #d4d4d8;
     }
-    .uc-tos-clause:last-child { border-bottom: none; margin-bottom: 0; }
-    .uc-tos-clause strong { color: var(--accent-blue); font-weight: 600; }
+    .uc-tos-bold { font-weight: 600; color: #fafafa; }
 
     /* ── Agree row ──────────────────────────────────────── */
     .uc-agree-row {
-        padding: 14px 18px;
-        border-top: 1px solid var(--border-dim);
-        background: rgba(255,255,255,.015);
         display: flex; align-items: flex-start; gap: 12px;
+        margin-top: 14px;
+        font-size: .8125rem; color: #d4d4d8; cursor: pointer;
     }
-    .uc-agree-row input[type="checkbox"] {
-        width: 16px; height: 16px; flex-shrink: 0; margin-top: 2px;
-        accent-color: var(--accent-green); cursor: pointer;
+    .uc-checkbox {
+        margin-top: 2px; width: 15px; height: 15px; flex-shrink: 0;
+        border-radius: 4px; border: 1px solid #52525b;
+        background: transparent; accent-color: #34d399; cursor: pointer;
     }
-    .uc-agree-label {
-        font-size: .74rem; color: var(--text-mono);
-        line-height: 1.6; cursor: pointer; user-select: none; font-weight: 300;
-    }
+    .uc-agree-label { line-height: 1.6; }
 
     /* ── Footer ─────────────────────────────────────────── */
     .uc-footer {
-        padding: 18px 28px; flex-shrink: 0;
-        border-top: 1px solid var(--border-dim);
-        background: rgba(0,0,0,.25);
-        display: flex; align-items: center;
-        justify-content: space-between; gap: 12px;
+        border-top: 1px solid #18181b;
+        padding: 18px 24px;
+        flex-shrink: 0;
     }
-    .uc-footer-hint {
-        font-size: .68rem; color: var(--text-muted);
-        letter-spacing: .1em; text-transform: uppercase;
+    .uc-btn {
+        display: block; width: 100%;
+        border-radius: 10px; border: 1px solid;
+        padding: 13px 16px;
+        font-size: .8125rem; font-weight: 500;
+        letter-spacing: .18em; text-transform: uppercase;
+        cursor: pointer; font-family: inherit;
+        transition: border-color .2s, color .2s, background .2s, box-shadow .2s;
+    }
+    .uc-btn--locked {
+        background: #09090b; border-color: #27272a;
+        color: #71717a; cursor: not-allowed;
+    }
+    .uc-btn--active {
+        background: #052e16; border-color: rgba(52,211,153,.5);
+        color: #6ee7b7; box-shadow: 0 0 20px rgba(52,211,153,.12);
+    }
+    .uc-btn--active:hover {
+        border-color: #34d399; color: #a7f3d0;
+        box-shadow: 0 0 28px rgba(52,211,153,.22);
     }
 
-    .uc-btn-continue {
-        padding: 10px 28px; border-radius: 5px;
-        font-family: var(--font-mono);
-        font-size: .74rem; font-weight: 600;
-        letter-spacing: .14em; text-transform: uppercase;
-        cursor: pointer; border: 1px solid;
-        transition: all .2s;
-    }
-    .uc-btn-continue--locked {
-        background: transparent;
-        border-color: var(--border-dim);
-        color: var(--text-muted); cursor: not-allowed;
-    }
-    .uc-btn-continue--active {
-        background: linear-gradient(135deg,#00c97e,#00e5a0);
-        border-color: var(--accent-green);
-        color: #051a10;
-        box-shadow: var(--glow-green), 0 4px 20px rgba(0,229,160,.25);
-    }
-    .uc-btn-continue--active:hover {
-        box-shadow: 0 0 20px rgba(0,229,160,.5), 0 6px 28px rgba(0,229,160,.35);
-        transform: translateY(-1px);
+    @@media (max-width: 768px) {
+        .uc-screen {
+            padding: 8px;
+        }
+
+        .uc-modal {
+            max-width: 100%;
+            height: calc(100dvh - 16px);
+        }
+
+        .uc-body {
+            padding: 16px 16px 20px;
+        }
+
+        .uc-tos-scroll {
+            max-height: none;
+        }
     }
 </style>

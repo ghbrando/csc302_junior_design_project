@@ -1,4 +1,6 @@
 @namespace unicoreconsumer.Components
+@using UniCore.Shared.Models
+@inject IConsumerVmService VmService
 
 <div class="stopped-table">
     <div class="table-header">
@@ -7,6 +9,7 @@
         <span>IP ADDRESS</span>
         <span>TOTAL COST</span>
         <span>STATUS</span>
+        <span>ACTION</span>
     </div>
     @foreach (var vm in Vms)
     {
@@ -16,6 +19,11 @@
             <span>@vm.IpAddress</span>
             <span class="cost-text">@vm.TotalCost</span>
             <span><span class="stopped-badge">STOPPED</span></span>
+            <span>
+                <button class="delete-btn" @onclick="() => HandleDeleteVm(vm.Id)" title="Delete VM">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </span>
         </div>
     }
 </div>
@@ -23,6 +31,7 @@
 @code {
     public class StoppedVm
     {
+        public string Id { get; set; } = "";
         public string Name { get; set; } = "";
         public string Os { get; set; } = "";
         public string Specs { get; set; } = "";
@@ -31,6 +40,26 @@
     }
 
     [Parameter] public List<StoppedVm> Vms { get; set; } = new();
+    [Parameter] public EventCallback<string> OnVmDeleted { get; set; }
+
+    private async Task HandleDeleteVm(string vmId)
+    {
+        if (string.IsNullOrEmpty(vmId))
+        {
+            return;
+        }
+
+        try
+        {
+            await VmService.DeleteVmAsync(vmId);
+            Vms.RemoveAll(vm => vm.Id == vmId);
+            await OnVmDeleted.InvokeAsync(vmId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting VM: {ex.Message}");
+        }
+    }
 }
 
 <style>
@@ -43,7 +72,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.8fr;
         padding: 0.7rem 1.2rem;
         font-size: 0.65rem;
         letter-spacing: 0.1em;
@@ -55,7 +84,7 @@
 
     .table-row {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.8fr;
         padding: 1rem 1.2rem;
         font-size: 0.82rem;
         color: var(--uc-text-table);
@@ -86,5 +115,31 @@
         letter-spacing: 0.08em;
         padding: 0.3rem 0.6rem;
         border-radius: 4px;
+    }
+
+    .delete-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted);
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .delete-btn:hover {
+        background-color: rgba(255, 59, 59, 0.1);
+        color: #ff3b3b;
+        border-color: #ff3b3b;
+    }
+
+    .delete-btn:active {
+        background-color: rgba(255, 59, 59, 0.2);
     }
 </style>
