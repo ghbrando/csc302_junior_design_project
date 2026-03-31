@@ -768,7 +768,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 RamGB = _selectedRamGB,
                 ServiceRelayPort = serviceRelayPort,
                 ServicePort = 8080,
-                ServiceUrl = $"https://{vmId}.services.unicore.io",
+                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
             };
 
             await VmService.CreateVmAsync(vm);
@@ -865,7 +865,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 VolumeSyncStatus = "Idle",
                 ServiceRelayPort = serviceRelayPort,
                 ServicePort = 8080,
-                ServiceUrl = $"https://{vmId}.services.unicore.io",
+                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
             };
 
             await VmService.CreateVmAsync(vm);
