@@ -165,10 +165,10 @@
 
         <div class="row mb-3 g-3">
             @{
-                var runningCount = Vms.Count(v => v.Status == "Running");
-                var totalHourlyRate = Vms.Where(v => v.Status == "Running").Sum(v => v.CostPerHour);
+                var runningCount = Vms.Count(v => v.Status is "Running" or "Provisioning");
+                var totalHourlyRate = Vms.Where(v => v.Status is "Running" or "Provisioning").Sum(v => v.CostPerHour);
                 var longestUptime = Vms
-                .Where(v => v.Status == "Running" && v.Uptime > TimeSpan.Zero)
+                .Where(v => v.Status is "Running" or "Provisioning" && v.Uptime > TimeSpan.Zero)
                 .OrderByDescending(v => v.Uptime)
                 .Select(v => v.UptimeString)
                 .FirstOrDefault();
@@ -212,7 +212,7 @@
                 </h6>
             </div>
             @{
-                var activeVms = Vms.Where(v => v.Status == "Running").ToList();
+                var activeVms = Vms.Where(v => v.Status is "Running" or "Provisioning").ToList();
                 var avgCpu = activeVms.Any() ? activeVms.Average(v => v.CurrentCpuUsage) : 0;
                 var avgGpu = activeVms.Any() ? activeVms.Average(v => v.CurrentGpuUsage) : 0;
                 var avgRam = activeVms.Any() ? activeVms.Average(v => v.CurrentRamUsage) : 0;
@@ -234,7 +234,7 @@
 
         <div class="row g-3">
             <div class="col-12">
-                <VmList Vms="@Vms.Where(v => v.Status == "Running").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)"
+                <VmList Vms="@Vms.Where(v => v.Status is "Running" or "Provisioning").ToList()" HostCpuCores="@(_specs?.CpuThreads ?? 0)"
                         OnMigrateClicked="OpenMigrateModal" OnSnapshotRequested="@TriggerSnapshotAsync" />
             </div>
         </div>
@@ -366,7 +366,7 @@
                 </div>
 
                 @{
-                    var runningVms = Vms.Where(v => v.Status == "Running").ToList();
+                    var runningVms = Vms.Where(v => v.Status is "Running" or "Provisioning").ToList();
                 }
 
                 @if (!runningVms.Any())
@@ -986,7 +986,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private void OpenStopModal()
     {
         _stopError = null;
-        _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
+        _selectedVmIds = Vms.Where(v => v.Status is "Running" or "Provisioning").Select(v => v.VmId).ToHashSet();
         _showStopModal = true;
     }
 
@@ -997,7 +997,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     }
 
     private void SelectAllVms() =>
-    _selectedVmIds = Vms.Where(v => v.Status == "Running").Select(v => v.VmId).ToHashSet();
+    _selectedVmIds = Vms.Where(v => v.Status is "Running" or "Provisioning").Select(v => v.VmId).ToHashSet();
 
     private void DeselectAllVms() => _selectedVmIds = new();
 
