@@ -101,6 +101,8 @@
     </div>
 </div>
 
+<TermsModal IsVisible="@showTermsModal" OnContinue="HandleTermsAcceptedAsync" OnClose="HandleTermsClosedAsync" />
+
 @code {
     private string name = string.Empty;
     private string email = string.Empty;
@@ -109,7 +111,9 @@
     private bool isRegister = false;
     private bool isReset = false;
     private bool isLoading = false;
+    private bool showTermsModal = false;
     private string errorMessage = string.Empty;
+    private Consumer? pendingConsumer;
 
     private async Task HandleSubmit()
     {
@@ -131,6 +135,8 @@
 
         try
         {
+            Consumer? authenticatedConsumer = null;
+
             if (isReset)
             {
                 // only email field required
@@ -152,7 +158,7 @@
                     return;
                 }
 
-                await ConsumerService.CreateConsumerAsync(name, email, decoded.Uid);
+                authenticatedConsumer = await ConsumerService.CreateConsumerAsync(name, email, decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
             }
@@ -169,12 +175,21 @@
                     return;
                 }
 
+                authenticatedConsumer = consumer;
+
                 await ConsumerService.UpdateLastLoginAsync(decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, consumer.Name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, consumer.Name);
             }
 
-            Nav.NavigateTo("/dashboard/");
+            if (authenticatedConsumer is not null && !authenticatedConsumer.TermsAccepted)
+            {
+                pendingConsumer = authenticatedConsumer;
+                showTermsModal = true;
+                return;
+            }
+
+            await CompleteLoginAsync();
         }
         catch (Exception ex)
         {
@@ -184,6 +199,33 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task HandleTermsAcceptedAsync()
+    {
+        if (pendingConsumer == null)
+        {
+            showTermsModal = false;
+            return;
+        }
+
+        await ConsumerService.UpdateTermsAcceptedAsync(pendingConsumer.FirebaseUid);
+        pendingConsumer.TermsAccepted = true;
+        showTermsModal = false;
+        await CompleteLoginAsync();
+    }
+
+    private Task HandleTermsClosedAsync()
+    {
+        showTermsModal = false;
+        pendingConsumer = null;
+        return Task.CompletedTask;
+    }
+
+    private Task CompleteLoginAsync()
+    {
+        Nav.NavigateTo("/dashboard/");
+        return Task.CompletedTask;
     }
 }
 
