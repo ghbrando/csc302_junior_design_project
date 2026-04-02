@@ -13,6 +13,7 @@
 @inject IVolumeBackupService VolumeBackupService
 @inject ISnapshotService SnapshotService
 @inject ContainerMonitorService MonitorService
+@inject VmProvisioningService ProvisioningService
 @inject PauseResumeListenerService PauseResumeListenerService
 @inject IMigrationService MigrationService
 @inject IConfiguration Configuration
@@ -537,12 +538,12 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private int AvailableCpuCores =>
     Math.Max(0,
     (int)Math.Floor((CurrentProvider?.CpuLimitPercent ?? 0) / 100.0 * (_specs?.CpuCores ?? 0))
-    - Vms.Where(v => v.Status == "Running").Sum(v => v.CpuCores));
+    - Vms.Where(v => v.Status is "Running" or "Provisioning").Sum(v => v.CpuCores));
 
     private int AvailableRamGB =>
     Math.Max(0,
     (int)Math.Floor(CurrentProvider?.RamLimitGB ?? 0)
-    - Vms.Where(v => v.Status == "Running").Sum(v => v.RamGB));
+    - Vms.Where(v => v.Status is "Running" or "Provisioning").Sum(v => v.RamGB));
 
     private bool _showMigrateModal = false;
     private bool _isMigrating = false;
@@ -795,7 +796,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 ContainerId = containerId,
                 VolumeName = volumeName,
                 StartedAt = startedAt,
-                Status = "Running",
+                Status = "Provisioning",
                 Image = _selectedImage,
                 ProviderId = AuthState.FirebaseUid ?? string.Empty,
                 RelayPort = relayPort,
@@ -808,7 +809,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             };
 
             await VmService.CreateVmAsync(vm);
-            MonitorService.StartMonitoring(vmId, containerId, startedAt);
+            ProvisioningService.StartProvisioning(vmId, containerId, relayPort, startedAt);
 
             _showLaunchModal = false;
         }
@@ -893,7 +894,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 ContainerId = containerId,
                 VolumeName = volumeName,
                 StartedAt = startedAt,
-                Status = "Running",
+                Status = "Provisioning",
                 Image = request.Image,
                 ProviderId = AuthState.FirebaseUid ?? string.Empty,
                 Client = request.ConsumerUid,
@@ -909,7 +910,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             };
 
             await VmService.CreateVmAsync(vm);
-            MonitorService.StartMonitoring(vmId, containerId, startedAt);
+            ProvisioningService.StartProvisioning(vmId, containerId, relayPort, startedAt);
 
             Console.WriteLine($"[DEBUG] Request {request.RequestId} completed successfully with VM {vmId}");
             await docRef.UpdateAsync(new Dictionary<string, object>
