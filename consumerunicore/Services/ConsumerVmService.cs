@@ -55,4 +55,9 @@ public class ConsumerVmService : IConsumerVmService
 
         return updatedVm;
     }
+
+    public async Task DeleteVmAsync(string vmId)
+    {
+        await _vmRepository.DeleteAsync(vmId);
+    }
 }

@@ -101,6 +101,8 @@
     </div>
 </div>
 
+<TermsModal IsVisible="@showTermsModal" OnContinue="HandleTermsContinue" OnClose="HandleTermsClose" />
+
 @code {
     private string name = string.Empty;
     private string email = string.Empty;
@@ -109,6 +111,8 @@
     private bool isRegister = false;
     private bool isReset = false;
     private bool isLoading = false;
+    private bool showTermsModal = false;
+    private string pendingProviderUid = string.Empty;
     private string errorMessage = string.Empty;
 
     private async Task HandleSubmit()
@@ -131,6 +135,8 @@
 
         try
         {
+            Provider? provider = null;
+
             if (isReset)
             {
                 await FirebaseAuth.SendPasswordResetEmailAsync(email);
@@ -151,7 +157,7 @@
                     return;
                 }
 
-                await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
+                provider = await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
             }
@@ -160,7 +166,7 @@
                 // Verify credentials and update last login
                 var idToken = await FirebaseAuth.SignInAsync(email, password);
                 var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
-                var provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
+                provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
 
                 if (provider == null)
                 {
@@ -172,8 +178,21 @@
                 AuthState.SetAuthState(decoded.Uid, email, provider.Name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, provider.Name);
             }
-            await ProviderService.UpdateNodeStatusAsync("Online", AuthState.FirebaseUid ?? "unknown-uid");
-            Nav.NavigateTo("/dashboard/");
+
+            if (provider == null)
+            {
+                errorMessage = "Provider account could not be loaded.";
+                return;
+            }
+
+            if (!provider.TermsAccepted)
+            {
+                pendingProviderUid = provider.FirebaseUid;
+                showTermsModal = true;
+                return;
+            }
+
+            await CompleteLoginAndNavigateAsync(provider.FirebaseUid);
         }
         catch (Exception ex)
         {
@@ -183,6 +202,32 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task HandleTermsContinue()
+    {
+        if (string.IsNullOrWhiteSpace(pendingProviderUid))
+        {
+            showTermsModal = false;
+            return;
+        }
+
+        await ProviderService.UpdateTermsAcceptedAsync(pendingProviderUid, true);
+        showTermsModal = false;
+        await CompleteLoginAndNavigateAsync(pendingProviderUid);
+    }
+
+    private Task HandleTermsClose()
+    {
+        showTermsModal = false;
+        pendingProviderUid = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private async Task CompleteLoginAndNavigateAsync(string firebaseUid)
+    {
+        await ProviderService.UpdateNodeStatusAsync("Online", firebaseUid);
+        Nav.NavigateTo("/dashboard/");
     }
 }
 

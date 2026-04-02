@@ -18,5 +18,6 @@ public interface IConsumerService
         string timeZone,
         string currency);
     Task<Consumer> UpdateLastLoginAsync(string firebaseUid);
+    Task<Consumer> UpdateTermsAcceptedAsync(string firebaseUid);
     FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Consumer?> onChanged);
 }

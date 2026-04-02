@@ -105,7 +105,7 @@ public class PauseResumeListenerService : IDisposable
                             oldState.Status,
                             newState.Status);
 
-                        _ = HandleVMStoppedAsync(vm.VmId, vm.ContainerId);
+                        _ = HandleVMStoppedAsync(vm.Name, vm.VmId, vm.ContainerId);
                     }
 
                     _vmState[vm.VmId] = newState;
@@ -150,12 +150,12 @@ public class PauseResumeListenerService : IDisposable
         }
     }
 
-    private async Task HandleVMStoppedAsync(string vmId, string containerId)
+    private async Task HandleVMStoppedAsync(string vmName, string vmId, string containerId)
     {
         try
         {
             _logger.LogInformation("Stopping Docker container {ContainerId} for VM {VmId}", containerId, vmId);
-            await _dockerService.StopContainerAsync(containerId, vmId);
+            await _dockerService.StopContainerAsync(containerId, vmName);
         }
         catch (Exception ex)
         {
