@@ -7,6 +7,7 @@
         <span>IP ADDRESS</span>
         <span>TOTAL COST</span>
         <span>STATUS</span>
+        <span>ACTIONS</span>
     </div>
     @foreach (var vm in Vms)
     {
@@ -16,6 +17,11 @@
             <span>@vm.IpAddress</span>
             <span class="cost-text">@vm.TotalCost</span>
             <span><span class="stopped-badge">STOPPED</span></span>
+            <span>
+                <button class="delete-btn" @onclick="@(() => HandleDelete(vm.VmId))" title="Delete VM">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </span>
         </div>
     }
 </div>
@@ -23,6 +29,7 @@
 @code {
     public class StoppedVm
     {
+        public string VmId { get; set; } = "";
         public string Name { get; set; } = "";
         public string Os { get; set; } = "";
         public string Specs { get; set; } = "";
@@ -31,6 +38,15 @@
     }
 
     [Parameter] public List<StoppedVm> Vms { get; set; } = new();
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
+
+    private async Task HandleDelete(string vmId)
+    {
+        if (OnDelete.HasDelegate)
+        {
+            await OnDelete.InvokeAsync(vmId);
+        }
+    }
 }
 
 <style>
@@ -43,7 +59,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.5fr;
         padding: 0.7rem 1.2rem;
         font-size: 0.65rem;
         letter-spacing: 0.1em;
@@ -55,7 +71,7 @@
 
     .table-row {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.5fr;
         padding: 1rem 1.2rem;
         font-size: 0.82rem;
         color: var(--uc-text-table);
@@ -86,5 +102,27 @@
         letter-spacing: 0.08em;
         padding: 0.3rem 0.6rem;
         border-radius: 4px;
+    }
+
+    .delete-btn {
+        background: none;
+        border: none;
+        color: var(--uc-text-muted);
+        cursor: pointer;
+        padding: 0.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+
+    .delete-btn:hover {
+        background: var(--uc-bg-elevated);
+        color: #ff6b6b;
+    }
+
+    .delete-btn:active {
+        transform: scale(0.95);
     }
 </style>

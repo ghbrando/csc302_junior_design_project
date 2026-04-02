@@ -271,17 +271,39 @@ public class DockerService : IDockerService, IDisposable
             WaitBeforeKillSeconds = 5
         });
 
+        // Capture any named volumes attached to this container before deleting it.
+        // Volumes cannot be removed while still referenced by a container.
+        var attachedNamedVolumes = new HashSet<string>(StringComparer.Ordinal);
+        var container = await client.Containers.InspectContainerAsync(containerId);
+        if (container.Mounts is not null)
+        {
+            foreach (var mount in container.Mounts)
+            {
+                if (string.Equals(mount.Type, "volume", StringComparison.OrdinalIgnoreCase) &&
+                    !string.IsNullOrWhiteSpace(mount.Name))
+                {
+                    attachedNamedVolumes.Add(mount.Name);
+                }
+            }
+        }
+
         await client.Containers.RemoveContainerAsync(containerId, new ContainerRemoveParameters
         {
             Force = true
         });
 
-        // Remove associated volume if provided
-        if (!string.IsNullOrEmpty(volumeName))
+        // Also include the explicit volume name from metadata if provided.
+        if (!string.IsNullOrWhiteSpace(volumeName))
+        {
+            attachedNamedVolumes.Add(volumeName);
+        }
+
+        // Remove associated named volumes now that the container is gone.
+        foreach (var attachedVolume in attachedNamedVolumes)
         {
             try
             {
-                await RemoveVolumeAsync(volumeName);
+                await RemoveVolumeAsync(attachedVolume);
             }
             catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
