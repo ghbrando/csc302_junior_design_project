@@ -312,6 +312,18 @@
                     </div>
                 </div>
 
+                <div class="mb-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="exposeServiceCheck"
+                               @bind="_exposeService" />
+                        <label class="form-check-label" for="exposeServiceCheck"
+                               style="font-size: 0.82rem; color: #94a3b8;">
+                            Expose port 8080 publicly
+                            <span style="color: #64748b; font-size: 0.75rem;">— https://[vmid].services.cbu-unicore.com</span>
+                        </label>
+                    </div>
+                </div>
+
                 @if (_launchError != null)
                 {
                     <div class="alert alert-danger py-2 mb-3" style="font-size: 0.78rem;">
@@ -519,6 +531,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private string _selectedImage = "debian:bookworm-slim";
     private int _selectedCpuCores = 1;
     private int _selectedRamGB = 1;
+    private bool _exposeService = false;
 
     // Available resources = provider budget minus what running VMs already claim
     private int AvailableCpuCores =>
@@ -727,7 +740,10 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private void CloseLaunchModal()
     {
         if (!_isLaunching)
+        {
             _showLaunchModal = false;
+            _exposeService = false;
+        }
     }
 
     private async Task LaunchVmAsync()
@@ -756,11 +772,15 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
             .First(p => !usedPorts.Contains(p));
 
-            var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
-            var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
-            var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
-            var serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
-                .First(p => !usedSvcPorts.Contains(p));
+            int? serviceRelayPort = null;
+            if (_exposeService)
+            {
+                var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
+                var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
+                var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
+                serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
+                    .First(p => !usedSvcPorts.Contains(p));
+            }
 
             var (containerId, volumeName) = await DockerService.StartContainerAsync(
                 vmId, name, _selectedImage, relayPort, _selectedCpuCores, _selectedRamGB,
@@ -783,8 +803,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 CpuCores = _selectedCpuCores,
                 RamGB = _selectedRamGB,
                 ServiceRelayPort = serviceRelayPort,
-                ServicePort = 8080,
-                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
+                ServicePort = _exposeService ? 8080 : null,
+                ServiceUrl = _exposeService ? $"https://{vmId}.services.cbu-unicore.com" : null,
             };
 
             await VmService.CreateVmAsync(vm);
@@ -844,15 +864,19 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             var relayPort = Enumerable.Range(relayPortStart, relayPortEnd - relayPortStart + 1)
             .First(p => !usedPorts.Contains(p));
 
-            var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
-            var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
-            var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
-            var serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
-                .First(p => !usedSvcPorts.Contains(p));
-
             var vmId = Guid.NewGuid().ToString();
             var vmName = string.IsNullOrWhiteSpace(request.VmName) ? $"vm-{vmId[..8]}" : request.VmName;
             var startedAt = DateTime.UtcNow;
+
+            int? serviceRelayPort = null;
+            if (request.ExposeService)
+            {
+                var svcPortStart = Configuration.GetValue<int>("FrpRelay:ServicePortRangeStart", 8000);
+                var svcPortEnd = Configuration.GetValue<int>("FrpRelay:ServicePortRangeEnd", 8200);
+                var usedSvcPorts = Vms.Where(v => v.ServiceRelayPort.HasValue).Select(v => v.ServiceRelayPort!.Value).ToHashSet();
+                serviceRelayPort = Enumerable.Range(svcPortStart, svcPortEnd - svcPortStart + 1)
+                    .First(p => !usedSvcPorts.Contains(p));
+            }
 
             Console.WriteLine($"[DEBUG] Starting Docker container {vmName} for request {request.RequestId}");
             var (containerId, volumeName) = await DockerService.StartContainerAsync(
@@ -880,8 +904,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
                 VolumeRequestedGb = request.VolumeGb,
                 VolumeSyncStatus = "Idle",
                 ServiceRelayPort = serviceRelayPort,
-                ServicePort = 8080,
-                ServiceUrl = $"https://{vmId}.services.cbu-unicore.com",
+                ServicePort = request.ExposeService ? 8080 : null,
+                ServiceUrl = request.ExposeService ? $"https://{vmId}.services.cbu-unicore.com" : null,
             };
 
             await VmService.CreateVmAsync(vm);

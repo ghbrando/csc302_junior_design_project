@@ -77,6 +77,18 @@
                         }
                     </div>
 
+                    <div class="cvm-field">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exposeServiceCheck"
+                                   @bind="_exposeService" />
+                            <label class="form-check-label" for="exposeServiceCheck"
+                                   style="font-size: 0.82rem; color: #94a3b8;">
+                                Expose port 8080 publicly
+                                <span style="color: #64748b; font-size: 0.75rem;">— https://[vmid].services.cbu-unicore.com</span>
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="cvm-actions">
                         <button class="cvm-btn-cancel" @onclick="CloseModal">Cancel</button>
                         <button class="cvm-btn-primary" @onclick="FindMatchAsync">
@@ -195,6 +207,7 @@
     private int _cpuCores = 2;
     private int _ramGb = 4;
     private int? _volumeGb;
+    private bool _exposeService = false;
     private MatchmakingResult? _match;
     private string? _errorMessage;
     private FirestoreChangeListener? _requestListener;
@@ -268,9 +281,10 @@
                     ["image"]        = _selectedImage,
                     ["cpu_cores"]    = _cpuCores,
                     ["ram_gb"]       = _ramGb,
-                    ["volume_gb"]    = _volumeGb.HasValue ? (object)_volumeGb.Value : null,
-                    ["vm_id"]        = "",
-                    ["error"]        = "",
+                    ["volume_gb"]       = _volumeGb.HasValue ? (object)_volumeGb.Value : null,
+                    ["expose_service"]  = _exposeService,
+                    ["vm_id"]           = "",
+                    ["error"]           = "",
                 });
 
             _requestListener = FirestoreDb
