@@ -7,6 +7,7 @@ public interface IProviderService
     Task<Provider?> GetByFirebaseUidAsync(string firebaseUid);
     Task<Provider> CreateProviderAsync(string name, string email, string firebaseUid);
     Task<Provider> UpdateLastLoginAsync(string firebaseUid);
+    Task<Provider> UpdateTermsAcceptedAsync(string firebaseUid, bool termsAccepted);
     Task<Provider> UpdateNodeStatusAsync(string status, string firebaseUid);
     Task<Provider> UpdateResourceLimitsAsync(double cpuLimitPercent, double ramLimitGB, string firebaseUid);
     Task<Provider> UpdateProfileAsync(string firebaseUid, string name, string email);
@@ -86,6 +87,19 @@ public class ProviderService : IProviderService
             throw new InvalidOperationException($"Provider {firebaseUid} not found");
 
         provider.LastLogin = DateTime.UtcNow;
+        await _repository.UpdateAsync(firebaseUid, provider);
+        return provider;
+    }
+
+    // Update provider terms acceptance state
+    public async Task<Provider> UpdateTermsAcceptedAsync(string firebaseUid, bool termsAccepted)
+    {
+        var provider = await _repository.GetByIdAsync(firebaseUid);
+
+        if (provider == null)
+            throw new InvalidOperationException($"Provider {firebaseUid} not found");
+
+        provider.TermsAccepted = termsAccepted;
         await _repository.UpdateAsync(firebaseUid, provider);
         return provider;
     }

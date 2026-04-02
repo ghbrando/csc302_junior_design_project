@@ -55,4 +55,12 @@ public class ConsumerVmService : IConsumerVmService
 
         return updatedVm;
     }
+
+    public async Task DeleteVmAsync(string vmId)
+    {
+        var vm = await _vmRepository.GetByIdAsync(vmId)
+            ?? throw new Exception($"VM {vmId} not found");
+
+        await _vmRepository.DeleteAsync(vmId);
+    }
 }

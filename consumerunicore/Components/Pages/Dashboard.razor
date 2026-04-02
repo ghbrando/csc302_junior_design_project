@@ -23,11 +23,11 @@
         <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)"
                   Value="@FormatCurrency(_totalSpent)" Accent="true" />
 
-        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)"
-                  Value="@_stoppedVms.Count.ToString()" SubText=" vm(s)" />
+        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)" Value="@_stoppedVms.Count.ToString()"
+                  SubText=" vm(s)" />
 
-        <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)"
-                  Value="0" SubText=" over budget" />
+        <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)" Value="0"
+                  SubText=" over budget" />
     </div>
 
     @if (!string.IsNullOrEmpty(_backupMessage))
@@ -55,30 +55,18 @@
         <div class="vm-grid">
             @foreach (var vm in _runningVms)
             {
-                <VmCard Name="@vm.Name"
-                        Os="@vm.Os"
-                        Specs="@vm.Specs"
-                        IpAddress="@vm.Connection"
-                        Cost="@($"${vm.Cost:F2}")"
-                        Uptime="@vm.Uptime"
-                        VmId="@vm.VmId"
-                    ResumeSuccess="@vm.ResumeSuccess"
-                    IsResumeInProgress="@_resumingVmIds.Contains(vm.VmId)"
-                        IsRunning="true"
-                        IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)"
-                        IsPaused="@vm.IsPaused"
-                        ShowBudget="false"
-                        ShowBackupButton="true"
-                        IsBackupInProgress="@(vm.VolumeSyncStatus is "Syncing" or "Requested")"
+                <VmCard Name="@vm.Name" Os="@vm.Os" Specs="@vm.Specs" IpAddress="@vm.Connection" Cost="@($"${vm.Cost:F2}")"
+                        Uptime="@vm.Uptime" VmId="@vm.VmId" ResumeSuccess="@vm.ResumeSuccess"
+                        IsResumeInProgress="@_resumingVmIds.Contains(vm.VmId)" IsRunning="true"
+                        IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)" IsPaused="@vm.IsPaused" ShowBudget="false"
+                        ShowBackupButton="true" IsBackupInProgress="@(vm.VolumeSyncStatus is "Syncing" or "Requested")"
                         LastBackup="@vm.LastBackup"
                         ShowMigrateButton="@(vm.ProviderUnhealthy && vm.MigrationStatus is not ("Requested" or "Restoring"))"
                         IsMigrating="@(vm.MigrationStatus is "Requested" or "Restoring" || _activeMigrations.ContainsKey(vm.VmId))"
                         MigrationStatusText="@(GetMigrationStatusText(vm.VmId, vm.MigrationStatus))"
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
-                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))"
-                        OnStop="@(() => HandleStopVm(vm.VmId))"
-                        OnBackup="@(() => HandleBackupVm(vm.VmId))"
-                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))"
+                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" OnStop="@(() => HandleStopVm(vm.VmId))"
+                        OnBackup="@(() => HandleBackupVm(vm.VmId))" OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))"
                         ServiceUrl="@vm.ServiceUrl" />
             }
         </div>
@@ -93,20 +81,16 @@
     }
     else
     {
-        <StoppedVmTable Vms="@_stoppedVms" />
+        <StoppedVmTable Vms="@_stoppedVms" OnVmDeleted="@((_) => StateHasChanged())" />
     }
 
 </div>
 
-<CreateVmModal IsOpen="@_showCreateModal"
-               ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+<CreateVmModal IsOpen="@_showCreateModal" ConsumerUid="@(AuthState.FirebaseUid ?? "")"
                OnClose="@(() => _showCreateModal = false)" />
 
-<MigrationDialog IsOpen="@_showMigrateDialog"
-                 VmId="@_migrateVmId"
-                 ConsumerUid="@(AuthState.FirebaseUid ?? "")"
-                 SourceProviderUid="@_migrateSourceProvider"
-                 OnClose="@(() => _showMigrateDialog = false)" />
+<MigrationDialog IsOpen="@_showMigrateDialog" VmId="@_migrateVmId" ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+                 SourceProviderUid="@_migrateSourceProvider" OnClose="@(() => _showMigrateDialog = false)" />
 
 @code {
     // ── Display models ────────────────────────────────────────────────────────
@@ -299,14 +283,14 @@
             && !string.Equals(status, "Online", StringComparison.OrdinalIgnoreCase);
 
         return new(
-            VmId:       vm.VmId,
-            Name:       string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
-            Os:         FormatImage(vm.Image),
-            Specs:      $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+            VmId: vm.VmId,
+            Name: string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+            Os: FormatImage(vm.Image),
+            Specs: $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
             Connection: FormatConnection(vm),
-            Cost:       vm.CurrentSessionCost,
-            Uptime:     FormatUptime(vm.UptimeString),
-            IsPaused:   vm.IsPaused,
+            Cost: vm.CurrentSessionCost,
+            Uptime: FormatUptime(vm.UptimeString),
+            IsPaused: vm.IsPaused,
             ResumeSuccess: vm.ResumeSuccess,
             VolumeSyncStatus: vm.VolumeSyncStatus,
             LastBackup: FormatLastBackup(vm.LastVolumeSyncAt),
@@ -319,9 +303,10 @@
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
     {
-        Name      = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
-        Os        = FormatImage(vm.Image),
-        Specs     = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+        Id = vm.VmId,
+        Name = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+        Os = FormatImage(vm.Image),
+        Specs = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
         IpAddress = FormatConnection(vm),
         TotalCost = $"${vm.CurrentSessionCost:F2}",
     };
@@ -331,21 +316,21 @@
     {
         if (string.IsNullOrWhiteSpace(image)) return "Linux";
         var name = image.Split(':')[0];
-        var tag  = image.Contains(':') ? " " + image.Split(':')[1] : "";
+        var tag = image.Contains(':') ? " " + image.Split(':')[1] : "";
         return char.ToUpper(name[0]) + name[1..].Replace("-", " ") + tag;
     }
 
     private static string FormatConnection(VirtualMachine vm)
     {
         if (vm.RelayPort.HasValue) return $"relay:{vm.RelayPort}";
-        if (vm.SshPort.HasValue)   return $"ssh:{vm.SshPort}";
+        if (vm.SshPort.HasValue) return $"ssh:{vm.SshPort}";
         return "—";
     }
 
     private static string FormatUptime(string uptimeString)
     {
         if (!TimeSpan.TryParse(uptimeString, out var ts)) return uptimeString;
-        if (ts.TotalDays >= 1)  return $"{(int)ts.TotalDays}d {ts.Hours}h";
+        if (ts.TotalDays >= 1) return $"{(int)ts.TotalDays}d {ts.Hours}h";
         if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
         return $"{ts.Minutes}m";
     }
