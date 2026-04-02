@@ -127,6 +127,22 @@ public class ConsumerService : IConsumerService
         await _repository.UpdateAsync(firebaseUid, consumer);
         return consumer;
     }
+
+    public async Task<Consumer> UpdateTermsAcceptedAsync(string firebaseUid)
+    {
+        if (string.IsNullOrWhiteSpace(firebaseUid))
+            throw new ArgumentException("Firebase UID cannot be empty.", nameof(firebaseUid));
+
+        var consumer = await _repository.GetByIdAsync(firebaseUid);
+
+        if (consumer == null)
+            throw new InvalidOperationException($"Consumer {firebaseUid} not found");
+
+        consumer.TermsAccepted = true;
+        await _repository.UpdateAsync(firebaseUid, consumer);
+        return consumer;
+    }
+
     // Listen for real-time changes to a consumer document
     public FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Consumer?> onChanged)
     {
