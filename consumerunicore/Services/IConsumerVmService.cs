@@ -20,7 +20,7 @@ public interface IConsumerVmService
     Task<VirtualMachine> StopVmAsync(string vmId);
 
     /// <summary>
-    /// Deletes a VM from Firebase identified by vmId.
+    /// Deletes a VM identified by vmId from Firestore.
     /// </summary>
     Task DeleteVmAsync(string vmId);
 }

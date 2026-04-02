@@ -81,7 +81,7 @@
     }
     else
     {
-        <StoppedVmTable Vms="@_stoppedVms" OnVmDeleted="@((_) => StateHasChanged())" />
+        <StoppedVmTable Vms="@_stoppedVms" OnDelete="@HandleDeleteVm" />
     }
 
 </div>
@@ -303,7 +303,7 @@
 
     private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
     {
-        Id = vm.VmId,
+        VmId = vm.VmId,
         Name = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
         Os = FormatImage(vm.Image),
         Specs = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
@@ -429,6 +429,25 @@
         finally
         {
             _stoppingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleDeleteVm(string vmId)
+    {
+        try
+        {
+            var vmName = _stoppedVms
+                .FirstOrDefault(v => v.VmId == vmId)?.Name ?? vmId;
+
+            await ConsumerVmService.DeleteVmAsync(vmId);
+            _backupMessage = $"VM '{vmName}' has been deleted.";
+            _backupMessageIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _backupMessage = $"Failed to delete VM: {ex.Message}";
+            _backupMessageIsError = true;
+            Console.WriteLine($"Error deleting VM: {ex.Message}");
         }
     }
 

@@ -9,7 +9,7 @@
         <span>IP ADDRESS</span>
         <span>TOTAL COST</span>
         <span>STATUS</span>
-        <span>ACTION</span>
+        <span>ACTIONS</span>
     </div>
     @foreach (var vm in Vms)
     {
@@ -20,7 +20,7 @@
             <span class="cost-text">@vm.TotalCost</span>
             <span><span class="stopped-badge">STOPPED</span></span>
             <span>
-                <button class="delete-btn" @onclick="() => HandleDeleteVm(vm.Id)" title="Delete VM">
+                <button class="delete-btn" @onclick="@(() => HandleDelete(vm.VmId))" title="Delete VM">
                     <i class="bi bi-trash"></i>
                 </button>
             </span>
@@ -31,7 +31,7 @@
 @code {
     public class StoppedVm
     {
-        public string Id { get; set; } = "";
+        public string VmId { get; set; } = "";
         public string Name { get; set; } = "";
         public string Os { get; set; } = "";
         public string Specs { get; set; } = "";
@@ -40,24 +40,13 @@
     }
 
     [Parameter] public List<StoppedVm> Vms { get; set; } = new();
-    [Parameter] public EventCallback<string> OnVmDeleted { get; set; }
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
 
-    private async Task HandleDeleteVm(string vmId)
+    private async Task HandleDelete(string vmId)
     {
-        if (string.IsNullOrEmpty(vmId))
+        if (OnDelete.HasDelegate)
         {
-            return;
-        }
-
-        try
-        {
-            await VmService.DeleteVmAsync(vmId);
-            Vms.RemoveAll(vm => vm.Id == vmId);
-            await OnVmDeleted.InvokeAsync(vmId);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error deleting VM: {ex.Message}");
+            await OnDelete.InvokeAsync(vmId);
         }
     }
 }
@@ -72,7 +61,7 @@
 
     .table-header {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.8fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.5fr;
         padding: 0.7rem 1.2rem;
         font-size: 0.65rem;
         letter-spacing: 0.1em;
@@ -84,7 +73,7 @@
 
     .table-row {
         display: grid;
-        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.8fr;
+        grid-template-columns: 2fr 2fr 1.5fr 1fr 1fr 0.5fr;
         padding: 1rem 1.2rem;
         font-size: 0.82rem;
         color: var(--uc-text-table);
@@ -118,28 +107,24 @@
     }
 
     .delete-btn {
+        background: none;
+        border: none;
+        color: var(--uc-text-muted);
+        cursor: pointer;
+        padding: 0.4rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 32px;
-        height: 32px;
-        padding: 0;
-        background-color: rgba(255, 255, 255, 0.05);
-        border: 1px solid var(--uc-border);
-        border-radius: var(--uc-radius);
-        color: var(--uc-text-muted);
-        font-size: 0.9rem;
-        cursor: pointer;
+        border-radius: 4px;
         transition: all 0.2s ease;
     }
 
     .delete-btn:hover {
-        background-color: rgba(255, 59, 59, 0.1);
-        color: #ff3b3b;
-        border-color: #ff3b3b;
+        background: var(--uc-bg-elevated);
+        color: #ff6b6b;
     }
 
     .delete-btn:active {
-        background-color: rgba(255, 59, 59, 0.2);
+        transform: scale(0.95);
     }
 </style>
