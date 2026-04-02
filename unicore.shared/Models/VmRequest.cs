@@ -37,6 +37,10 @@ public class VmRequest
     [FirestoreProperty("vm_id")]
     public string VmId { get; set; } = "";
 
+    /// <summary>Whether the consumer wants port 8080 exposed publicly via HTTPS subdomain.</summary>
+    [FirestoreProperty("expose_service")]
+    public bool ExposeService { get; set; } = false;
+
     /// <summary>Filled by provider on failure.</summary>
     [FirestoreProperty("error")]
     public string Error { get; set; } = "";
