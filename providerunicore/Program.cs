@@ -112,6 +112,8 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IDockerService, DockerService>();
 builder.Services.AddSingleton<ContainerMonitorService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ContainerMonitorService>());
+builder.Services.AddSingleton<VmProvisioningService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<VmProvisioningService>());
 builder.Services.AddSingleton<PauseResumeListenerService>();
 builder.Services.AddSingleton<VolumeBackupService>();
 builder.Services.AddSingleton<IVolumeBackupService>(sp => sp.GetRequiredService<VolumeBackupService>());

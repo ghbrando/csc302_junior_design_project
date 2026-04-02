@@ -16,8 +16,21 @@
     <div class="vm-meta">@Os &bull; @Specs</div>
 
     <div class="vm-status">
-        <span class="running-dot @(IsPaused ? "paused" : "")"></span>
-        <span class="running-label @(IsPaused ? "paused-label" : "")">@(IsPaused ? "PAUSED" : "RUNNING")</span>
+        @if (IsFailed)
+        {
+            <span class="running-dot failed-dot"></span>
+            <span class="running-label failed-label">FAILED</span>
+        }
+        else if (IsProvisioning)
+        {
+            <span class="running-dot provisioning-dot"></span>
+            <span class="running-label provisioning-label">SETTING UP</span>
+        }
+        else
+        {
+            <span class="running-dot @(IsPaused ? "paused" : "")"></span>
+            <span class="running-label @(IsPaused ? "paused-label" : "")">@(IsPaused ? "PAUSED" : "RUNNING")</span>
+        }
         <span class="vm-ip">&bull; @IpAddress</span>
     </div>
 
@@ -98,7 +111,7 @@
     }
 
     <div class="vm-actions">
-        <button class="btn-ssh" @onclick="OnSsh" disabled="@(!ResumeSuccess || IsPaused)"><i class="bi bi-terminal"></i>
+        <button class="btn-ssh" @onclick="OnSsh" disabled="@(!ResumeSuccess || IsPaused || IsProvisioning || IsFailed)"><i class="bi bi-terminal"></i>
             SSH</button>
             <button class="btn-pause" @onclick="OnPause" disabled="@(IsPaused && IsResumeInProgress)"><i
                 class="@(IsPaused ? "bi bi-play-fill" : "bi bi-pause-fill")"></i> @((IsPaused && IsResumeInProgress) ?
@@ -140,6 +153,8 @@
     [Parameter] public bool IsMigrating { get; set; } = false;
     [Parameter] public string? MigrationStatusText { get; set; }
     [Parameter] public string? ServiceUrl { get; set; }
+    [Parameter] public bool IsProvisioning { get; set; } = false;
+    [Parameter] public bool IsFailed { get; set; } = false;
 
     private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
 }
@@ -225,6 +240,24 @@
 
     .running-label.paused-label {
         color: var(--uc-yellow);
+    }
+
+    .running-dot.provisioning-dot {
+        background: var(--uc-purple);
+        animation: none;
+    }
+
+    .running-label.provisioning-label {
+        color: var(--uc-purple);
+    }
+
+    .running-dot.failed-dot {
+        background: var(--uc-red);
+        animation: none;
+    }
+
+    .running-label.failed-label {
+        color: var(--uc-red);
     }
 
     .vm-ip {

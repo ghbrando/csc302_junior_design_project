@@ -67,7 +67,9 @@
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
                         OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" OnStop="@(() => HandleStopVm(vm.VmId))"
                         OnBackup="@(() => HandleBackupVm(vm.VmId))" OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))"
-                        ServiceUrl="@vm.ServiceUrl" />
+                        ServiceUrl="@vm.ServiceUrl"
+                        IsProvisioning="@vm.IsProvisioning"
+                        IsFailed="@vm.IsFailed" />
             }
         </div>
     }
@@ -98,7 +100,7 @@
                      string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
                      string? VolumeSyncStatus, string LastBackup,
                      string? MigrationStatus, string ProviderId, bool ProviderUnhealthy,
-                     string? ServiceUrl);
+                     string? ServiceUrl, bool IsProvisioning, bool IsFailed);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -213,12 +215,12 @@
             }
 
             _runningVms = all
-                .Where(vm => string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase))
+                .Where(vm => vm.Status is "Running" or "Provisioning")
                 .Select(MapRunning)
                 .ToList();
 
             _stoppedVms = all
-                .Where(vm => !string.Equals(vm.Status, "Running", StringComparison.OrdinalIgnoreCase)
+                .Where(vm => vm.Status is not ("Running" or "Provisioning")
                            && vm.MigrationStatus != "Migrated")
                 .Select(MapStopped)
                 .ToList();
@@ -297,7 +299,9 @@
             MigrationStatus: vm.MigrationStatus,
             ProviderId: vm.ProviderId,
             ProviderUnhealthy: providerUnhealthy,
-            ServiceUrl: vm.ServiceUrl
+            ServiceUrl: vm.ServiceUrl,
+            IsProvisioning: vm.Status == "Provisioning",
+            IsFailed: vm.Status == "Failed"
         );
     }
 

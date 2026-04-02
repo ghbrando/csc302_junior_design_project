@@ -13,5 +13,6 @@ public interface IVmService
     Task DecrementVmConsecutiveFailedConnectionsAsync(string vmId, int decrementBy);
     Task<VirtualMachine> UpdateVmMetricsAsync(string vmId, double cpu, double gpu, double ram, string? uptimeString = null);
     Task DeleteVmAsync(string vmId);
+    Task UpdateVmStatusAsync(string vmId, string status);
     FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged);
 }

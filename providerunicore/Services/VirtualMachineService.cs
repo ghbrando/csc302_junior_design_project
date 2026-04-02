@@ -101,6 +101,14 @@ public class VirtualMachineService : IVmService
         await _repository.UpdateAsync(vmID, vm);
     }
 
+    public async Task UpdateVmStatusAsync(string vmId, string status)
+    {
+        var vm = await _repository.GetByIdAsync(vmId);
+        if (vm == null) return;
+        vm.Status = status;
+        await _repository.UpdateAsync(vmId, vm);
+    }
+
     // Listen for real-time changes to all VMs
     public FirestoreChangeListener ListenAllVms(Action<IEnumerable<VirtualMachine>> onChanged)
     {
