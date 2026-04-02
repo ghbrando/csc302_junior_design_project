@@ -105,7 +105,7 @@ public class PauseResumeListenerService : IDisposable
                             oldState.Status,
                             newState.Status);
 
-                        _ = HandleVMStoppedAsync(vm.VmName, vm.VmId, vm.ContainerId);
+                        _ = HandleVMStoppedAsync(vm.Name, vm.VmId, vm.ContainerId);
                     }
 
                     _vmState[vm.VmId] = newState;
