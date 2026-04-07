@@ -209,6 +209,7 @@
     private int? _volumeGb;
     private bool _exposeService = false;
     private MatchmakingResult? _match;
+    private List<MatchmakingResult> _matches = new();
     private string? _errorMessage;
     private FirestoreChangeListener? _requestListener;
 
@@ -235,17 +236,14 @@
 
         try
         {
-            _match = await MatchmakingService.FindBestMatchAsync(new MatchmakingRequest
+            _matches = await MatchmakingService.FindTopMatchesAsync(new MatchmakingRequest
             {
-                Region        = _selectedRegion,
+                Region         = _selectedRegion,
                 CpuCoresNeeded = _cpuCores,
                 RamGbNeeded    = _ramGb,
             });
 
-            _step = _match != null ? Step.Confirm : Step.Error;
-            _errorMessage = _match == null
-                ? $"No providers available in {_selectedRegion} with {_cpuCores} cores / {_ramGb} GB RAM. Try adjusting your requirements."
-                : null;
+            _step = Step.Confirm;
         }
         catch (Exception ex)
         {
@@ -254,6 +252,12 @@
         }
 
         StateHasChanged();
+    }
+
+    private async Task SelectProviderAsync(MatchmakingResult match)
+    {
+        _match = match;
+        await SubmitRequestAsync();
     }
 
     private async Task SubmitRequestAsync()
@@ -328,6 +332,7 @@
     {
         _step = Step.Form;
         _match = null;
+        _matches = new();
         _errorMessage = null;
     }
 
@@ -347,6 +352,7 @@
     {
         _step = Step.Form;
         _match = null;
+        _matches = new();
         _errorMessage = null;
         _vmName = "";
         _cpuCores = 2;
