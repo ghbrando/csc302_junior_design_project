@@ -143,6 +143,19 @@ public class ConsumerService : IConsumerService
         return consumer;
     }
 
+    public async Task<Consumer> UpdateOnboardingAsync(string firebaseUid, int step, string? timeZone = null, string? currency = null)
+    {
+        var consumer = await _repository.GetByIdAsync(firebaseUid)
+            ?? throw new InvalidOperationException($"Consumer {firebaseUid} not found");
+
+        consumer.OnboardingStep = step;
+        if (timeZone != null) consumer.TimeZone = timeZone;
+        if (currency != null) consumer.Currency = currency;
+
+        await _repository.UpdateAsync(firebaseUid, consumer);
+        return consumer;
+    }
+
     // Listen for real-time changes to a consumer document
     public FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Consumer?> onChanged)
     {

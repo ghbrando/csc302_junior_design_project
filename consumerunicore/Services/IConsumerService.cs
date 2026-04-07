@@ -19,5 +19,6 @@ public interface IConsumerService
         string currency);
     Task<Consumer> UpdateLastLoginAsync(string firebaseUid);
     Task<Consumer> UpdateTermsAcceptedAsync(string firebaseUid);
+    Task<Consumer> UpdateOnboardingAsync(string firebaseUid, int step, string? timeZone = null, string? currency = null);
     FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Consumer?> onChanged);
 }

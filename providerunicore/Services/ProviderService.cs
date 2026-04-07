@@ -22,6 +22,7 @@ public interface IProviderService
         string timeZone,
         string currency);
     Task IncrementConsistencyScoreAsync(string firebaseUid, double incrementBy);
+    Task<Provider> UpdateOnboardingAsync(string firebaseUid, int step, string? region = null, string? timeZone = null, string? currency = null);
     FirestoreChangeListener ListenByFirebaseUid(string firebaseUid, Action<Provider?> onChanged);
 }
 
@@ -143,6 +144,20 @@ public class ProviderService : IProviderService
 
         provider.ConsistencyScore += incrementBy;
         await _repository.UpdateAsync(firebaseUid, provider);
+    }
+
+    public async Task<Provider> UpdateOnboardingAsync(string firebaseUid, int step, string? region = null, string? timeZone = null, string? currency = null)
+    {
+        var provider = await _repository.GetByIdAsync(firebaseUid)
+            ?? throw new InvalidOperationException($"Provider {firebaseUid} not found");
+
+        provider.OnboardingStep = step;
+        if (region != null) provider.Region = region;
+        if (timeZone != null) provider.TimeZone = timeZone;
+        if (currency != null) provider.Currency = currency;
+
+        await _repository.UpdateAsync(firebaseUid, provider);
+        return provider;
     }
 
     // Listen for real-time changes to a provider document

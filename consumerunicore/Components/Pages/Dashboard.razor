@@ -11,6 +11,11 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
 
+<ConsumerOnboardingModal IsVisible="_showOnboarding"
+                         InitialStep="_onboardingStep"
+                         FirebaseUid="@AuthState.FirebaseUid"
+                         OnComplete="@(() => _showOnboarding = false)" />
+
 <div class="dashboard">
 
     <DashboardHeader Title="Virtual Machines" RunningCount="@_runningVms.Count" OnCreate="HandleCreateVm" />
@@ -115,6 +120,8 @@
     private FirestoreChangeListener? _providerListener;
     private FirestoreChangeListener? _migrationListener;
     private string _currencyCode = "USD";
+    private bool _showOnboarding;
+    private int _onboardingStep;
     private string? _backupMessage;
     private bool _backupMessageIsError;
     private readonly HashSet<string> _backupPendingVmIds = new();
@@ -185,6 +192,11 @@
         {
             if (!string.IsNullOrWhiteSpace(consumer?.Currency))
                 _currencyCode = consumer.Currency;
+            if (consumer != null)
+            {
+                _onboardingStep = consumer.OnboardingStep;
+                _showOnboarding = consumer.OnboardingStep < 2;
+            }
             StateHasChanged();
         });
     }

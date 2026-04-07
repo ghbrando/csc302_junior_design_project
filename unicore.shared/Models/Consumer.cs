@@ -46,4 +46,7 @@ public class Consumer
 
     [FirestoreProperty("terms_accepted")]
     public bool TermsAccepted { get; set; } = false;
+
+    [FirestoreProperty("onboarding_step")]
+    public int OnboardingStep { get; set; } = 0;
 }

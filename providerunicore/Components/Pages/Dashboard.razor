@@ -140,6 +140,11 @@
     }
 </style>
 
+<ProviderOnboardingModal IsVisible="_showOnboarding"
+                         InitialStep="_onboardingStep"
+                         FirebaseUid="@AuthState.FirebaseUid"
+                         OnComplete="@(() => _showOnboarding = false)" />
+
 <div class="container-fluid px-4 py-3">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -559,6 +564,8 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private FirestoreChangeListener? _providerListener;
     private FirestoreChangeListener? _requestListener;
     private string _currencyCode = "USD";
+    private bool _showOnboarding;
+    private int _onboardingStep;
     private FirestoreChangeListener? _migrationListener;
     private readonly HashSet<string> _processedMigrationIds = new();
     private readonly HashSet<string> _processedRequestIds = new();
@@ -660,6 +667,12 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             {
                 if (provider?.CpuLimitPercent > 0) _cpuLimit = provider.CpuLimitPercent;
                 if (provider?.RamLimitGB > 0) _ramLimit = provider.RamLimitGB;
+            }
+
+            if (provider != null)
+            {
+                _onboardingStep = provider.OnboardingStep;
+                _showOnboarding = provider.OnboardingStep < 3;
             }
 
             _ = InvokeAsync(StateHasChanged);

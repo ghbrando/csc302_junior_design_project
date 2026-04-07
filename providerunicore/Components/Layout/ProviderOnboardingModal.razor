@@ -1,0 +1,380 @@
+@inject IProviderService ProviderService
+
+@if (IsVisible)
+{
+    <div class="ob-overlay" role="dialog" aria-modal="true">
+        <div class="ob-modal">
+
+            <!-- Header -->
+            <div class="ob-header">
+                <div class="ob-header-icon">
+                    <i class="bi bi-hdd-stack ob-header-icon-i"></i>
+                </div>
+                <div class="ob-header-text">
+                    <h1>Set Up Your Node</h1>
+                    <span class="ob-subtitle">Provider Profile &nbsp;·&nbsp; Step @(_step + 1) of @TotalSteps</span>
+                </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="ob-progress-track">
+                <div class="ob-progress-fill" style="width: @((_step + 1) * 100 / TotalSteps)%"></div>
+            </div>
+
+            <!-- Body -->
+            <div class="ob-body">
+
+                @if (_step == 0)
+                {
+                    <div class="ob-question">
+                        <div class="ob-question-label">
+                            <i class="bi bi-geo-alt"></i> Where is your node located?
+                        </div>
+                        <p class="ob-question-hint">Consumers are matched to providers in the same region. Choose the region closest to your physical machine.</p>
+                        <div class="ob-option-grid">
+                            @foreach (var r in _regions)
+                            {
+                                <button class="ob-option @(_region == r.Value ? "ob-option--selected" : "")"
+                                        @onclick="() => _region = r.Value">
+                                    <span class="ob-option-label">@r.Label</span>
+                                    <span class="ob-option-sub">@r.Value</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_step == 1)
+                {
+                    <div class="ob-question">
+                        <div class="ob-question-label">
+                            <i class="bi bi-globe2"></i> What is your time zone?
+                        </div>
+                        <p class="ob-question-hint">Used to display uptime, payout schedules, and activity timestamps in your local time.</p>
+                        <div class="ob-option-grid">
+                            @foreach (var tz in _timeZones)
+                            {
+                                <button class="ob-option @(_timeZone == tz.Value ? "ob-option--selected" : "")"
+                                        @onclick="() => _timeZone = tz.Value">
+                                    <span class="ob-option-label">@tz.Label</span>
+                                    <span class="ob-option-sub">@tz.Value</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (_step == 2)
+                {
+                    <div class="ob-question">
+                        <div class="ob-question-label">
+                            <i class="bi bi-currency-exchange"></i> What is your preferred currency?
+                        </div>
+                        <p class="ob-question-hint">Used to display earnings and payout amounts in your preferred currency.</p>
+                        <div class="ob-option-grid ob-option-grid--small">
+                            @foreach (var c in _currencies)
+                            {
+                                <button class="ob-option @(_currency == c.Code ? "ob-option--selected" : "")"
+                                        @onclick="() => _currency = c.Code">
+                                    <span class="ob-option-label">@c.Code</span>
+                                    <span class="ob-option-sub">@c.Name</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- Footer -->
+            <div class="ob-footer">
+                <button class="ob-btn ob-btn--back" @onclick="GoBack" disabled="@(_step == 0)">
+                    ← Back
+                </button>
+                <div class="ob-step-dots">
+                    @for (int i = 0; i < TotalSteps; i++)
+                    {
+                        var idx = i;
+                        <span class="ob-dot @(idx == _step ? "ob-dot--active" : idx < _step ? "ob-dot--done" : "")"></span>
+                    }
+                </div>
+                <button class="ob-btn ob-btn--next @(CanAdvance ? "" : "ob-btn--locked")"
+                        disabled="@(!CanAdvance || _saving)"
+                        @onclick="GoNext">
+                    @if (_saving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    }
+                    @(_step == TotalSteps - 1 ? "Finish →" : "Next →")
+                </button>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    private const int TotalSteps = 3;
+
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public int InitialStep { get; set; } = 0;
+    [Parameter] public string FirebaseUid { get; set; } = string.Empty;
+    [Parameter] public EventCallback OnComplete { get; set; }
+
+    private int _step;
+    private bool _saving;
+
+    private string _region   = string.Empty;
+    private string _timeZone = "UTC-08:00";
+    private string _currency = "USD";
+
+    private bool CanAdvance => _step switch
+    {
+        0 => !string.IsNullOrEmpty(_region),
+        1 => !string.IsNullOrEmpty(_timeZone),
+        2 => !string.IsNullOrEmpty(_currency),
+        _ => false
+    };
+
+    protected override void OnParametersSet()
+    {
+        _step = InitialStep;
+    }
+
+    private async Task GoNext()
+    {
+        if (!CanAdvance || _saving) return;
+        _saving = true;
+
+        try
+        {
+            if (_step == 0)
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, 1, region: _region);
+            else if (_step == 1)
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, 2, timeZone: _timeZone);
+            else if (_step == 2)
+            {
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, TotalSteps, currency: _currency);
+                await OnComplete.InvokeAsync();
+                return;
+            }
+            _step++;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (_step > 0) _step--;
+    }
+
+    // ── Data ──────────────────────────────────────────────────
+
+    private record RegionOption(string Label, string Value);
+    private record TzOption(string Label, string Value);
+    private record CurrencyOption(string Code, string Name);
+
+    private readonly RegionOption[] _regions =
+    [
+        new("US West",       "US-West"),
+        new("US East",       "US-East"),
+        new("EU West",       "EU-West"),
+        new("EU Central",    "EU-Central"),
+        new("Asia Pacific",  "Asia-Pacific"),
+    ];
+
+    private readonly TzOption[] _timeZones =
+    [
+        new("Hawaii",          "UTC-10:00"),
+        new("Alaska",          "UTC-09:00"),
+        new("Pacific",         "UTC-08:00"),
+        new("Mountain",        "UTC-07:00"),
+        new("Central",         "UTC-06:00"),
+        new("Eastern",         "UTC-05:00"),
+        new("Atlantic",        "UTC-04:00"),
+        new("UTC / London",    "UTC+00:00"),
+        new("Central Europe",  "UTC+01:00"),
+        new("Eastern Europe",  "UTC+02:00"),
+        new("Moscow",          "UTC+03:00"),
+        new("India",           "UTC+05:30"),
+        new("China / HK",      "UTC+08:00"),
+        new("Japan / Korea",   "UTC+09:00"),
+        new("Sydney",          "UTC+10:00"),
+        new("Auckland",        "UTC+12:00"),
+    ];
+
+    private readonly CurrencyOption[] _currencies =
+    [
+        new("USD", "US Dollar"),
+        new("EUR", "Euro"),
+        new("GBP", "British Pound"),
+        new("CAD", "Canadian Dollar"),
+        new("AUD", "Australian Dollar"),
+        new("JPY", "Japanese Yen"),
+        new("CHF", "Swiss Franc"),
+        new("INR", "Indian Rupee"),
+    ];
+}
+
+<style>
+    .ob-overlay {
+        --ob-bg:        #0d1117;
+        --ob-card:      #111820;
+        --ob-border:    #1e2d3d;
+        --ob-green:     #00e5a0;
+        --ob-text:      #d6e4f0;
+        --ob-muted:     #5a7a92;
+        --ob-mono:      #a8c4d4;
+        --ob-radius:    6px;
+        --ob-font:      'JetBrains Mono', 'Cascadia Code', 'Consolas', monospace;
+
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(4,8,12,.88);
+        backdrop-filter: blur(6px);
+        font-family: var(--ob-font);
+    }
+
+    .ob-modal {
+        width: 620px; max-width: 96vw; max-height: 92vh;
+        background: var(--ob-bg);
+        border: 1px solid var(--ob-border);
+        border-radius: 10px;
+        display: flex; flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 32px 80px rgba(0,0,0,.7), 0 0 60px rgba(0,229,160,.04);
+        animation: obIn .3s cubic-bezier(.16,1,.3,1) both;
+    }
+
+    @@keyframes obIn {
+        from { opacity: 0; transform: scale(.95) translateY(16px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Header */
+    .ob-header {
+        display: flex; align-items: center; gap: 14px;
+        padding: 22px 28px 18px;
+        border-bottom: 1px solid var(--ob-border);
+        background: linear-gradient(180deg, rgba(0,229,160,.04) 0%, transparent 100%);
+        flex-shrink: 0;
+    }
+    .ob-header-icon {
+        width: 40px; height: 40px; flex-shrink: 0;
+        background: rgba(0,229,160,.08);
+        border: 1px solid rgba(0,229,160,.25);
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .ob-header-icon-i { font-size: 1.1rem; color: var(--ob-green); }
+    .ob-header-text h1 {
+        font-size: 1.1rem; font-weight: 700; color: var(--ob-text);
+        margin: 0; letter-spacing: .01em;
+    }
+    .ob-subtitle {
+        display: block; font-size: .65rem; color: var(--ob-muted);
+        letter-spacing: .14em; text-transform: uppercase; margin-top: 3px;
+    }
+
+    /* Progress */
+    .ob-progress-track {
+        height: 2px; background: var(--ob-border); flex-shrink: 0;
+    }
+    .ob-progress-fill {
+        height: 100%; background: var(--ob-green);
+        box-shadow: 0 0 8px rgba(0,229,160,.5);
+        transition: width .35s ease;
+    }
+
+    /* Body */
+    .ob-body {
+        flex: 1; overflow-y: auto; padding: 28px;
+        scrollbar-width: thin; scrollbar-color: #1e3a4f #0d1117;
+    }
+    .ob-body::-webkit-scrollbar { width: 6px; }
+    .ob-body::-webkit-scrollbar-track { background: #0d1117; }
+    .ob-body::-webkit-scrollbar-thumb { background: #1e3a4f; border-radius: 3px; }
+
+    .ob-question-label {
+        font-size: .95rem; font-weight: 700; color: var(--ob-text);
+        margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+    }
+    .ob-question-label i { color: var(--ob-green); }
+    .ob-question-hint {
+        font-size: .75rem; color: var(--ob-muted); margin-bottom: 20px;
+        line-height: 1.6;
+    }
+
+    /* Option grid */
+    .ob-option-grid {
+        display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px;
+    }
+    .ob-option-grid--small {
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    }
+
+    .ob-option {
+        background: var(--ob-card);
+        border: 1px solid var(--ob-border);
+        border-radius: var(--ob-radius);
+        padding: 12px 14px;
+        text-align: left; cursor: pointer;
+        transition: border-color .15s, box-shadow .15s;
+        display: flex; flex-direction: column; gap: 3px;
+    }
+    .ob-option:hover { border-color: rgba(0,229,160,.35); }
+    .ob-option--selected {
+        border-color: var(--ob-green);
+        background: rgba(0,229,160,.07);
+        box-shadow: 0 0 0 1px var(--ob-green), 0 0 12px rgba(0,229,160,.12);
+    }
+    .ob-option-label {
+        font-size: .8rem; font-weight: 600; color: var(--ob-text);
+    }
+    .ob-option--selected .ob-option-label { color: var(--ob-green); }
+    .ob-option-sub { font-size: .68rem; color: var(--ob-muted); }
+
+    /* Footer */
+    .ob-footer {
+        padding: 16px 28px; flex-shrink: 0;
+        border-top: 1px solid var(--ob-border);
+        background: rgba(0,0,0,.2);
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+
+    .ob-step-dots { display: flex; gap: 6px; align-items: center; }
+    .ob-dot {
+        width: 6px; height: 6px; border-radius: 50%;
+        background: var(--ob-border); transition: all .2s;
+    }
+    .ob-dot--active { background: var(--ob-green); box-shadow: 0 0 6px rgba(0,229,160,.7); width: 18px; border-radius: 3px; }
+    .ob-dot--done   { background: rgba(0,229,160,.4); }
+
+    .ob-btn {
+        padding: 9px 22px; border-radius: 5px;
+        font-family: var(--ob-font); font-size: .72rem;
+        font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+        cursor: pointer; border: 1px solid; transition: all .2s;
+    }
+    .ob-btn--back {
+        background: transparent; border-color: var(--ob-border); color: var(--ob-muted);
+    }
+    .ob-btn--back:hover:not(:disabled) { border-color: rgba(0,229,160,.3); color: var(--ob-green); }
+    .ob-btn--back:disabled { opacity: .3; cursor: not-allowed; }
+
+    .ob-btn--next {
+        background: linear-gradient(135deg, #00c97e, var(--ob-green));
+        border-color: var(--ob-green); color: #051a10;
+        box-shadow: 0 0 12px rgba(0,229,160,.25);
+    }
+    .ob-btn--next:hover:not(:disabled) {
+        box-shadow: 0 0 20px rgba(0,229,160,.5); transform: translateY(-1px);
+    }
+    .ob-btn--locked {
+        background: transparent; border-color: var(--ob-border);
+        color: var(--ob-muted); cursor: not-allowed; box-shadow: none;
+    }
+</style>
