@@ -9,7 +9,7 @@ public interface IMigrationRequestService
     /// If targetProviderUid is null, auto-selects the healthiest available provider.
     /// Returns the created migration request.
     /// </summary>
-    Task<VmMigrationRequest> RequestMigrationAsync(string vmId, string consumerUid, string? targetProviderUid = null);
+    Task<VmMigrationRequest> RequestMigrationAsync(string vmId, string consumerUid, string? targetProviderUid = null, int? requestedCpuCores = null, int? requestedRamGb = null);
 
     /// <summary>
     /// Returns the current migration request for a VM, or null if none exists.

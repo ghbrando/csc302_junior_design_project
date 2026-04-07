@@ -33,4 +33,14 @@ public class VmMigrationRequest
 
     [FirestoreProperty("new_vm_id")]
     public string? NewVmId { get; set; } // The VM ID on the new provider after successful migration
+
+    [FirestoreProperty("requested_cpu_cores")]
+    public int? RequestedCpuCores { get; set; }
+    [FirestoreProperty("requested_ram_gb")]
+    public int? RequestedRamGb { get; set; }
+
+    [FirestoreProperty("effective_cpu_cores")]
+    public int EffectiveCpuCores { get; set; }
+    [FirestoreProperty("effective_ram_gb")]
+    public int EffectiveRamGb { get; set; }
 }

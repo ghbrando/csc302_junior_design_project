@@ -167,11 +167,20 @@ public class MigrationService : IMigrationService
 
             var newVmName = oldVm.Name;
             var startedAt = DateTime.UtcNow;
+            var effectiveCPU = request.EffectiveCpuCores;
+            var effectiveRAM = request.EffectiveRamGb;
+
+            if (effectiveCPU <= 0 || effectiveRAM <= 0)
+            {
+                _logger.LogWarning("[Migration] Effective CPU or RAM is null, defaulting to old VM specs.");
+                effectiveCPU = oldVm.CpuCores;
+                effectiveRAM = oldVm.RamGB;
+            }
 
             _logger.LogInformation("[Migration] Step 7 – starting container from {Image}", imageToUse);
             var (containerId, _) = await _dockerService.StartContainerAsync(
                 newVmId, newVmName, imageToUse, relayPort,
-                oldVm.CpuCores, oldVm.RamGB,
+                effectiveCPU, effectiveRAM,
                 existingVolumeName: newVolumeName,
                 consumerUid: oldVm.Client,
                 volumeGb: oldVm.VolumeRequestedGb);
@@ -195,8 +204,8 @@ public class MigrationService : IMigrationService
                 Client = oldVm.Client,
                 RelayPort = relayPort,
                 SshPort = sshPort,
-                CpuCores = oldVm.CpuCores,
-                RamGB = oldVm.RamGB,
+                CpuCores = effectiveCPU,
+                RamGB = effectiveRAM,
                 VolumeRequestedGb = oldVm.VolumeRequestedGb,
                 VolumeSyncStatus = "Idle",
                 OriginalVmId = request.VmId,
@@ -289,9 +298,9 @@ public class MigrationService : IMigrationService
     private async Task<int> AllocateRelayPortAsync()
     {
         var portStart = _configuration.GetValue<int>("FrpRelay:PortRangeStart", 2222);
-        var portEnd   = _configuration.GetValue<int>("FrpRelay:PortRangeEnd",   2300);
+        var portEnd = _configuration.GetValue<int>("FrpRelay:PortRangeEnd", 2300);
 
-        var allVms    = await _vmRepo.GetAllAsync();
+        var allVms = await _vmRepo.GetAllAsync();
         var usedPorts = allVms
             .Where(v => v.RelayPort.HasValue)
             .Select(v => v.RelayPort!.Value)

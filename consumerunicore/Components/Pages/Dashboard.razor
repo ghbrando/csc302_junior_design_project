@@ -66,10 +66,9 @@
                         MigrationStatusText="@(GetMigrationStatusText(vm.VmId, vm.MigrationStatus))"
                         OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
                         OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" OnStop="@(() => HandleStopVm(vm.VmId))"
-                        OnBackup="@(() => HandleBackupVm(vm.VmId))" OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId))"
-                        ServiceUrl="@vm.ServiceUrl"
-                        IsProvisioning="@vm.IsProvisioning"
-                        IsFailed="@vm.IsFailed" />
+                        OnBackup="@(() => HandleBackupVm(vm.VmId))"
+                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId, vm.CpuCores, vm.RamGb))"
+                        ServiceUrl="@vm.ServiceUrl" IsProvisioning="@vm.IsProvisioning" IsFailed="@vm.IsFailed" />
             }
         </div>
     }
@@ -92,7 +91,8 @@
                OnClose="@(() => _showCreateModal = false)" />
 
 <MigrationDialog IsOpen="@_showMigrateDialog" VmId="@_migrateVmId" ConsumerUid="@(AuthState.FirebaseUid ?? "")"
-                 SourceProviderUid="@_migrateSourceProvider" OnClose="@(() => _showMigrateDialog = false)" />
+                 SourceProviderUid="@_migrateSourceProvider" CurrentCpuCores="@_migrateCurrentCpuCores"
+                 CurrentRamGb="@_migrateCurrentRamGb" OnClose="@(() => _showMigrateDialog = false)" />
 
 @code {
     // ── Display models ────────────────────────────────────────────────────────
@@ -100,7 +100,8 @@
                      string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
                      string? VolumeSyncStatus, string LastBackup,
                      string? MigrationStatus, string ProviderId, bool ProviderUnhealthy,
-                     string? ServiceUrl, bool IsProvisioning, bool IsFailed);
+                     string? ServiceUrl, bool IsProvisioning, bool IsFailed,
+                     int CpuCores, int RamGb);
 
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
@@ -122,6 +123,8 @@
     private bool _showMigrateDialog;
     private string _migrateVmId = "";
     private string _migrateSourceProvider = "";
+    private int _migrateCurrentCpuCores;
+    private int _migrateCurrentRamGb;
 
     private double _totalSpent => _runningVms.Sum(v => v.Cost);
 
@@ -301,7 +304,9 @@
             ProviderUnhealthy: providerUnhealthy,
             ServiceUrl: vm.ServiceUrl,
             IsProvisioning: vm.Status == "Provisioning",
-            IsFailed: vm.Status == "Failed"
+            IsFailed: vm.Status == "Failed",
+            CpuCores: vm.CpuCores,
+            RamGb: vm.RamGB
         );
     }
 
@@ -456,10 +461,12 @@
     }
 
     // ── Migration ─────────────────────────────────────────────────────────
-    private void OpenMigrationDialog(string vmId, string providerId)
+    private void OpenMigrationDialog(string vmId, string providerId, int currentCpuCores, int currentRamGb)
     {
         _migrateVmId = vmId;
         _migrateSourceProvider = providerId;
+        _migrateCurrentCpuCores = currentCpuCores;
+        _migrateCurrentRamGb = currentRamGb;
         _showMigrateDialog = true;
     }
 
