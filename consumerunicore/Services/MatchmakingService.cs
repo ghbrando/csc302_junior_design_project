@@ -42,6 +42,8 @@ namespace consumerunicore.Services
 
         public async Task<List<MatchmakingResult>> FindTopMatchesAsync(MatchmakingRequest request, int maxResults = 5)
         {
+            if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults), "Must be at least 1.");
+
             var onlineInRegion = await FetchOnlineProvidersInRegionAsync(request.Region);
 
             if (!onlineInRegion.Any())
