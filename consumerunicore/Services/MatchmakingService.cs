@@ -10,6 +10,12 @@ namespace consumerunicore.Services
         /// Returns null if no qualifying provider exists.
         /// </summary>
         Task<MatchmakingResult?> FindBestMatchAsync(MatchmakingRequest request);
+
+        /// <summary>
+        /// Returns up to <paramref name="maxResults"/> qualifying providers,
+        /// sorted by consistency score descending.
+        /// </summary>
+        Task<List<MatchmakingResult>> FindTopMatchesAsync(MatchmakingRequest request, int maxResults = 5);
     }
 
     public class MatchmakingService : IMatchmakingService
@@ -30,32 +36,28 @@ namespace consumerunicore.Services
 
         public async Task<MatchmakingResult?> FindBestMatchAsync(MatchmakingRequest request)
         {
-            // ----------------------------------------------------------------
-            // STEP 1 + 2: Single Firestore round-trip — filter Online + region.
-            // CreateQuery() chains both WhereEqualTo filters before executing.
-            // ----------------------------------------------------------------
+            var matches = await FindTopMatchesAsync(request, maxResults: 1);
+            return matches.FirstOrDefault();
+        }
+
+        public async Task<List<MatchmakingResult>> FindTopMatchesAsync(MatchmakingRequest request, int maxResults = 5)
+        {
+            if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults), "Must be at least 1.");
+
             var onlineInRegion = await FetchOnlineProvidersInRegionAsync(request.Region);
 
             if (!onlineInRegion.Any())
-                return null;
+                return new List<MatchmakingResult>();
 
-            // ----------------------------------------------------------------
-            // STEP 3: Evaluate each candidate in parallel (fan-out).
-            // Each evaluation fetches machine_specs + running VMs and computes
-            // available resources. Returns null if provider doesn't qualify.
-            // ----------------------------------------------------------------
             var evaluations = await Task.WhenAll(
                 onlineInRegion.Select(p => EvaluateCandidateAsync(p, request)));
 
-            // ----------------------------------------------------------------
-            // STEP 4: Sort qualifying candidates by consistency_score DESC.
-            // Absent scores are null-coalesced to 100.0.
-            // STEP 5: Return the top result (greedy first-match by score).
-            // ----------------------------------------------------------------
             return evaluations
                 .Where(e => e != null)
                 .OrderByDescending(e => e!.ConsistencyScore)
-                .FirstOrDefault();
+                .Take(maxResults)
+                .Select(e => e!)
+                .ToList();
         }
 
         // ====================================================================
