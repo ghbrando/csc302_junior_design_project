@@ -119,15 +119,10 @@
     {
         errorMessage = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        var validationError = ValidateInputs();
+        if (validationError != null)
         {
-            errorMessage = "Email and password are required.";
-            return;
-        }
-
-        if (isRegister && string.IsNullOrWhiteSpace(name))
-        {
-            errorMessage = "Full name is required.";
+            errorMessage = validationError;
             return;
         }
 
@@ -147,7 +142,6 @@
 
             if (isRegister)
             {
-                // Create Firebase user, then save consumer in Firestore
                 var idToken = await FirebaseAuth.SignUpAsync(email, password);
                 var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
                 var existing = await ConsumerService.GetByFirebaseUidAsync(decoded.Uid);
@@ -158,15 +152,27 @@
                     return;
                 }
 
+                await FirebaseAuth.SendEmailVerificationAsync(idToken);
+
                 authenticatedConsumer = await ConsumerService.CreateConsumerAsync(name, email, decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
+
+                errorMessage = "Account created! Please check your email to verify your account before logging in.";
+                isRegister = false;
+                return;
             }
             else
             {
-                // Verify credentials and update last login
                 var idToken = await FirebaseAuth.SignInAsync(email, password);
                 var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+
+                if (!decoded.Claims.TryGetValue("email_verified", out var ev) || ev is not true)
+                {
+                    errorMessage = "Please verify your email before logging in. Check your inbox.";
+                    return;
+                }
+
                 var consumer = await ConsumerService.GetByFirebaseUidAsync(decoded.Uid);
 
                 if (consumer == null)
@@ -176,7 +182,6 @@
                 }
 
                 authenticatedConsumer = consumer;
-
                 await ConsumerService.UpdateLastLoginAsync(decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, consumer.Name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, consumer.Name);
@@ -231,6 +236,31 @@
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await HandleSubmit();
+    }
+
+    private string? ValidateInputs()
+    {
+        // Name check (only required during registration)
+        if (isRegister && string.IsNullOrWhiteSpace(name))
+            return "Full name is required.";
+
+        // Basic email format check
+        if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            return "Please enter a valid email address.";
+
+        if (!isReset)
+        {
+            if (password.Length < 8)
+                return "Password must be at least 8 characters.";
+
+            if (!password.Any(char.IsDigit))
+                return "Password must contain at least one number.";
+
+            if (!password.Any(char.IsUpper))
+                return "Password must contain at least one uppercase letter.";
+        }
+
+        return null;
     }
 }
 

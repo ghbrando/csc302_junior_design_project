@@ -77,6 +77,19 @@ public class FirebaseAuthService : IFirebaseAuthService
             throw new Exception(result.Error.Message);
     }
 
+    public async Task SendEmailVerificationAsync(string idToken)
+    {
+        var http = _httpFactory.CreateClient();
+        var payload = new { requestType = "VERIFY_EMAIL", idToken };
+        var url = "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=" + _webApiKey;
+        var response = await http.PostAsJsonAsync(url, payload);
+        var result = await response.Content.ReadFromJsonAsync<FirebaseRestResponse>()
+                    ?? throw new Exception("Invalid response format from Firebase.");
+
+        if (!string.IsNullOrEmpty(result.Error?.Message))
+            throw new Exception(result.Error.Message);
+    }
+
     // Internal response model for Firebase REST API
     private class FirebaseRestResponse
     {
