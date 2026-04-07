@@ -103,13 +103,6 @@ public class HeartbeatWorker : BackgroundService
                 continue;
             }
 
-            // Offline providers are excluded from scoring — their VMs may be in a transient state
-            if (provider.NodeStatus == "Offline")
-            {
-                _logger.LogDebug("[HeartbeatWorker] Provider {Name} is Offline, skipping.", provider.Name);
-                continue;
-            }
-
             double scoreDelta = 0;
             var vmFieldUpdates = new List<(string vmId, int consecutiveMisses)>();
 

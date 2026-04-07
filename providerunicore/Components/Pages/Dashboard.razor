@@ -1037,14 +1037,15 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             {
                 if (!string.IsNullOrEmpty(vm.ContainerId))
                     await DockerService.StopContainerAsync(vm.ContainerId, vm.Name, vm.VolumeName);
-
-                MonitorService.StopMonitoring(vmId);
-                await VmService.DeleteVmAsync(vmId);
             }
             catch (Exception ex)
             {
-                errors.Add($"{vm.Name}: {ex.Message}");
+                errors.Add($"{vm.Name} (Docker): {ex.Message}");
             }
+
+            // Always clean up Firestore and in-memory state regardless of Docker errors.
+            MonitorService.StopMonitoring(vmId);
+            await VmService.DeleteVmAsync(vmId);
         }
 
         _isStopping = false;
