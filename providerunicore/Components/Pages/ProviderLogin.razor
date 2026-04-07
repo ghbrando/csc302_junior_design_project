@@ -55,7 +55,12 @@
         {
             <div class="field-group">
                 <label class="field-label">PASSWORD</label>
-                <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown"/>
+                <div class="password-wrapper">
+                    <input class="field-input" type="@(showPassword ? "text" : "password")" placeholder="••••••••" @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown"/>
+                    <button type="button" class="password-toggle" @onclick="TogglePassword" tabindex="-1">
+                        <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                    </button>
+                </div>
             </div>
         }
 
@@ -111,6 +116,7 @@
     private bool isRegister = false;
     private bool isReset = false;
     private bool isLoading = false;
+    private bool showPassword = false;
     private bool showTermsModal = false;
     private string pendingProviderUid = string.Empty;
     private string errorMessage = string.Empty;
@@ -238,6 +244,8 @@
         Nav.NavigateTo("/dashboard/");
     }
 
+    private void TogglePassword() => showPassword = !showPassword;
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key == "Enter") await HandleSubmit();
@@ -360,6 +368,48 @@
         font-weight: 600;
     }
 
+    .password-wrapper {
+        display: flex;
+        align-items: center;
+        background-color: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        transition: border-color 0.2s;
+    }
+
+    .password-wrapper:focus-within {
+        border-color: var(--uc-green);
+    }
+
+    .password-wrapper .field-input {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        padding-right: 0;
+    }
+
+    .password-wrapper .field-input:focus {
+        border-color: transparent;
+    }
+
+    .password-toggle {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        padding: 0 0.7rem;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        line-height: 1;
+    }
+
+    .password-toggle:hover {
+        color: #555;
+    }
+
     .field-input {
         background-color: var(--uc-bg-elevated);
         border: 1px solid var(--uc-border);
@@ -424,5 +474,11 @@
         cursor: pointer;
         padding: 0;
         text-decoration: underline;
+    }
+
+    /* Suppress browser-native password reveal button */
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+        display: none;
     }
 </style>
