@@ -41,21 +41,21 @@
         {
             <div class="field-group">
                 <label class="field-label">FULL NAME</label>
-                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" />
+                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" @onkeydown="OnKeyDown" />
             </div>
         }
 
         <div class="field-group">
             <label class="field-label">EMAIL ADDRESS</label>
             <input class="field-input" type="email" placeholder="john@example.com" @bind="email"
-                   @bind:event="oninput" />
+                   @bind:event="oninput" @onkeydown="OnKeyDown" />
         </div>
 
         @if (!isReset)
         {
             <div class="field-group">
                 <label class="field-label">PASSWORD</label>
-                <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" />
+                <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown"/>
             </div>
         }
 
@@ -228,6 +228,11 @@
     {
         await ProviderService.UpdateNodeStatusAsync("Online", firebaseUid);
         Nav.NavigateTo("/dashboard/");
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await HandleSubmit();
     }
 }
 
