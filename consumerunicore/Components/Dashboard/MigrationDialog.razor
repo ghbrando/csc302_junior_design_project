@@ -49,6 +49,25 @@
                     else
                     {
                         <div class="mig-field">
+                            <label class="mig-label">REQUESTED CPU CORES</label>
+                            <input class="mig-input" type="number" min="@CurrentCpuCores" step="1" @bind="_requestedCpuCores" />
+                            <div class="mig-hint">Current: @CurrentCpuCores vCPU. Upgrades only.</div>
+                        </div>
+
+                        <div class="mig-field">
+                            <label class="mig-label">REQUESTED RAM (GB)</label>
+                            <input class="mig-input" type="number" min="@CurrentRamGb" step="1" @bind="_requestedRamGb" />
+                            <div class="mig-hint">Current: @CurrentRamGb GB. Upgrades only.</div>
+                        </div>
+
+                        @if (_requestedCpuCores < CurrentCpuCores || _requestedRamGb < CurrentRamGb)
+                        {
+                            <div class="mig-validation-error">
+                                Requested resources cannot be lower than current VM specs.
+                            </div>
+                        }
+
+                        <div class="mig-field">
                             <label class="mig-label">TARGET PROVIDER</label>
                             <div class="mig-provider-option @(_selectedProviderUid == null ? "selected" : "")"
                                  @onclick="() => _selectedProviderUid = null">
@@ -74,7 +93,7 @@
 
                         <div class="mig-actions">
                             <button class="mig-btn-cancel" @onclick="CloseModal">Cancel</button>
-                            <button class="mig-btn-primary" @onclick="ConfirmMigrationAsync">
+                            <button class="mig-btn-primary" @onclick="ConfirmMigrationAsync" disabled="@HasInvalidSizing">
                                 <i class="bi bi-arrow-right-circle"></i> Confirm Migration
                             </button>
                         </div>
@@ -144,6 +163,8 @@
     [Parameter] public string VmId { get; set; } = "";
     [Parameter] public string ConsumerUid { get; set; } = "";
     [Parameter] public string SourceProviderUid { get; set; } = "";
+    [Parameter] public int CurrentCpuCores { get; set; }
+    [Parameter] public int CurrentRamGb { get; set; }
 
     private Step _step = Step.SelectTarget;
     private List<Provider> _providers = new();
@@ -153,9 +174,22 @@
     private VmMigrationRequest? _migrationRequest;
     private FirestoreChangeListener? _migrationListener;
     private bool _providersLoaded;
+    private int _requestedCpuCores;
+    private int _requestedRamGb;
+    private bool HasInvalidSizing =>
+        _requestedCpuCores < CurrentCpuCores || _requestedRamGb < CurrentRamGb ||
+        _requestedCpuCores <= 0 || _requestedRamGb <= 0;
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsOpen)
+        {
+            if (_requestedCpuCores <= 0)
+                _requestedCpuCores = Math.Max(CurrentCpuCores, 1);
+            if (_requestedRamGb <= 0)
+                _requestedRamGb = Math.Max(CurrentRamGb, 1);
+        }
+
         if (IsOpen && !_providersLoaded && !string.IsNullOrEmpty(SourceProviderUid))
         {
             await LoadProvidersAsync();
@@ -191,13 +225,21 @@
 
     private async Task ConfirmMigrationAsync()
     {
+        if (HasInvalidSizing)
+        {
+            _errorMessage = "Requested resources cannot be lower than current VM specs.";
+            _step = Step.Error;
+            StateHasChanged();
+            return;
+        }
+
         _step = Step.Submitting;
         StateHasChanged();
 
         try
         {
             _migrationRequest = await MigrationService.RequestMigrationAsync(
-                VmId, ConsumerUid, _selectedProviderUid);
+                VmId, ConsumerUid, _selectedProviderUid, _requestedCpuCores, _requestedRamGb);
 
             _step = Step.Migrating;
             StateHasChanged();
@@ -256,6 +298,8 @@
         _step = Step.SelectTarget;
         _errorMessage = null;
         _selectedProviderUid = null;
+        _requestedCpuCores = Math.Max(CurrentCpuCores, 1);
+        _requestedRamGb = Math.Max(CurrentRamGb, 1);
     }
 
     private async Task CloseModal()
@@ -278,6 +322,8 @@
         _errorMessage = null;
         _migrationRequest = null;
         _providersLoaded = false;
+        _requestedCpuCores = 0;
+        _requestedRamGb = 0;
     }
 
     public async ValueTask DisposeAsync()
@@ -398,6 +444,37 @@
         color: var(--uc-text-muted);
     }
 
+    .mig-input {
+        width: 100%;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        color: var(--uc-text-white);
+        border-radius: 6px;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.8rem;
+    }
+
+    .mig-input:focus {
+        outline: none;
+        border-color: rgba(139, 92, 246, 0.6);
+    }
+
+    .mig-hint {
+        margin-top: 0.35rem;
+        font-size: 0.7rem;
+        color: var(--uc-text-muted);
+    }
+
+    .mig-validation-error {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        color: var(--uc-red);
+        font-size: 0.75rem;
+        border-radius: 6px;
+        padding: 0.55rem 0.7rem;
+        margin-bottom: 0.8rem;
+    }
+
     .mig-actions {
         display: flex;
         justify-content: flex-end;
@@ -440,6 +517,12 @@
         background: rgba(139, 92, 246, 0.35);
     }
 
+    .mig-btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: rgba(139, 92, 246, 0.12);
+    }
+
     .mig-center {
         display: flex;
         flex-direction: column;
@@ -460,7 +543,9 @@
     }
 
     @@keyframes mig-spin {
-        to { transform: rotate(360deg); }
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     .mig-status-text {

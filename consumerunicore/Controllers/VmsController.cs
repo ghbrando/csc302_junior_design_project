@@ -160,7 +160,7 @@ public class VmsController : ControllerBase
                 return Unauthorized(new { error = "Consumer not authenticated." });
 
             var request = await _migrationService.RequestMigrationAsync(
-                vmId, consumerUid, body?.TargetProviderUid);
+                vmId, consumerUid, body?.TargetProviderUid, body?.RequestedCpuCores, body?.RequestedRamGb);
 
             return Ok(new
             {
@@ -169,6 +169,8 @@ public class VmsController : ControllerBase
                 source_provider = request.SourceProviderUid,
                 target_provider = request.TargetProviderUid,
                 status = request.Status,
+                requested_cpu_cores = request.RequestedCpuCores,
+                requested_ram_gb = request.RequestedRamGb,
             });
         }
         catch (InvalidOperationException ex)
@@ -253,4 +255,6 @@ public class MigrateRequest
     /// Optional target provider UID. If null, auto-selects healthiest provider.
     /// </summary>
     public string? TargetProviderUid { get; set; }
+    public int? RequestedCpuCores { get; set; }
+    public int? RequestedRamGb { get; set; }
 }
