@@ -158,7 +158,9 @@
                                             <span>@match.AvailableRamGb.ToString("F1") GB RAM available</span>
                                         </div>
                                     </div>
-                                    <button class="cvm-btn-primary" @onclick="() => SelectProviderAsync(match)">
+                                    <button class="cvm-btn-primary"
+                                            aria-label="Select @match.Provider.Name"
+                                            @onclick="() => SelectProviderAsync(match)">
                                         Select
                                     </button>
                                 </div>
@@ -517,34 +519,6 @@
         background: rgba(139, 92, 246, 0.35);
     }
 
-    /* Match card */
-    .cvm-match-card {
-        background: var(--uc-bg-elevated);
-        border: 1px solid var(--uc-border);
-        border-radius: 6px;
-        padding: 0.9rem 1rem;
-        margin-bottom: 0.9rem;
-    }
-
-    .cvm-match-row {
-        display: flex;
-        justify-content: space-between;
-        padding: 0.3rem 0;
-        font-size: 0.8rem;
-    }
-
-    .cvm-match-row:not(:last-child) {
-        border-bottom: 1px solid var(--uc-border);
-    }
-
-    .cvm-match-label {
-        color: var(--uc-text-muted);
-    }
-
-    .cvm-match-value {
-        color: var(--uc-text-white);
-        font-weight: 500;
-    }
 
     .cvm-request-summary {
         display: flex;
