@@ -672,7 +672,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             if (provider != null)
             {
                 _onboardingStep = provider.OnboardingStep;
-                _showOnboarding = provider.OnboardingStep < 3;
+                _showOnboarding = provider.OnboardingStep < 4;
             }
 
             _ = InvokeAsync(StateHasChanged);

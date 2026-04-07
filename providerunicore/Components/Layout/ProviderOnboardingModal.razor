@@ -1,4 +1,5 @@
 @inject IProviderService ProviderService
+@inject IMachineService MachineService
 
 @if (IsVisible)
 {
@@ -84,6 +85,79 @@
                     </div>
                 }
 
+                @if (_step == 3)
+                {
+                    <div class="ob-question">
+                        <div class="ob-question-label">
+                            <i class="bi bi-cpu"></i> Detect Your Hardware
+                        </div>
+                        <p class="ob-question-hint">UniCore will scan your machine to register its specs on the network. This helps consumers find nodes that match their requirements.</p>
+
+                        @if (_specs == null && !_detecting && _detectError == null)
+                        {
+                            <button class="ob-detect-btn" @onclick="DetectSpecs">
+                                <i class="bi bi-search"></i> Run Detection
+                            </button>
+                        }
+
+                        @if (_detecting)
+                        {
+                            <div class="ob-detect-status">
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                Scanning hardware…
+                            </div>
+                        }
+
+                        @if (_detectError != null)
+                        {
+                            <div class="ob-detect-error">
+                                <i class="bi bi-exclamation-triangle me-1"></i> @_detectError
+                            </div>
+                            <button class="ob-detect-btn mt-2" @onclick="DetectSpecs">
+                                <i class="bi bi-arrow-clockwise"></i> Retry
+                            </button>
+                        }
+
+                        @if (_specs != null)
+                        {
+                            <div class="ob-specs-grid">
+                                <div class="ob-spec-row">
+                                    <span class="ob-spec-key"><i class="bi bi-cpu-fill"></i> CPU</span>
+                                    <span class="ob-spec-val">@_specs.CpuName (@_specs.CpuCores c / @_specs.CpuThreads t · @_specs.CpuClockSpeedGHz GHz)</span>
+                                </div>
+                                <div class="ob-spec-row">
+                                    <span class="ob-spec-key"><i class="bi bi-memory"></i> RAM</span>
+                                    <span class="ob-spec-val">@_specs.RamGB GB</span>
+                                </div>
+                                <div class="ob-spec-row">
+                                    <span class="ob-spec-key"><i class="bi bi-gpu-card"></i> GPU</span>
+                                    <span class="ob-spec-val">
+                                        @if (!string.IsNullOrEmpty(_specs.GpuName))
+                                        {
+                                            @($"{_specs.GpuName} ({_specs.VramGB} GB VRAM)")
+                                        }
+                                        else
+                                        {
+                                            <span class="ob-spec-none">None detected</span>
+                                        }
+                                    </span>
+                                </div>
+                                <div class="ob-spec-row">
+                                    <span class="ob-spec-key"><i class="bi bi-hdd"></i> Disk</span>
+                                    <span class="ob-spec-val">@_specs.DiskGB GB</span>
+                                </div>
+                                <div class="ob-spec-row">
+                                    <span class="ob-spec-key"><i class="bi bi-laptop"></i> OS</span>
+                                    <span class="ob-spec-val">@_specs.OsName</span>
+                                </div>
+                            </div>
+                            <button class="ob-detect-btn ob-detect-btn--rerun mt-3" @onclick="DetectSpecs">
+                                <i class="bi bi-arrow-clockwise"></i> Re-run Detection
+                            </button>
+                        }
+                    </div>
+                }
+
             </div>
 
             <!-- Footer -->
@@ -114,7 +188,7 @@
 }
 
 @code {
-    private const int TotalSteps = 3;
+    private const int TotalSteps = 4;
 
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public int InitialStep { get; set; } = 0;
@@ -128,11 +202,16 @@
     private string _timeZone = "UTC-08:00";
     private string _currency = "USD";
 
+    private MachineSpecs? _specs;
+    private bool _detecting;
+    private string? _detectError;
+
     private bool CanAdvance => _step switch
     {
         0 => !string.IsNullOrEmpty(_region),
         1 => !string.IsNullOrEmpty(_timeZone),
         2 => !string.IsNullOrEmpty(_currency),
+        3 => _specs != null,
         _ => false
     };
 
@@ -153,8 +232,10 @@
             else if (_step == 1)
                 await ProviderService.UpdateOnboardingAsync(FirebaseUid, 2, timeZone: _timeZone);
             else if (_step == 2)
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, 3, currency: _currency);
+            else if (_step == 3)
             {
-                await ProviderService.UpdateOnboardingAsync(FirebaseUid, TotalSteps, currency: _currency);
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, TotalSteps);
                 await OnComplete.InvokeAsync();
                 return;
             }
@@ -169,6 +250,25 @@
     private void GoBack()
     {
         if (_step > 0) _step--;
+    }
+
+    private async Task DetectSpecs()
+    {
+        _detecting = true;
+        _detectError = null;
+        _specs = null;
+        try
+        {
+            _specs = await MachineService.GetSpecsAsync();
+        }
+        catch (Exception ex)
+        {
+            _detectError = ex.Message;
+        }
+        finally
+        {
+            _detecting = false;
+        }
     }
 
     // ── Data ──────────────────────────────────────────────────
@@ -377,4 +477,47 @@
         background: transparent; border-color: var(--ob-border);
         color: var(--ob-muted); cursor: not-allowed; box-shadow: none;
     }
+
+    /* Spec detection */
+    .ob-detect-btn {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 20px; border-radius: var(--ob-radius);
+        background: rgba(0,229,160,.08); border: 1px solid rgba(0,229,160,.35);
+        color: var(--ob-green); font-family: var(--ob-font);
+        font-size: .75rem; font-weight: 600; letter-spacing: .08em;
+        cursor: pointer; transition: all .2s;
+    }
+    .ob-detect-btn:hover { background: rgba(0,229,160,.15); border-color: var(--ob-green); }
+    .ob-detect-btn--rerun { font-size: .68rem; opacity: .75; }
+    .ob-detect-btn--rerun:hover { opacity: 1; }
+
+    .ob-detect-status {
+        display: flex; align-items: center;
+        font-size: .78rem; color: var(--ob-muted); padding: 8px 0;
+    }
+
+    .ob-detect-error {
+        font-size: .75rem; color: #ff6b6b;
+        background: rgba(255,107,107,.07); border: 1px solid rgba(255,107,107,.25);
+        border-radius: var(--ob-radius); padding: 10px 14px;
+    }
+
+    .ob-specs-grid {
+        display: flex; flex-direction: column; gap: 0;
+        border: 1px solid var(--ob-border); border-radius: var(--ob-radius);
+        overflow: hidden;
+    }
+    .ob-spec-row {
+        display: flex; align-items: baseline; gap: 12px;
+        padding: 10px 14px; font-size: .78rem;
+        border-bottom: 1px solid var(--ob-border);
+    }
+    .ob-spec-row:last-child { border-bottom: none; }
+    .ob-spec-row:nth-child(even) { background: rgba(255,255,255,.02); }
+    .ob-spec-key {
+        min-width: 60px; color: var(--ob-green); font-weight: 600;
+        display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .ob-spec-val { color: var(--ob-mono); word-break: break-all; }
+    .ob-spec-none { color: var(--ob-muted); font-style: italic; }
 </style>
