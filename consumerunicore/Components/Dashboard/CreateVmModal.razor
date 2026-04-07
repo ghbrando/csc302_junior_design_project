@@ -105,49 +105,71 @@
                     </div>
                     break;
 
-                // ── Step 3: Confirm match ──────────────────────────────────────
+                // ── Step 3: Choose Provider ──────────────────────────────────────
                 case Step.Confirm:
                     <div class="cvm-header">
-                        <i class="bi bi-check-circle cvm-icon" style="color: var(--uc-green);"></i>
-                        <span class="cvm-title">Match Found</span>
+                        <i class="bi bi-people cvm-icon"></i>
+                        <span class="cvm-title">Choose Provider</span>
                     </div>
 
-                    <div class="cvm-match-card">
-                        <div class="cvm-match-row">
-                            <span class="cvm-match-label">Provider</span>
-                            <span class="cvm-match-value">@_match!.Provider.Name</span>
-                        </div>
-                        <div class="cvm-match-row">
-                            <span class="cvm-match-label">Region</span>
-                            <span class="cvm-match-value">@_match.Provider.Region</span>
-                        </div>
-                        <div class="cvm-match-row">
-                            <span class="cvm-match-label">Consistency</span>
-                            <span class="cvm-match-value">@_match.ConsistencyScore.ToString("F0")%</span>
-                        </div>
-                        <div class="cvm-match-row">
-                            <span class="cvm-match-label">Available CPU</span>
-                            <span class="cvm-match-value">@_match.AvailableCpuCores cores</span>
-                        </div>
-                        <div class="cvm-match-row">
-                            <span class="cvm-match-label">Available RAM</span>
-                            <span class="cvm-match-value">@_match.AvailableRamGb.ToString("F1") GB</span>
-                        </div>
-                    </div>
-
-                    <div class="cvm-request-summary">
+                    <div class="cvm-request-summary" style="margin-bottom: 1rem;">
                         <span class="cvm-label">YOUR REQUEST</span>
                         <span class="cvm-summary-text">@_cpuCores vCPU / @_ramGb GB RAM@(_volumeGb.HasValue ? $" / {_volumeGb} GB Storage" : "") &bull; @_selectedImage</span>
                     </div>
 
-                    <div class="cvm-actions">
-                        <button class="cvm-btn-cancel" @onclick="GoBack">
-                            <i class="bi bi-arrow-left"></i> Back
-                        </button>
-                        <button class="cvm-btn-primary" @onclick="SubmitRequestAsync">
-                            <i class="bi bi-rocket-takeoff"></i> Launch VM
-                        </button>
-                    </div>
+                    @if (_matches.Count == 0)
+                    {
+                        <div class="cvm-center" style="padding: 1.5rem 0;">
+                            <i class="bi bi-exclamation-circle" style="font-size: 2rem; color: var(--uc-text-muted);"></i>
+                            <p class="cvm-status-text" style="color: var(--uc-text-muted); margin-top: 0.75rem;">No Available Providers</p>
+                            <p class="cvm-status-sub">No available providers in your region. Please try again later.</p>
+                        </div>
+                        <div class="cvm-actions">
+                            <button class="cvm-btn-cancel" @onclick="GoBack">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button class="cvm-btn-cancel" @onclick="CloseModal">Close</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cvm-provider-list">
+                            @for (int i = 0; i < _matches.Count; i++)
+                            {
+                                var match = _matches[i];
+                                var isRecommended = i == 0;
+                                <div class="cvm-provider-card">
+                                    <div class="cvm-provider-info">
+                                        <div class="cvm-provider-name-row">
+                                            <span class="cvm-provider-name">@match.Provider.Name</span>
+                                            @if (isRecommended)
+                                            {
+                                                <span class="cvm-recommended-badge">RECOMMENDED</span>
+                                            }
+                                        </div>
+                                        <div class="cvm-provider-meta">
+                                            <span>@match.Provider.Region</span>
+                                            <span class="cvm-meta-sep">&bull;</span>
+                                            <span>@match.ConsistencyScore.ToString("F0")% consistency</span>
+                                        </div>
+                                        <div class="cvm-provider-resources">
+                                            <span>@match.AvailableCpuCores cores available</span>
+                                            <span class="cvm-meta-sep">&bull;</span>
+                                            <span>@match.AvailableRamGb.ToString("F1") GB RAM available</span>
+                                        </div>
+                                    </div>
+                                    <button class="cvm-btn-primary" @onclick="() => SelectProviderAsync(match)">
+                                        Select
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                        <div class="cvm-actions">
+                            <button class="cvm-btn-cancel" @onclick="GoBack">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                        </div>
+                    }
                     break;
 
                 // ── Step 4: Provisioning ───────────────────────────────────────
@@ -586,5 +608,69 @@
         margin: 0;
         max-width: 320px;
         line-height: 1.5;
+    }
+
+    /* Provider selection list */
+    .cvm-provider-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .cvm-provider-card {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: 6px;
+        padding: 0.75rem 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .cvm-provider-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .cvm-provider-name-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .cvm-provider-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .cvm-recommended-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--uc-purple);
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        border-radius: 3px;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .cvm-provider-meta,
+    .cvm-provider-resources {
+        font-size: 0.75rem;
+        color: var(--uc-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+
+    .cvm-meta-sep {
+        color: var(--uc-border-light);
     }
 </style>
