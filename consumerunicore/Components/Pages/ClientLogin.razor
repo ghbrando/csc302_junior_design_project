@@ -173,11 +173,12 @@
                 var idToken = await FirebaseAuth.SignInAsync(email, password);
                 var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
 
-                if (!decoded.Claims.TryGetValue("email_verified", out var ev) || ev is not true)
-                {
-                    errorMessage = "Please verify your email before logging in. Check your inbox.";
-                    return;
-                }
+                // DEV: email verification check paused
+                // if (!decoded.Claims.TryGetValue("email_verified", out var ev) || ev is not true)
+                // {
+                //     errorMessage = "Please verify your email before logging in. Check your inbox.";
+                //     return;
+                // }
 
                 var consumer = await ConsumerService.GetByFirebaseUidAsync(decoded.Uid);
 
