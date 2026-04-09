@@ -395,7 +395,7 @@
         flex-shrink: 0;
         background: none;
         border: none;
-        color: #888;
+        color: var(--uc-text-muted);
         cursor: pointer;
         padding: 0 0.7rem;
         font-size: 0.95rem;
@@ -405,7 +405,7 @@
     }
 
     .password-toggle:hover {
-        color: #555;
+        color: var(--uc-text-secondary);
     }
 
     .field-input {
@@ -430,7 +430,7 @@
 
     .auth-submit {
         background-color: var(--uc-blue);
-        color: #000;
+        color: #0b1020;
         border: none;
         border-radius: var(--uc-radius);
         font-size: 0.7rem;
@@ -472,6 +472,18 @@
         cursor: pointer;
         padding: 0;
         text-decoration: underline;
+    }
+
+    body.light-mode .auth-card {
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+    }
+
+    body.light-mode .auth-title {
+        color: var(--uc-text-primary);
+    }
+
+    body.light-mode .auth-submit {
+        color: #ffffff;
     }
 
     /* Suppress browser-native password reveal button */

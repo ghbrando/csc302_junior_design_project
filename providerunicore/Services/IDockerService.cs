@@ -21,7 +21,8 @@ public interface IDockerService
     Task<(string ContainerId, string VolumeName)> StartContainerAsync(
         string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
         string? existingVolumeName = null, string? consumerUid = null,
-        int? volumeGb = null, int? serviceRelayPort = null, CancellationToken ct = default);
+        int? volumeGb = null, int? serviceRelayPort = null, string? providerUid = null,
+        CancellationToken ct = default);
 
     /// <summary>
     /// Returns the host port mapped to SSH (port 22) inside the container.
@@ -32,7 +33,8 @@ public interface IDockerService
     /// <summary>
     /// Stops and removes a container by its Docker container ID, and optionally removes its associated volume.
     /// </summary>
-    Task StopContainerAsync(string containerId, string vmName, string? volumeName = null);
+    Task StopContainerAsync(string containerId, string vmName, string? volumeName = null,
+        string? vmId = null, string? providerUid = null);
 
     /// <summary>
     /// Returns a one-shot CPU% and RAM% snapshot for a running container.

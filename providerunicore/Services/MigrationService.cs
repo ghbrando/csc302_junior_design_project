@@ -152,7 +152,9 @@ public class MigrationService : IMigrationService
                 try
                 {
                     _monitorService.StopMonitoring(request.VmId);
-                    await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName);
+                        await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName,
+                            vmId: oldVm.VmId,
+                            providerUid: oldVm.ProviderId);
                 }
                 catch (Exception ex)
                 {
@@ -183,7 +185,8 @@ public class MigrationService : IMigrationService
                 effectiveCPU, effectiveRAM,
                 existingVolumeName: newVolumeName,
                 consumerUid: oldVm.Client,
-                volumeGb: oldVm.VolumeRequestedGb);
+                volumeGb: oldVm.VolumeRequestedGb,
+                providerUid: request.TargetProviderUid);
 
             newContainerId = containerId;
             var sshPort = await _dockerService.GetContainerSshPortAsync(containerId);
@@ -325,7 +328,10 @@ public class MigrationService : IMigrationService
     {
         if (!string.IsNullOrEmpty(containerId))
         {
-            try { await _dockerService.StopContainerAsync(containerId, vmId ?? "partial-migration"); }
+            try
+            {
+                await _dockerService.StopContainerAsync(containerId, vmId ?? "partial-migration", vmId: vmId);
+            }
             catch (Exception ex) { _logger.LogWarning("[Migration] Cleanup: failed to stop container {Id}: {Msg}", containerId, ex.Message); }
         }
 

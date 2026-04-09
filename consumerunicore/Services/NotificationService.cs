@@ -1,7 +1,5 @@
 using System.Runtime.InteropServices;
 
-namespace providerunicore.Services;
-
 public interface INotificationService
 {
     Task SendVmStartedNotificationAsync(string vmName, string vmId);
@@ -19,17 +17,15 @@ public class NotificationService : INotificationService
 
     public async Task SendVmStartedNotificationAsync(string vmName, string vmId)
     {
-        string title = "UniCore – VM Started";
-        string message = $"VM \"{vmName}\" is now running.";
-        _logger.LogInformation("Preparing VM-started notification for VM {VmId} ({VmName}).", vmId, vmName);
+        var title = "UniCore - VM Started";
+        var message = $"VM \"{vmName}\" is now running.";
         await SendNativeNotificationAsync(title, message);
     }
 
     public async Task SendVmStoppedNotificationAsync(string vmName, string vmId)
     {
-        string title = "UniCore – VM Stopped";
-        string message = $"VM \"{vmName}\" has stopped.";
-        _logger.LogInformation("Preparing VM-completed notification for VM {VmId} ({VmName}).", vmId, vmName);
+        var title = "UniCore - VM Stopped";
+        var message = $"VM \"{vmName}\" has stopped.";
         await SendNativeNotificationAsync(title, message);
     }
 
@@ -37,7 +33,6 @@ public class NotificationService : INotificationService
     {
         try
         {
-            _logger.LogInformation("Dispatching native notification on OS: {OS}", RuntimeInformation.OSDescription);
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 await SendWindowsNotificationAsync(title, body);
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
@@ -73,24 +68,21 @@ public class NotificationService : INotificationService
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
         System.Diagnostics.Process.Start(psi);
         return Task.CompletedTask;
     }
 
     private async Task SendLinuxNotificationAsync(string title, string body)
     {
-        // notify-send is part of libnotify, available on most Linux distros.
-        // Install with: sudo apt install libnotify-bin (Debian/Ubuntu)
-        //               sudo dnf install libnotify      (Fedora)
-        var iconPath = Path.Combine(AppContext.BaseDirectory, "wwwroot", "icons", "unicore-notification-icon.png");
-
         var psi = new System.Diagnostics.ProcessStartInfo
         {
             FileName = "notify-send",
-            ArgumentList = { "--app-name=UniCore", "--urgency=normal", $"--icon={iconPath}", title, body },
+            ArgumentList = { "--app-name=UniCore", "--urgency=normal", title, body },
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
         using var process = System.Diagnostics.Process.Start(psi);
         if (process != null)
             await process.WaitForExitAsync();
@@ -98,14 +90,9 @@ public class NotificationService : INotificationService
 
     private async Task SendMacNotificationAsync(string title, string body)
     {
-        // Prefer terminal-notifier when available because it tends to behave more
-        // consistently from long-running developer processes like dotnet watch.
-        _logger.LogInformation("Attempting macOS notification via terminal-notifier.");
         if (await TryTerminalNotifierAsync(title, body))
             return;
 
-        // Fall back to osascript, which is available on all macOS installations.
-        _logger.LogInformation("Falling back to macOS notification via osascript.");
         var script = $"display notification \"{EscapeAppleScriptString(body)}\" with title \"{EscapeAppleScriptString(title)}\"";
 
         var psi = new System.Diagnostics.ProcessStartInfo
@@ -117,20 +104,11 @@ public class NotificationService : INotificationService
         };
 
         using var process = System.Diagnostics.Process.Start(psi);
-        if (process == null)
-        {
-            _logger.LogWarning("macOS notification failed to start osascript.");
-            return;
-        }
-
-        await process.WaitForExitAsync();
-        if (process.ExitCode != 0)
-            _logger.LogWarning("osascript exited with code {ExitCode} while sending a macOS notification.", process.ExitCode);
-        else
-            _logger.LogInformation("macOS notification sent via osascript.");
+        if (process != null)
+            await process.WaitForExitAsync();
     }
 
-    private async Task<bool> TryTerminalNotifierAsync(string title, string body)
+    private static async Task<bool> TryTerminalNotifierAsync(string title, string body)
     {
         try
         {
@@ -144,8 +122,7 @@ public class NotificationService : INotificationService
                     "-appName", "UniCore"
                 },
                 UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true
+                CreateNoWindow = true
             };
 
             using var process = System.Diagnostics.Process.Start(psi);
@@ -153,24 +130,12 @@ public class NotificationService : INotificationService
                 return false;
 
             await process.WaitForExitAsync();
-            if (process.ExitCode == 0)
-            {
-                _logger.LogInformation("macOS notification sent via terminal-notifier.");
-                return true;
-            }
-
-            var stderr = await process.StandardError.ReadToEndAsync();
-            _logger.LogWarning(
-                "terminal-notifier exited with code {ExitCode}. Stderr: {Stderr}",
-                process.ExitCode,
-                string.IsNullOrWhiteSpace(stderr) ? "(empty)" : stderr.Trim());
+            return process.ExitCode == 0;
         }
-        catch (Exception ex)
+        catch
         {
-            _logger.LogDebug(ex, "terminal-notifier is unavailable or failed to start.");
+            return false;
         }
-
-        return false;
     }
 
     private static string EscapeAppleScriptString(string value)

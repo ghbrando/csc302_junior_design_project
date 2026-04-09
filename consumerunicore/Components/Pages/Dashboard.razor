@@ -6,6 +6,7 @@
 @implements IAsyncDisposable
 @inject IConsumerService ConsumerService
 @inject IConsumerVmService ConsumerVmService
+@inject INotificationService NotificationService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -127,6 +128,12 @@
     private readonly HashSet<string> _backupPendingVmIds = new();
     private Dictionary<string, string> _providerStatuses = new(); // providerId -> NodeStatus
     private Dictionary<string, VmMigrationRequest> _activeMigrations = new(); // vmId -> request
+    private readonly Dictionary<string, string> _lastVmStatuses = new(); // vmId -> last status
+    private readonly HashSet<string> _startedNotifiedVmIds = new();
+    private readonly HashSet<string> _completedNotifiedVmIds = new();
+    private bool _hasInitialVmSnapshot;
+    private bool _notifyVmStartedPref = true;
+    private bool _notifyVmCompletedPref = true;
     private bool _showMigrateDialog;
     private string _migrateVmId = "";
     private string _migrateSourceProvider = "";
@@ -194,6 +201,8 @@
                 _currencyCode = consumer.Currency;
             if (consumer != null)
             {
+                _notifyVmStartedPref = consumer.NotifyVmStarted;
+                _notifyVmCompletedPref = consumer.NotifyVmCompleted;
                 _onboardingStep = consumer.OnboardingStep;
                 _showOnboarding = consumer.OnboardingStep < 2;
             }
@@ -207,8 +216,16 @@
             .Select(d => d.ConvertTo<VirtualMachine>())
             .ToList();
 
-        _ = InvokeAsync(() =>
+        _ = InvokeAsync(async () =>
         {
+            if (_hasInitialVmSnapshot)
+                await NotifyVmTransitionsAsync(all);
+
+            _lastVmStatuses.Clear();
+            foreach (var vm in all)
+                _lastVmStatuses[vm.VmId] = vm.Status;
+            _hasInitialVmSnapshot = true;
+
             // Detect backup completion/error for VMs we triggered
             foreach (var vm in all)
             {
@@ -243,6 +260,60 @@
             _loading = false;
             StateHasChanged();
         });
+    }
+
+    private async Task NotifyVmTransitionsAsync(List<VirtualMachine> all)
+    {
+        var activeVmIds = all.Select(v => v.VmId).ToHashSet();
+        _startedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+        _completedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+
+        foreach (var vm in all)
+        {
+            var currentStatus = vm.Status ?? string.Empty;
+            var hasPrevious = _lastVmStatuses.TryGetValue(vm.VmId, out var previousStatus);
+            var previousWasActive = hasPrevious && IsRunningLike(previousStatus!);
+            var transitionedToRunning =
+                currentStatus.Equals("Running", StringComparison.OrdinalIgnoreCase)
+                && (!hasPrevious || !previousStatus!.Equals("Running", StringComparison.OrdinalIgnoreCase));
+
+            if (_notifyVmStartedPref
+                && transitionedToRunning
+                && !_startedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStartedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _startedNotifiedVmIds.Add(vm.VmId);
+                _completedNotifiedVmIds.Remove(vm.VmId);
+            }
+
+            if (_notifyVmCompletedPref
+                && previousWasActive
+                && IsCompletedStatus(currentStatus)
+                && !_completedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStoppedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _completedNotifiedVmIds.Add(vm.VmId);
+                _startedNotifiedVmIds.Remove(vm.VmId);
+            }
+        }
+    }
+
+    private static bool IsRunningLike(string status)
+    {
+        return status.Equals("Running", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Provisioning", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompletedStatus(string status)
+    {
+        return status.Equals("Stopped", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Failed", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Error", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveVmName(VirtualMachine vm)
+    {
+        return string.IsNullOrWhiteSpace(vm.Name) ? vm.VmId : vm.Name;
     }
 
     private void OnProviderSnapshot(QuerySnapshot snapshot)

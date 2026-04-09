@@ -25,12 +25,20 @@
 
 <style>
     .badge-online {
-        background-color: rgba(0, 230, 118, 0.1);
-        color: var(--uc-green);
-        border: 1px solid rgba(0, 230, 118, 0.3);
+        background-color: color-mix(in srgb, var(--uc-green) 30%, #062a18 70%);
+        color: #ffffff;
+        border: 1px solid color-mix(in srgb, var(--uc-green) 75%, transparent);
+        box-shadow: 0 0 0 1px rgba(0, 230, 118, 0.15), 0 0 16px rgba(0, 230, 118, 0.22);
         font-size: 0.65rem;
         padding: 0.35em 0.8em;
         letter-spacing: 1px;
+    }
+
+    body.light-mode .badge-online {
+        background-color: rgba(15, 143, 79, 0.12);
+        color: #0f8f4f;
+        border-color: rgba(15, 143, 79, 0.45);
+        box-shadow: none;
     }
 
     .btn-emergency {
@@ -49,8 +57,8 @@
     }
 
     .btn-launch-vm {
-        border: 1px solid rgba(0, 230, 118, 0.4);
-        color: var(--uc-green);
+        border: 1px solid color-mix(in srgb, var(--uc-green-readable) 52%, transparent);
+        color: var(--uc-green-readable);
         font-size: 0.7rem;
         font-weight: bold;
         letter-spacing: 1px;
@@ -59,8 +67,8 @@
     }
 
     .btn-launch-vm:hover:not(:disabled) {
-        background-color: rgba(0, 230, 118, 0.15);
-        color: var(--uc-green);
+        background-color: color-mix(in srgb, var(--uc-green-readable) 18%, transparent);
+        color: var(--uc-green-readable);
     }
 
     .btn-launch-vm:disabled {
@@ -80,8 +88,8 @@
     }
 
     .uc-modal {
-        background: var(--uc-dark-2);
-        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
         border-radius: 8px;
         padding: 1.75rem;
         width: 100%;
@@ -91,7 +99,7 @@
     .uc-modal-title {
         font-size: 0.95rem;
         font-weight: 600;
-        color: #e2e8f0;
+        color: var(--uc-text-primary);
         margin-bottom: 1.25rem;
     }
 
@@ -99,15 +107,15 @@
         font-size: 0.72rem;
         font-weight: 600;
         letter-spacing: 0.8px;
-        color: #64748b;
+        color: var(--uc-text-secondary);
         text-transform: uppercase;
         margin-bottom: 0.4rem;
     }
 
     .uc-select {
-        background: #0f172a;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        color: #e2e8f0;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-primary);
         font-size: 0.83rem;
         border-radius: 4px;
         padding: 0.45rem 0.7rem;
@@ -185,7 +193,7 @@
             </div>
             <div class="col-12 col-md-6 col-lg-3">
                 <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
-                          Color="#3b82f6" />
+                          Color="#3b82f6" ValueColor="var(--uc-text-primary)" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
                 <InfoCard Title="Hourly Rate" Value="@FormatCurrency(totalHourlyRate)" Unit="/hr"
@@ -193,18 +201,20 @@
             </div>
             <div class="col-12 col-md-6 col-lg-3">
                 <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
-                          Color="#ffeb3b" />
+                          Color="#ffeb3b" ValueColor="var(--uc-text-primary)" />
             </div>
         </div>
 
         <div class="row mb-3 g-3">
             <div class="col-md-6">
                 <ResourceSlider Title="CPU CORE LIMIT" Unit="percent" Max="100" MinLimit="20" Color="#00E5FF"
+                                TickCount="9" Step="2"
                                 IconClass="bi bi-cpu" Value="@CpuLimit" ValueChanged="@(v => OnSliderChanged(ref _cpuLimit, v))" />
             </div>
             <div class="col-md-6">
                 <ResourceSlider Title="RAM ALLOCATION" Unit="gigabytes"
                                 Max="@(_specs?.RamGB > 0 ? (double)_specs.RamGB : 128)" MinLimit="1" Color="#D500F9"
+                                TickCount="9" Step="0.5"
                                 IconClass="bi bi-hdd-rack" Value="@RamLimit" ValueChanged="@(v => OnSliderChanged(ref _ramLimit, v))" />
             </div>
         </div>

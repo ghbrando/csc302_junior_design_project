@@ -7,12 +7,14 @@
 
 <nav class="sidebar d-flex flex-column">
     <!-- Removed default bottom margin from logo container -->
-    <div class="sidebar-brand mb-0 pb-0">
-        <img src="/unicore-logo.png" alt="Unicore Logo" width="204" height="136" />
+    <div class="sidebar-brand pb-0">
+        <div class="sidebar-logo-badge">
+            <img src="/unicore-logo.png" alt="Unicore Logo" class="sidebar-logo-image" />
+        </div>
     </div>
 
     <!-- Removed default top margin and padding from the list -->
-    <ul class="nav flex-column sidebar-nav mt-0 pt-0">
+    <ul class="nav flex-column sidebar-nav pt-0">
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
                 <i class="bi bi-display"></i>
@@ -108,9 +110,35 @@
     .sidebar-brand {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
         padding: 1.5rem 1.25rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 30px;
+        background: var(--uc-logo-strip-bg);
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .sidebar-logo-badge {
+        width: 118px;
+        height: 118px;
+        border-radius: 50%;
+        background: var(--uc-logo-badge-bg);
+        border: 1px solid var(--uc-logo-badge-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar-logo-image {
+        width: 96px;
+        height: auto;
+    }
+
+    body.light-mode .sidebar-logo-badge {
+        background: #000000 !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
     }
 
     .brand-icon {
@@ -127,6 +155,7 @@
 
     .sidebar-nav {
         padding: 0 0.75rem;
+        margin-top: 30px;
         gap: 2px;
         flex: 1;
     }

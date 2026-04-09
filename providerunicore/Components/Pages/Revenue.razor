@@ -37,7 +37,7 @@
         <div class="row mb-3 g-3">
             <div class="col-12 col-md-4">
                 <BalanceCard Title="Total Balance" Value="@FormatCurrency(583.50)" IconClass="bi bi-currency-dollar"
-                             IconBgColor="rgba(0,230,118,0.15)" ValueColor="var(--uc-green)" />
+                             IconBgColor="rgba(0,230,118,0.18)" ValueColor="#86efac" />
             </div>
             <div class="col-12 col-md-4">
                 <BalanceCard Title="Available" Value="@FormatCurrency(464.90)" IconClass="bi bi-graph-up-arrow"
@@ -66,8 +66,8 @@
 
     <style>
         .btn-payout {
-            border: 1px solid var(--uc-green);
-            color: var(--uc-green);
+            border: 1px solid var(--uc-green-readable);
+            color: var(--uc-green-readable);
             font-size: 0.7rem;
             font-weight: bold;
             letter-spacing: 1px;
@@ -76,7 +76,7 @@
         }
 
         .btn-payout:hover {
-            background-color: var(--uc-green);
+            background-color: var(--uc-green-readable);
             color: var(--uc-bg-body);
         }
     </style>
