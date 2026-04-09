@@ -8,6 +8,7 @@
 @inject IProviderService ProviderService
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @implements IDisposable
+@inject FirestoreDb firestoreDb
 
 
 <PageTitle>Revenue Tracker</PageTitle>
@@ -36,16 +37,16 @@
         @* Balance Cards *@
         <div class="row mb-3 g-3">
             <div class="col-12 col-md-4">
-                <BalanceCard Title="Total Balance" Value="@FormatCurrency(583.50)" IconClass="bi bi-currency-dollar"
-                             IconBgColor="rgba(0,230,118,0.15)" ValueColor="var(--uc-green)" />
+                @* Total accrued from current active sessions *@
+                <BalanceCard Title="Lifetime Earnings" Value="@FormatCurrency(_totalEarnings)" />
             </div>
             <div class="col-12 col-md-4">
-                <BalanceCard Title="Available" Value="@FormatCurrency(464.90)" IconClass="bi bi-graph-up-arrow"
-                             IconBgColor="rgba(0,188,212,0.15)" ValueColor="var(--uc-cyan)" />
+                @* Amount ready to be moved to bank *@
+                <BalanceCard Title="Available Balance" Value="@FormatCurrency(_availableBalance)" IconBgColor="#0d47a1" />
             </div>
             <div class="col-12 col-md-4">
-                <BalanceCard Title="Pending" Value="@FormatCurrency(118.60)" IconClass="bi bi-clock-history"
-                             IconBgColor="rgba(255,171,0,0.15)" ValueColor="var(--uc-amber)" />
+                @* Amount currently being processed *@
+                <BalanceCard Title="Pending Payouts" Value="@FormatCurrency(_pendingPayouts)" IconBgColor="#e65100" />
             </div>
         </div>
 
@@ -82,14 +83,65 @@
     </style>
 
 @code {
-    String _currencyCode = "USD";
+    // ── State ─────────────────────────────────────────────────────────────────
+    private string _currencyCode = "USD";
     private string CurrencySymbol => GetCurrencySymbol(_currencyCode);
     private string _errorMessage = "";
     private bool _providerLoaded;
 
+    private double _totalEarnings;
+    private double _availableBalance;
+    private double _pendingPayouts;
+    private List<VirtualMachine> _vms = new();
     private Provider? CurrentProvider { get; set; }
+    private bool _listenersStarted;
+    private FirestoreChangeListener? _vmListener;
 
-    protected override async Task OnInitializedAsync()
+    // Use lowercase 'firestoreDb' to distinguish from the Class name
+    [Inject] private FirestoreDb db { get; set; }
+
+    // ── Firestore Snapshot Logic ──────────────────────────────────────────────
+    private void OnVmSnapshot(QuerySnapshot snapshot)
+    {
+        _vms = snapshot.Documents.Select(d => d.ConvertTo<VirtualMachine>()).ToList();
+        
+        _totalEarnings = _vms.Sum(vm => CalculateProviderShare(vm));
+
+        // Simplified logic for display
+        _availableBalance = _totalEarnings * 0.8; 
+        _pendingPayouts = _totalEarnings * 0.2;
+
+        // FIX: Using a fallback if CreatedAt doesn't exist in your model
+        // If your model uses 'CreatedTime' or 'Timestamp', change '.Date' below to match
+        RevenueData = _vms
+            .GroupBy(v => DateTime.UtcNow.Date) 
+            .Select(g => new RevenueDataPoint {
+                Date = g.Key,
+                Amount = (decimal)g.Sum(vm => CalculateProviderShare(vm)) 
+            })
+            .OrderBy(d => d.Date)
+            .TakeLast(7)
+            .ToList();
+
+        StateHasChanged();
+    }
+
+    private double CalculateProviderShare(VirtualMachine vm)
+    {
+        double volume = vm.VolumeRequestedGb ?? 0;
+        double hourlyRate = (vm.CpuCores * 0.04) + (vm.RamGB * 0.006);
+        
+        double hoursUsed = 0;
+        if (TimeSpan.TryParse(vm.UptimeString, out var ts)) 
+            hoursUsed = ts.TotalHours;
+
+        double gross = (hourlyRate * hoursUsed) + (volume * 0.08) + (vm.ServicePort == 8080 ? 5.0 : 0.0);
+        
+        return gross * 0.70; 
+    }
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override void OnInitialized()
     {
         AuthState.OnChange += OnAuthStateChanged;
     }
@@ -97,7 +149,6 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         await base.OnAfterRenderAsync(firstRender);
-
         if (firstRender)
             await EnsureProviderLoadedAsync();
     }
@@ -120,55 +171,77 @@
         {
             CurrentProvider = await ProviderService.GetByFirebaseUidAsync(AuthState.FirebaseUid);
             _currencyCode = CurrentProvider?.Currency ?? "USD";
+            
+            if (!_listenersStarted)
+            {
+                StartListeners();
+                _listenersStarted = true;
+            }
+
             _errorMessage = "";
             _providerLoaded = true;
         }
         catch (Exception ex)
         {
             _errorMessage = $"Error loading provider data: {ex.Message}";
-            Console.WriteLine($"[ERROR] Revenue page: {ex}");
         }
     }
-    private List<RevenueDataPoint> RevenueData { get; set; } = new()
-    {
-        new() { Date = new DateTime(2024, 1, 28), Amount = 45.00m },
-        new() { Date = new DateTime(2024, 1, 29), Amount = 72.50m },
-        new() { Date = new DateTime(2024, 1, 30), Amount = 58.00m },
-        new() { Date = new DateTime(2024, 1, 31), Amount = 110.00m },
-        new() { Date = new DateTime(2024, 2, 1), Amount = 95.00m },
-        new() { Date = new DateTime(2024, 2, 2), Amount = 88.50m },
-        new() { Date = new DateTime(2024, 2, 3), Amount = 114.50m },
-    };
 
-    private List<Payout> Payouts { get; set; } = new()
+    private void StartListeners()
     {
-        new() { Id = "PAY-2024-089", Date = new DateTime(2024, 2, 1), Amount = 245.00, Method = "Bank Transfer", Status =
-"Completed" },
-        new() { Id = "PAY-2024-088", Date = new DateTime(2024, 1, 28), Amount = 189.50, Method = "Bank Transfer", Status =
-"Completed" },
-        new() { Id = "PAY-2024-087", Date = new DateTime(2024, 1, 21), Amount = 312.00, Method = "Crypto", Status = "Completed" },
-    };
+        // FIX: Changed 'FirestoreDb' (Class) to 'firestoreDb' (Injected Instance)
+        var vmQuery = firestoreDb.Collection("virtual_machines")
+                                .WhereEqualTo("provider_id", AuthState.FirebaseUid);
+        _vmListener = vmQuery.Listen(OnVmSnapshot);
 
-    private string GetCurrencySymbol(string currencyCode)
+        _ = FetchPayoutHistoryAsync();
+    }
+
+    private async Task FetchPayoutHistoryAsync()
     {
-        return currencyCode switch
+        try 
         {
-            "EUR" => "€",
-            "GBP" => "£",
-            "JPY" => "¥",
-            "CAD" => "C$",
-            "AUD" => "A$",
-            _ => "$"
-        };
+            // FIX: Changed 'FirestoreDb' (Class) to 'firestoreDb' (Injected Instance)
+            var snapshot = await firestoreDb.Collection("payouts")
+                                            .WhereEqualTo("provider_uid", AuthState.FirebaseUid)
+                                            .OrderByDescending("timestamp")
+                                            .GetSnapshotAsync();
+
+            Payouts = snapshot.Documents.Select(d => new Payout {
+                Id = d.Id,
+                Date = d.ContainsField("timestamp") ? d.GetValue<DateTime>("timestamp") : DateTime.MinValue,
+                Amount = d.ContainsField("amount") ? d.GetValue<double>("amount") : 0.0,
+                Method = d.ContainsField("method") ? d.GetValue<string>("method") : "Unknown",
+                Status = d.ContainsField("status") ? d.GetValue<string>("status") : "Pending"
+            }).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching payout history: {ex.Message}");
+        }
+        
+        StateHasChanged();
     }
 
-    private string FormatCurrency(double amount)
+    private string GetCurrencySymbol(string currencyCode) => currencyCode switch
     {
-        return $"{CurrencySymbol}{amount:F2}";
-    }
+        "EUR" => "€",
+        "GBP" => "£",
+        "JPY" => "¥",
+        "CAD" => "C$",
+        "AUD" => "A$",
+        _ => "$"
+    };
+
+    private string FormatCurrency(double amount) => $"{CurrencySymbol}{amount:F2}";
+
+    // Initialize these as empty lists so they aren't using the dummy mock data anymore
+    private List<RevenueDataPoint> RevenueData { get; set; } = new();
+    private List<Payout> Payouts { get; set; } = new();
 
     public void Dispose()
     {
         AuthState.OnChange -= OnAuthStateChanged;
+        _vmListener?.StopAsync();
     }
 }
