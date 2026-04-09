@@ -179,12 +179,21 @@
         <div class="row mb-3 g-3">
             @{
                 var runningCount = Vms.Count(v => v.Status is "Running" or "Provisioning");
-                var totalHourlyRate = Vms.Where(v => v.Status is "Running" or "Provisioning").Sum(v => v.CostPerHour);
+
+                // Calculate the Provider's 70% share of the hourly rate
+                var totalProviderHourlyRevenue = Vms
+                    .Where(v => v.Status is "Running" or "Provisioning")
+                    .Sum(v => {
+                        double grossHourly = (v.CpuCores * 0.04) + (v.RamGB * 0.006);
+                        return grossHourly * 0.70; // Provider keeps 70%
+                    });
+
                 var longestUptime = Vms
-                .Where(v => v.Status is "Running" or "Provisioning" && v.Uptime > TimeSpan.Zero)
-                .OrderByDescending(v => v.Uptime)
-                .Select(v => v.UptimeString)
-                .FirstOrDefault();
+                    .Where(v => v.Status is "Running" or "Provisioning" && v.Uptime > TimeSpan.Zero)
+                    .OrderByDescending(v => v.Uptime)
+                    .Select(v => v.UptimeString)
+                    .FirstOrDefault();
+
                 var uptime = longestUptime ?? "N/A";
             }
 
@@ -192,16 +201,15 @@
                 <NodeStatusCard NodeStatus="@CurrentNodeStatus" OnNodeStatusChanged="HandleNodeStatusChanged" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
-                <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity"
-                          Color="#3b82f6" ValueColor="var(--uc-text-primary)" />
+                <InfoCard Title="Active VMs" Value="@runningCount.ToString()" Unit="running" IconClass="bi bi-activity" Color="#3b82f6" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
-                <InfoCard Title="Hourly Rate" Value="@FormatCurrency(totalHourlyRate)" Unit="/hr"
-                          IconClass="bi bi-graph-up-arrow" Color="#00e676" ValueColor="#00e676" />
+                @* Updated Title and Value to reflect Revenue share *@
+                <InfoCard Title="Hourly Revenue" Value="@FormatCurrency(totalProviderHourlyRevenue)" Unit="/hr"
+                        IconClass="bi bi-cash-stack" Color="#00e676" ValueColor="#00e676" />
             </div>
             <div class="col-12 col-md-6 col-lg-3">
-                <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill"
-                          Color="#ffeb3b" ValueColor="var(--uc-text-primary)" />
+                <InfoCard Title="Longest VM Uptime" Value="@uptime" Unit="" IconClass="bi bi-lightning-charge-fill" Color="#ffeb3b" />
             </div>
         </div>
 
