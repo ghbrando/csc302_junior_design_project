@@ -1,0 +1,357 @@
+@page "/docs"
+
+<PageTitle>UniCore — Documentation</PageTitle>
+
+<div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+        <nav class="docs-nav">
+            <p class="docs-nav-label">Getting Started</p>
+            <a href="#what-is-unicore" class="docs-nav-link">What is UniCore?</a>
+            <a href="#architecture" class="docs-nav-link">Architecture</a>
+
+            <p class="docs-nav-label">Consumers</p>
+            <a href="#get-a-vm" class="docs-nav-link">Getting a VM</a>
+            <a href="#terminal-access" class="docs-nav-link">Terminal Access</a>
+
+            <p class="docs-nav-label">Providers</p>
+            <a href="#become-a-provider" class="docs-nav-link">Becoming a Provider</a>
+            <a href="#earning" class="docs-nav-link">Earning & Payouts</a>
+
+            <p class="docs-nav-label">Platform</p>
+            <a href="#security" class="docs-nav-link">Security Model</a>
+            <a href="#faq" class="docs-nav-link">FAQ</a>
+        </nav>
+    </aside>
+
+    <!-- Main content -->
+    <article class="docs-content">
+
+        <!-- Page header -->
+        <div class="docs-page-header">
+            <span class="docs-badge">Documentation</span>
+            <h1 class="docs-title">How UniCore Works</h1>
+            <p class="docs-subtitle">
+                UniCore connects people who need compute power with people who have hardware to spare —
+                through a secure relay that keeps both sides private.
+            </p>
+        </div>
+
+        <!-- What is UniCore -->
+        <section id="what-is-unicore" class="docs-section">
+            <h2>What is UniCore?</h2>
+            <p>
+                UniCore is a peer-to-peer distributed computing marketplace. Instead of paying
+                a cloud provider like AWS or GCP for a virtual machine, you rent compute time
+                directly from other people's idle hardware — at a fraction of the cost.
+            </p>
+            <p>
+                If you have a spare PC, you can list it on UniCore and earn money whenever
+                someone uses it. If you need a Linux VM for a build job, a dev environment,
+                or a quick experiment, you can spin one up in seconds from your browser —
+                no account setup, no port forwarding, no exposed IP addresses.
+            </p>
+
+            <div class="docs-callout docs-callout-cyan">
+                <p class="docs-callout-title">The core insight</p>
+                <p>
+                    Most personal computers sit idle more than 90% of the time. UniCore lets
+                    that idle capacity do useful work for someone else, and pays the owner for it.
+                </p>
+            </div>
+        </section>
+
+        <!-- Architecture -->
+        <section id="architecture" class="docs-section">
+            <h2>Architecture</h2>
+            <p>
+                UniCore uses a three-tier relay model. Neither the consumer nor the provider
+                ever exposes a public IP address — all traffic flows through a GCP-hosted relay.
+            </p>
+
+            <div class="docs-arch-diagram">
+                <div class="arch-node arch-node-cyan">
+                    <span class="arch-node-label">Consumer</span>
+                    <span class="arch-node-sub">Browser</span>
+                </div>
+                <div class="arch-arrow">&harr;</div>
+                <div class="arch-node arch-node-purple">
+                    <span class="arch-node-label">GCP Relay</span>
+                    <span class="arch-node-sub">SignalR + FRP</span>
+                </div>
+                <div class="arch-arrow">&harr;</div>
+                <div class="arch-node arch-node-green">
+                    <span class="arch-node-label">Provider</span>
+                    <span class="arch-node-sub">Desktop App</span>
+                </div>
+                <div class="arch-arrow">&harr;</div>
+                <div class="arch-node arch-node-green">
+                    <span class="arch-node-label">Docker</span>
+                    <span class="arch-node-sub">Linux Container</span>
+                </div>
+            </div>
+
+            <div class="docs-steps">
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-green">1</span>
+                    <div>
+                        <p class="docs-step-title">Provider registers</p>
+                        <p class="docs-step-body">
+                            The provider installs the desktop app, authenticates, and connects
+                            to the relay via an outbound WebSocket. Their machine appears as
+                            available in the marketplace. No inbound firewall rules needed.
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-cyan">2</span>
+                    <div>
+                        <p class="docs-step-title">Consumer requests a VM</p>
+                        <p class="docs-step-body">
+                            The consumer visits the web app, picks an available provider, and
+                            clicks "Launch VM." The relay forwards this request to the chosen
+                            provider's desktop app via SignalR.
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-purple">3</span>
+                    <div>
+                        <p class="docs-step-title">Container starts, tunnel opens</p>
+                        <p class="docs-step-body">
+                            The provider app creates a Docker container running Ubuntu and opens
+                            an FRP tunnel back through the relay. The relay assigns a public
+                            subdomain (e.g. <code>abc123.unicore.app</code>) mapped to that
+                            container's SSH port.
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-cyan">4</span>
+                    <div>
+                        <p class="docs-step-title">Consumer gets a terminal</p>
+                        <p class="docs-step-body">
+                            The web app opens an in-browser terminal over that subdomain. The
+                            consumer has a full Linux shell. The provider's real IP is never
+                            disclosed — traffic exits through the GCP relay only.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Getting a VM -->
+        <section id="get-a-vm" class="docs-section">
+            <h2>Getting a VM</h2>
+            <p>
+                Consumers access UniCore entirely through a browser — nothing to install.
+            </p>
+
+            <ol class="docs-ol">
+                <li>Open the UniCore web app and sign in (or continue as guest).</li>
+                <li>Browse the list of online providers. Each listing shows available RAM, CPU cores, and current pricing.</li>
+                <li>Click <strong>Launch VM</strong> on a provider you want to use.</li>
+                <li>Wait a few seconds while the container starts and the tunnel is established.</li>
+                <li>A terminal opens in your browser. You're now inside a Ubuntu Linux environment.</li>
+                <li>When you're done, click <strong>Stop VM</strong>. Billing stops immediately.</li>
+            </ol>
+
+            <div class="docs-callout docs-callout-green">
+                <p class="docs-callout-title">No SSH client required</p>
+                <p>
+                    The terminal runs directly in your browser via a web-based SSH client.
+                    You don't need PuTTY, OpenSSH, or any other tool.
+                </p>
+            </div>
+        </section>
+
+        <!-- Terminal Access -->
+        <section id="terminal-access" class="docs-section">
+            <h2>Terminal Access</h2>
+            <p>
+                Every VM provisioned through UniCore comes with:
+            </p>
+            <ul class="docs-ul">
+                <li>Ubuntu 22.04 LTS base image</li>
+                <li>Full <code>sudo</code> access inside the container</li>
+                <li>Outbound internet access (for installing packages, cloning repos, etc.)</li>
+                <li>A pre-generated SSH keypair — no password prompt</li>
+                <li>Isolated filesystem — your data is not visible to the provider</li>
+            </ul>
+            <p>
+                Sessions are terminated automatically when you close the browser tab or when
+                the provider's machine goes offline. Data is not persisted between sessions
+                unless you explicitly push it to an external service (GitHub, S3, etc.).
+            </p>
+        </section>
+
+        <!-- Becoming a Provider -->
+        <section id="become-a-provider" class="docs-section">
+            <h2>Becoming a Provider</h2>
+            <p>
+                Anyone with a spare Windows or Linux machine can become a provider. The minimum
+                requirements are modest — most gaming PCs, home servers, and old workstations
+                qualify.
+            </p>
+
+            <div class="docs-specs-grid">
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Minimum RAM</p>
+                    <p class="docs-spec-value">4 GB</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Minimum CPU</p>
+                    <p class="docs-spec-value">2 cores</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">OS</p>
+                    <p class="docs-spec-value">Win 10+ / Ubuntu 20.04+</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Required Software</p>
+                    <p class="docs-spec-value">Docker Desktop</p>
+                </div>
+            </div>
+
+            <ol class="docs-ol">
+                <li>Download the UniCore Provider app for your platform.</li>
+                <li>Install Docker Desktop if you don't already have it.</li>
+                <li>Sign in with your UniCore account and complete provider onboarding.</li>
+                <li>Set your resource limits — how much RAM and CPU each consumer VM can use.</li>
+                <li>Set your price per hour (denominated in USD).</li>
+                <li>Click <strong>Go Online</strong>. Your machine is now listed in the marketplace.</li>
+            </ol>
+
+            <p>
+                You can go offline any time. Active consumer sessions are given a 60-second
+                warning before your machine disconnects to give them time to save work.
+            </p>
+        </section>
+
+        <!-- Earning & Payouts -->
+        <section id="earning" class="docs-section">
+            <h2>Earning &amp; Payouts</h2>
+            <p>
+                Providers are paid per hour of active consumer usage. Billing is prorated to
+                the minute — consumers are never charged for idle time after their session ends.
+            </p>
+
+            <div class="docs-callout docs-callout-green">
+                <p class="docs-callout-title">Consistency score</p>
+                <p>
+                    UniCore tracks provider uptime with a <strong>consistency score</strong> (0–1).
+                    Every 10 seconds, a background service checks whether your active VMs are
+                    reachable. Being reliably online improves your score and increases your
+                    visibility in the marketplace. Going offline unexpectedly reduces it.
+                </p>
+            </div>
+
+            <p>
+                Payouts are processed on a rolling basis. Minimum payout threshold and payment
+                methods are configured in your provider dashboard.
+            </p>
+        </section>
+
+        <!-- Security Model -->
+        <section id="security" class="docs-section">
+            <h2>Security Model</h2>
+
+            <div class="docs-security-grid">
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Provider IP never exposed</p>
+                    <p class="docs-security-body">
+                        Providers connect outbound to the relay via WebSocket. Consumers only
+                        ever see the relay's IP. A provider's home or office IP is never
+                        transmitted to or visible by consumers.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Docker isolation</p>
+                    <p class="docs-security-body">
+                        Each consumer session runs inside a Docker container. Consumers cannot
+                        access the provider's host filesystem, processes, or network interfaces
+                        outside the container.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Firebase JWT auth</p>
+                    <p class="docs-security-body">
+                        All API calls are authenticated with short-lived Firebase JWTs. Tokens
+                        are verified server-side on every request. Sessions expire and require
+                        re-authentication.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">GCP-backed relay</p>
+                    <p class="docs-security-body">
+                        The relay runs on GCP Cloud Run with a Redis backplane for SignalR.
+                        Traffic between the relay and both parties is encrypted in transit
+                        via TLS.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ -->
+        <section id="faq" class="docs-section">
+            <h2>FAQ</h2>
+
+            <div class="docs-faq">
+                <details class="docs-faq-item">
+                    <summary>Do consumers need to create an account?</summary>
+                    <p>
+                        Guest access is available for short sessions. A free account is required
+                        to access billing, save session history, or run sessions longer than
+                        30 minutes.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>What happens if the provider goes offline mid-session?</summary>
+                    <p>
+                        The relay detects the disconnection within seconds. The consumer's
+                        terminal will display a connection-lost message. Any unsaved work inside
+                        the container is lost. UniCore's heartbeat service monitors active VMs
+                        every 10 seconds and updates provider consistency scores accordingly.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>Can I run GPU workloads?</summary>
+                    <p>
+                        GPU passthrough is on the roadmap. Currently, only CPU-based workloads
+                        are supported. Providers with CUDA-capable GPUs will be able to opt in
+                        to GPU listings in a future release.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>Is my data private from the provider?</summary>
+                    <p>
+                        All consumer workloads run inside Docker containers. Providers cannot
+                        inspect the container filesystem or processes during a live session.
+                        However, as with any shared compute environment, you should avoid
+                        processing highly sensitive credentials or data you wouldn't trust
+                        to a third-party VPS.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>How is pricing set?</summary>
+                    <p>
+                        Providers set their own hourly rate. UniCore takes a small platform fee.
+                        The consumer-facing price shown in the marketplace is the all-in price
+                        including the platform fee.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>What ports are available in a consumer VM?</summary>
+                    <p>
+                        VMs have full outbound internet access. Inbound port exposure (e.g. for
+                        running a web server accessible from outside) is not currently supported
+                        in the base tier. Public HTTPS subdomain exposure for web development
+                        is planned as a future feature.
+                    </p>
+                </details>
+            </div>
+        </section>
+
+    </article>
+</div>

@@ -1,7 +1,110 @@
-﻿@page "/"
+@page "/"
 
-<PageTitle>Home</PageTitle>
+<PageTitle>UniCore — Rent compute. Earn from idle hardware.</PageTitle>
 
-<h1>Hello, world!</h1>
+<!-- Logo Feature Section -->
+<section class="logo-section">
+    <div class="logo-wrap">
+        <div class="logo-glow"></div>
+        <img src="unicore_icon.png" alt="UniCore" class="logo-img" />
+    </div>
+</section>
 
-Welcome to your new app.
+<!-- Hero -->
+<section class="hero">
+    <div class="hero-inner">
+        <h1>Rent compute.<br />Earn from idle hardware.</h1>
+        <p class="tagline">Distributed computing, democratized.</p>
+        <p class="subtext">No cloud account. No port forwarding. Just a browser.</p>
+
+        <div class="cta-buttons">
+            <button class="btn-teal">Get a VM &rarr;</button>
+            <button class="btn-green">Become a Provider &rarr;</button>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works -->
+<section class="how-it-works">
+    <div class="container">
+        <h2 class="section-title">How It Works</h2>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-card-border step-border-green"></div>
+                <div class="step-number step-color-green">01</div>
+                <h3>Providers Connect</h3>
+                <p>Install the desktop app and connect your machine to the network</p>
+            </div>
+            <div class="step-card">
+                <div class="step-card-border step-border-cyan"></div>
+                <div class="step-number step-color-cyan">02</div>
+                <h3>Consumers Launch</h3>
+                <p>Spin up a Linux VM in seconds from your browser</p>
+            </div>
+            <div class="step-card">
+                <div class="step-card-border step-border-purple"></div>
+                <div class="step-number step-color-purple">03</div>
+                <h3>Secure Relay</h3>
+                <p>UniCore's relay connects them — provider IP never exposed</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Dual Action Split -->
+<section class="dual-action">
+    <div class="container">
+        <div class="dual-grid">
+            <div class="dual-divider">or</div>
+
+            <!-- Consumer Side -->
+            <div class="dual-panel dual-panel-consumer">
+                <img src="consumer_icon.png" alt="Consumer" class="panel-icon panel-icon-cyan" />
+                <h3>I need compute</h3>
+                <p class="panel-desc">Open a browser. Get a Linux terminal. No account setup required.</p>
+                <button class="btn-full btn-full-cyan">
+                    Launch Consumer App &rsaquo;
+                </button>
+                <p class="panel-footnote">Works in any browser — nothing to install</p>
+            </div>
+
+            <!-- Provider Side -->
+            <div class="dual-panel dual-panel-provider">
+                <img src="provider_icon.png" alt="Provider" class="panel-icon panel-icon-green" />
+                <h3>I want to earn</h3>
+                <p class="panel-desc">Install the provider app, set your limits, and start earning.</p>
+                <button class="btn-full btn-full-green">
+                    &#11123; Download for Windows
+                </button>
+                <button class="btn-full btn-full-green-outline">
+                    &#11123; Download for Linux
+                </button>
+                <p class="panel-footnote">v1.0.0 &bull; Supports Ubuntu 20.04+ and Windows 10+</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Security Strip -->
+<section class="security-strip">
+    <div class="container">
+        <div class="security-grid">
+            <div class="security-tile"><p>Provider IP never exposed</p></div>
+            <div class="security-tile"><p>Docker-isolated workloads</p></div>
+            <div class="security-tile"><p>Firebase JWT auth</p></div>
+            <div class="security-tile"><p>GCP-backed relay</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- Footer -->
+<footer class="site-footer">
+    <div class="footer-inner">
+        <span class="footer-tagline">UniCore — compute for everyone.</span>
+        <div class="footer-links">
+            <a href="#">GitHub</a>
+            <a href="/docs">Docs</a>
+            <a href="#">Sign In</a>
+        </div>
+    </div>
+</footer>
