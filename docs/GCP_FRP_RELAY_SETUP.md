@@ -1,10 +1,12 @@
 # GCP FRP Relay Setup
 
-Guide for setting up a GCP VM as a TCP relay between a Docker container (provider) and a local SSH client (consumer) using [FRP (Fast Reverse Proxy)](https://github.com/fatedier/frp).
+Guide for setting up a GCP VM as a TCP relay between Docker containers (providers) and consumers using [FRP (Fast Reverse Proxy)](https://github.com/fatedier/frp).
 
 ```
-Consumer (localhost) ──SSH──> GCP VM :2222 ──FRP tunnel──> Docker container :22
+Consumer ──SSH──> GCP VM :2222–2300 ──FRP tunnel──> Docker container :22
 ```
+
+Each running VM gets its own relay port allocated dynamically from the 2222–2300 range (SSH) and optionally from 8000–8200 (HTTP services). Port assignments are stored in Firestore on the `VirtualMachine` document (`relay_port`, `service_relay_port`).
 
 ---
 
@@ -34,18 +36,23 @@ gcloud compute instances add-access-config frp-relay --access-config-name="Exter
 
 ### 1.3 Create firewall rules
 ```powershell
-# FRP control port — frpc (provider/Docker) connects here
+# FRP control port — frpc (Docker containers) connect here to register tunnels
 gcloud compute firewall-rules create allow-frp-server --project=unicore-junior-design --allow=tcp:7000 --target-tags=frp-relay --description="FRP server control port"
 
-# Forwarded SSH port — consumers connect here
-gcloud compute firewall-rules create allow-frp-forwarded-ssh --project=unicore-junior-design --allow=tcp:2222 --target-tags=frp-relay --description="FRP forwarded SSH port for consumers"
+# SSH relay range — one port per running VM
+gcloud compute firewall-rules create allow-frp-forwarded-ssh --project=unicore-junior-design --allow=tcp:2222-2300 --target-tags=frp-relay --description="FRP forwarded SSH ports for consumers (one per VM)"
+
+# HTTP service relay range — for VMs that expose a web service
+gcloud compute firewall-rules create allow-frp-service-ports --project=unicore-junior-design --allow=tcp:8000-8200 --target-tags=frp-relay --description="FRP forwarded HTTP service ports"
 ```
 
 Port layout:
-| Port | Purpose |
-|------|---------|
-| 7000 | FRP server control (frpc registers here) |
-| 2222 | Consumer SSH entry point |
+| Port / Range | Purpose |
+|-------------|---------|
+| 7000 | FRP server control (`frpc` in each container registers here) |
+| 2222–2300 | Consumer SSH entry — one port per running VM |
+| 8000–8200 | HTTP service relay — one port per VM with an exposed web service |
+| 80, 443 | Caddy HTTPS termination (see [SERVICE_EXPOSURE_SETUP.md](SERVICE_EXPOSURE_SETUP.md)) |
 
 ---
 
@@ -108,6 +115,9 @@ tar -xzf frp.tar.gz
 ```
 
 ### 3.3 Configure the FRP client
+
+The provider app generates this config dynamically at container startup time. `RELAY_PORT` is allocated by `MigrationService.AllocateRelayPortAsync()` from the 2222–2300 range and stored in Firestore before the container starts.
+
 ```bash
 cat > frpc.toml << EOF
 serverAddr = "GCP_VM_EXTERNAL_IP"
@@ -115,14 +125,20 @@ serverPort = 7000
 auth.token = "your-secret-token-here"
 
 [[proxies]]
-name = "docker-ssh"
+name = "ssh-<vmId>"
 type = "tcp"
 localIP = "127.0.0.1"
 localPort = 22
-remotePort = 2222
+remotePort = RELAY_PORT          # e.g. 2223 — unique per VM
+
+[[proxies]]
+name = "svc-<vmId>"
+type = "tcp"
+localPort = 8080
+remotePort = SERVICE_RELAY_PORT  # e.g. 8001 — only set if VM exposes a web service
 EOF
 ```
-> Replace `GCP_VM_EXTERNAL_IP` and `your-secret-token-here` with your values.
+> Replace `GCP_VM_EXTERNAL_IP`, `your-secret-token-here`, `RELAY_PORT`, and `SERVICE_RELAY_PORT` with real values. In production these come from GCP Secret Manager and Firestore.
 
 ### 3.4 Start the FRP client
 ```bash
@@ -140,9 +156,13 @@ Successful registration looks like:
 
 From your local machine:
 ```bash
-ssh -p 2222 CONTAINER_USER@GCP_VM_EXTERNAL_IP
+ssh -p RELAY_PORT CONTAINER_USER@GCP_VM_EXTERNAL_IP
 ```
-This SSH connection goes: `localhost → GCP VM :2222 → FRP tunnel → Docker container :22`
+Replace `RELAY_PORT` with the port allocated for this VM (visible in Firestore `virtual_machines/<vmId>.relay_port`).
+
+This SSH connection goes: `client → GCP VM :RELAY_PORT → FRP tunnel → Docker container :22`
+
+In the consumer web app, `WebShellService` resolves this endpoint automatically from Firestore and connects via SSH.NET.
 
 ---
 
