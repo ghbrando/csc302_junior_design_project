@@ -11,6 +11,7 @@ public class MigrationService : IMigrationService
     private readonly IVmService _vmService;
     private readonly IFirestoreRepository<VirtualMachine> _vmRepo;
     private readonly ContainerMonitorService _monitorService;
+    private readonly VmProvisioningService _provisioningService;
     private readonly FirestoreDb _firestoreDb;
     private readonly IConfiguration _configuration;
     private readonly ILogger<MigrationService> _logger;
@@ -25,6 +26,7 @@ public class MigrationService : IMigrationService
         IVmService vmService,
         IFirestoreRepository<VirtualMachine> vmRepo,
         ContainerMonitorService monitorService,
+        VmProvisioningService provisioningService,
         FirestoreDb firestoreDb,
         IConfiguration configuration,
         ILogger<MigrationService> logger)
@@ -35,6 +37,7 @@ public class MigrationService : IMigrationService
         _vmService = vmService ?? throw new ArgumentNullException(nameof(vmService));
         _vmRepo = vmRepo ?? throw new ArgumentNullException(nameof(vmRepo));
         _monitorService = monitorService ?? throw new ArgumentNullException(nameof(monitorService));
+        _provisioningService = provisioningService ?? throw new ArgumentNullException(nameof(provisioningService));
         _firestoreDb = firestoreDb ?? throw new ArgumentNullException(nameof(firestoreDb));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -152,7 +155,9 @@ public class MigrationService : IMigrationService
                 try
                 {
                     _monitorService.StopMonitoring(request.VmId);
-                    await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName);
+                    await _dockerService.StopContainerAsync(oldVm.ContainerId, oldVm.Name, oldVm.VolumeName,
+                        vmId: oldVm.VmId,
+                        providerUid: oldVm.ProviderId);
                 }
                 catch (Exception ex)
                 {
@@ -183,7 +188,8 @@ public class MigrationService : IMigrationService
                 effectiveCPU, effectiveRAM,
                 existingVolumeName: newVolumeName,
                 consumerUid: oldVm.Client,
-                volumeGb: oldVm.VolumeRequestedGb);
+                volumeGb: oldVm.VolumeRequestedGb,
+                providerUid: request.TargetProviderUid);
 
             newContainerId = containerId;
             var sshPort = await _dockerService.GetContainerSshPortAsync(containerId);
@@ -197,7 +203,7 @@ public class MigrationService : IMigrationService
                 ContainerId = containerId,
                 VolumeName = newVolumeName,
                 StartedAt = startedAt,
-                Status = "Running",
+                Status = "Provisioning",
                 Image = oldVm.Image,
                 SnapshotImage = oldVm.SnapshotImage,
                 ProviderId = request.TargetProviderUid,
@@ -223,7 +229,7 @@ public class MigrationService : IMigrationService
 
             // ── Step 10: Wire new VM into monitoring ───────────────────────────
             _logger.LogInformation("[Migration] Step 10 – starting monitor for new VM {VmId}", newVmId);
-            _monitorService.StartMonitoring(newVmId, containerId, startedAt);
+            _provisioningService.StartProvisioning(newVmId, containerId, relayPort, startedAt);
 
             // ── Step 11: Mark request as completed ────────────────────────────
             _logger.LogInformation("[Migration] Step 11 – migration {Id} completed. New VM: {NewVmId}",
@@ -325,7 +331,10 @@ public class MigrationService : IMigrationService
     {
         if (!string.IsNullOrEmpty(containerId))
         {
-            try { await _dockerService.StopContainerAsync(containerId, vmId ?? "partial-migration"); }
+            try
+            {
+                await _dockerService.StopContainerAsync(containerId, vmId ?? "partial-migration", vmId: vmId);
+            }
             catch (Exception ex) { _logger.LogWarning("[Migration] Cleanup: failed to stop container {Id}: {Msg}", containerId, ex.Message); }
         }
 

@@ -44,9 +44,9 @@
         display: flex;
         align-items: center;
         gap: 0.4rem;
-        background: rgba(0, 230, 118, 0.1);
-        border: 1px solid rgba(0, 230, 118, 0.3);
-        color: var(--uc-green);
+        background: color-mix(in srgb, var(--uc-green-readable) 16%, transparent);
+        border: 1px solid color-mix(in srgb, var(--uc-green-readable) 48%, transparent);
+        color: var(--uc-green-readable);
         font-size: 0.7rem;
         font-weight: 700;
         letter-spacing: 0.08em;
@@ -57,7 +57,7 @@
     .status-dot {
         width: 7px;
         height: 7px;
-        background: var(--uc-green);
+        background: var(--uc-green-readable);
         border-radius: 50%;
         display: inline-block;
         animation: pulse 2s infinite;

@@ -27,10 +27,11 @@
                @oninput="HandleInput"
                style="--thumb-color: @Color; --track-percent: @GetPercent()%;" />
 
-        <div class="d-flex justify-content-between mt-2" style="font-size: 0.75rem; font-family: var(--uc-font-mono); color: var(--uc-text-muted);">
-            <span>@Min</span>
-            <span>@(Max * 0.5)</span>
-            <span>@Max</span>
+        <div class="range-scale mt-2" style="grid-template-columns: repeat(@EffectiveTickCount, minmax(0, 1fr));">
+            @foreach (var tick in GetTickValues())
+            {
+                <span class="tick-label">@FormatTickValue(tick)</span>
+            }
         </div>
     </div>
 </div>
@@ -40,6 +41,14 @@
         width: 40px; height: 40px; border: 1px solid; border-radius: var(--uc-radius);
         background: rgba(255, 255, 255, 0.03); box-shadow: 0 0 10px rgba(0,0,0,0.2);
     }
+
+    .range-container {
+        padding: 0.45rem 0.5rem 0.3rem;
+        border: 1px solid color-mix(in srgb, var(--uc-border-light) 85%, transparent);
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--uc-bg-elevated) 94%, transparent);
+    }
+
     .custom-range {
         -webkit-appearance: none; width: 100%; height: 4px; background: var(--uc-border-light);
         border-radius: 2px; outline: none;
@@ -56,7 +65,50 @@
         transform: scale(1.2); box-shadow: 0 0 15px var(--thumb-color);
     }
     .custom-range::-webkit-slider-runnable-track {
-        -webkit-appearance: none; background: transparent;
+        -webkit-appearance: none;
+        height: 6px;
+        background: var(--range-track-bg, var(--uc-border-light));
+        border-radius: 999px;
+    }
+
+    .custom-range::-moz-range-track {
+        height: 6px;
+        background: var(--range-track-bg, var(--uc-border-light));
+        border-radius: 999px;
+        border: none;
+    }
+
+    .range-scale {
+        display: grid;
+        gap: 0;
+    }
+
+    .tick-label {
+        font-size: 0.68rem;
+        font-family: var(--uc-font-mono);
+        color: var(--uc-text-secondary);
+        text-align: center;
+    }
+
+    body.light-mode .range-container {
+        border-color: #cbd5e1;
+        background: #f8fafc;
+    }
+
+    body.light-mode .custom-range {
+        height: 6px;
+        background: #111111;
+        --range-track-bg: #111111;
+    }
+
+    body.light-mode .custom-range::-webkit-slider-thumb {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08), 0 0 10px var(--thumb-color);
+    }
+
+    body.light-mode .tick-label {
+        color: #334155;
+        font-weight: 600;
     }
 </style>
 
@@ -69,8 +121,11 @@
     [Parameter] public string Color { get; set; } = "#00e5ff";
     [Parameter] public string IconClass { get; set; } = "bi bi-cpu";
     [Parameter] public double MinLimit { get; set; } = 0;
+    [Parameter] public int TickCount { get; set; } = 6;
     [Parameter] public double Value { get; set; }
     [Parameter] public EventCallback<double> ValueChanged { get; set; }
+
+    private int EffectiveTickCount => Math.Max(2, TickCount);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -112,5 +167,37 @@
     {
         if (Max == Min) return 0;
         return Math.Clamp(((Value - Min) / (Max - Min)) * 100, 0, 100);
+    }
+
+    private IEnumerable<double> GetTickValues()
+    {
+        if (Max <= Min)
+        {
+            yield return Min;
+            yield break;
+        }
+
+        var segments = EffectiveTickCount - 1;
+        var tickStep = (Max - Min) / segments;
+
+        for (int i = 0; i <= segments; i++)
+        {
+            yield return Min + (tickStep * i);
+        }
+    }
+
+    private string FormatTickValue(double tick)
+    {
+        if (Unit.Equals("percent", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{Math.Round(tick):0}%";
+        }
+
+        if (Math.Abs(tick - Math.Round(tick)) < 0.05)
+        {
+            return $"{Math.Round(tick):0}";
+        }
+
+        return tick.ToString("0.0");
     }
 }

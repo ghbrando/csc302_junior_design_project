@@ -68,10 +68,11 @@
         get
         {
             if (!DataPoints.Any()) return Enumerable.Empty<string>();
+            // Max value based on the provider's 70% revenue
             double max = (double)DataPoints.Max(d => d.Amount);
             double step = max / GridLines;
             return Enumerable.Range(0, GridLines + 1)
-                .Select(i => $"{CurrencySymbol}{(max - i * step):0}")
+                .Select(i => $"{CurrencySymbol}{(max - i * step):0.00}")
                 .ToList();
         }
     }

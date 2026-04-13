@@ -8,6 +8,7 @@ public class VmProvisioningService : IHostedService, IDisposable
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<VmProvisioningService> _logger;
     private readonly ContainerMonitorService _monitorService;
+    private readonly IDockerService _dockerService;
     private readonly string _relayIp;
     private readonly int _timeoutSeconds;
     private readonly int _pollIntervalSeconds;
@@ -22,11 +23,13 @@ public class VmProvisioningService : IHostedService, IDisposable
         IServiceScopeFactory scopeFactory,
         ILogger<VmProvisioningService> logger,
         ContainerMonitorService monitorService,
+        IDockerService dockerService,
         IConfiguration configuration)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
         _monitorService = monitorService;
+        _dockerService = dockerService;
         _relayIp = configuration["FrpRelay:ServerAddr"] ?? "localhost";
         _timeoutSeconds = configuration.GetValue<int>("Provisioning:TimeoutSeconds", 120);
         _pollIntervalSeconds = configuration.GetValue<int>("Provisioning:PollIntervalSeconds", 5);
@@ -67,7 +70,19 @@ public class VmProvisioningService : IHostedService, IDisposable
                 if (elapsed.TotalSeconds >= _timeoutSeconds)
                 {
                     _pending.TryRemove(vmId, out _);
-                    _logger.LogWarning("VM {VmId} provisioning timed out after {Seconds}s", vmId, _timeoutSeconds);
+                    _logger.LogWarning("VM {VmId} provisioning timed out after {Seconds}s; stopping container {ContainerId}", vmId, _timeoutSeconds, containerId);
+
+                    // Stop and remove the container from Docker
+                    try
+                    {
+                        await _dockerService.StopContainerAsync(containerId, vmId);
+                        _monitorService.StopMonitoring(vmId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError("Error stopping container {ContainerId} for VM {VmId}: {Message}", containerId, vmId, ex.Message);
+                    }
+
                     await UpdateStatusAsync(vmId, "Failed");
                     continue;
                 }

@@ -26,19 +26,16 @@
     <!-- Notifications -->
     <SettingsSection Title="NOTIFICATIONS"             Subtitle="Configure alert preferences"                 Icon="bi-bell"
                      IconColor="var(--uc-purple)"                 IconBg="rgba(168,85,247,0.15)">
-        <ToggleRow Label="Vm Started" Description="Notify when vm started" @bind-IsOn="notifyVmStarted" />
-        <ToggleRow Label="Vm Completed" Description="Notify when vm completed" @bind-IsOn="notifyVmCompleted" />
-        <ToggleRow Label="Budget Alert" Description="Notify when budget alert" @bind-IsOn="notifyBudgetAlert" />
-        <ToggleRow Label="Payout Ready" Description="Notify when payout ready" @bind-IsOn="notifyPayoutReady" />
-        <ToggleRow Label="System Updates" Description="Notify when system updates" @bind-IsOn="notifySystemUpdates" />
+        <ToggleRow Label="Vm Started" Description="Notify when vm started" IsOn="@notifyVmStarted"
+                   IsOnChanged="HandleVmStartedChangedAsync" />
+        <ToggleRow Label="Vm Completed" Description="Notify when vm completed" IsOn="@notifyVmCompleted"
+                   IsOnChanged="HandleVmCompletedChangedAsync" />
     </SettingsSection>
 
     <!-- Security -->
     <SettingsSection Title="SECURITY"        Subtitle="Manage authentication &amp; access"            Icon="bi-shield"
                      IconColor="var(--uc-teal)"            IconBg="rgba(16,185,129,0.15)">
         <SecurityLinkRow Label="Change Password" Icon="bi-key" OnClick="HandlePasswordResetAsync" />
-        <SecurityLinkRow Label="Two-Factor Authentication" Icon="bi-shield-lock" OnClick="HandleTwoFactorClick" />
-        <SecurityLinkRow Label="API Keys" Icon="bi-key" OnClick="HandleApiKeysClick" />
     </SettingsSection>
 
     <!-- Payment Methods -->
@@ -53,11 +50,12 @@
         <RegionalSettings @bind-TimeZone="timeZone" @bind-Currency="currency" />
     </SettingsSection>
 
-    <!-- Save Button -->
-    <div class="save-row">
-        <button class="btn-save" @onclick="HandleSaveAsync" disabled="@(_saving || _loading)">
-            @(_saving ? "SAVING..." : "SAVE CHANGES")
-        </button>
+    <div class="settings-action-bar">
+        <div class="settings-action-bar-inner">
+            <button class="btn-save" @onclick="HandleSaveAsync" disabled="@(_saving || _loading)">
+                @(_saving ? "SAVING..." : "SAVE CHANGES")
+            </button>
+        </div>
     </div>
 
     @if (_showStatusToast && !string.IsNullOrWhiteSpace(_statusMessage))
@@ -199,23 +197,43 @@
 
     private async Task HandleSaveAsync()
     {
+        await PersistSettingsAsync(updateAuthState: true, showSuccessMessage: true);
+    }
+
+    private async Task HandleVmStartedChangedAsync(bool value)
+    {
+        notifyVmStarted = value;
+        await PersistSettingsAsync(updateAuthState: false, showSuccessMessage: false);
+    }
+
+    private async Task HandleVmCompletedChangedAsync(bool value)
+    {
+        notifyVmCompleted = value;
+        await PersistSettingsAsync(updateAuthState: false, showSuccessMessage: false);
+    }
+
+    private async Task PersistSettingsAsync(bool updateAuthState, bool showSuccessMessage)
+    {
         if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid))
             return;
 
         if (string.IsNullOrWhiteSpace(fullName))
         {
-            ShowStatus("Full name is required.", true);
+            if (showSuccessMessage)
+                ShowStatus("Full name is required.", true);
             return;
         }
 
         if (string.IsNullOrWhiteSpace(email))
         {
-            ShowStatus("Email is required.", true);
+            if (showSuccessMessage)
+                ShowStatus("Email is required.", true);
             return;
         }
 
         _saving = true;
-        _statusMessage = "";
+        if (showSuccessMessage)
+            _statusMessage = "";
 
         try
         {
@@ -240,10 +258,15 @@
             notifySystemUpdates = updated.NotifySystemUpdates;
             timeZone = updated.TimeZone;
             currency = updated.Currency;
-            AuthState.SetAuthState(updated.FirebaseUid, updated.Email, updated.Name);
-            await JS.InvokeVoidAsync("authStorage.save", updated.FirebaseUid, updated.Email, updated.Name);
 
-            ShowStatus("Settings saved.", false);
+            if (updateAuthState)
+            {
+                AuthState.SetAuthState(updated.FirebaseUid, updated.Email, updated.Name);
+                await JS.InvokeVoidAsync("authStorage.save", updated.FirebaseUid, updated.Email, updated.Name);
+            }
+
+            if (showSuccessMessage)
+                ShowStatus("Settings saved.", false);
         }
         catch (Exception ex)
         {
@@ -272,16 +295,6 @@
         {
             ShowStatus($"Password reset failed: {ex.Message}", true);
         }
-    }
-
-    private void HandleTwoFactorClick()
-    {
-        ShowStatus("Two-factor authentication setup is coming soon.", false);
-    }
-
-    private void HandleApiKeysClick()
-    {
-        ShowStatus("API key management is coming soon.", false);
     }
 
     private void ShowStatus(string message, bool isError)
@@ -325,15 +338,42 @@
 <style>
     .settings-page {
         padding: 2rem 2.5rem;
+        padding-bottom: 6rem;
         max-width: 920px;
         margin: 0 auto;
         font-family: var(--uc-font-base);
     }
 
-    .save-row {
+    .settings-action-bar {
+        position: fixed;
+        left: 220px;
+        right: 0;
+        bottom: 0;
+        z-index: 1400;
+        padding: 0.9rem 2.5rem 1rem;
+        background: linear-gradient(180deg, rgba(2, 6, 23, 0.18) 0%, rgba(2, 6, 23, 0.92) 35%, rgba(2, 6, 23, 0.98) 100%);
+        border-top: 1px solid var(--uc-border);
+        backdrop-filter: blur(14px);
+    }
+
+    body.light-mode .settings-action-bar {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(244, 247, 251, 0.94) 40%, rgba(244, 247, 251, 0.98) 100%);
+        border-top-color: #cbd5e1;
+        box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .settings-action-bar-inner {
+        max-width: 920px;
+        margin: 0 auto;
         display: flex;
         justify-content: flex-end;
-        margin-top: 1rem;
+    }
+
+    @@media (max-width: 768px) {
+        .settings-action-bar {
+            left: 0;
+            padding: 0.8rem 1rem 0.9rem;
+        }
     }
 
     .btn-save {
@@ -348,6 +388,11 @@
         cursor: pointer;
         font-family: var(--uc-font-mono);
         transition: background 0.2s;
+    }
+
+    body.light-mode .btn-save {
+        background: #0f8f4f;
+        color: #fff;
     }
 
     .btn-save:hover {

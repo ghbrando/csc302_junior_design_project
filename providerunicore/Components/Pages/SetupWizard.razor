@@ -7,17 +7,19 @@
 <PageTitle>UniCore Setup</PageTitle>
 
 <style>
-    .setup-card { background: var(--uc-dark-2); border: 1px solid rgba(255,255,255,0.07); border-radius:8px; padding:2rem; max-width:640px; margin:0 auto; }
+    .setup-card { background: var(--uc-bg-card); border: 1px solid var(--uc-border); border-radius:8px; padding:2rem; max-width:640px; margin:0 auto; }
     .step-row { display:flex; gap:1rem; align-items:flex-start; }
-    .step-title { font-size:0.9rem; font-weight:600; color:#e2e8f0 }
-    .step-detail { font-size:0.78rem; color:#94a3b8; margin-top:0.25rem }
+    .step-title { font-size:0.9rem; font-weight:600; color:var(--uc-text-primary) }
+    .step-detail { font-size:0.78rem; color:var(--uc-text-secondary); margin-top:0.25rem }
     .btn-setup { font-size:0.75rem; padding:0.45rem 1.1rem; border-radius:4px; margin-top:0.75rem }
+    .setup-title { letter-spacing:0.5px; color: var(--uc-text-primary); }
+    .setup-subtitle { font-size:0.82rem; color: var(--uc-text-secondary); }
 </style>
 
 <div class="container-fluid px-4 py-5">
     <div class="text-center mb-4">
-        <h5 class="fw-bold text-white" style="letter-spacing:0.5px;">UniCore Node Setup</h5>
-        <p class="text-muted" style="font-size:0.82rem;">This page verifies Docker connectivity. The app assumes Docker is already installed and configured.</p>
+        <h5 class="fw-bold setup-title">UniCore Node Setup</h5>
+        <p class="setup-subtitle">This page verifies Docker connectivity. The app assumes Docker is already installed and configured.</p>
     </div>
 
     <div class="setup-card">
