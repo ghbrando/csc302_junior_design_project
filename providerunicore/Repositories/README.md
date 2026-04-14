@@ -55,9 +55,12 @@ Dashboard.razor → IVmService → IFirestoreRepository<VirtualMachine> → Fire
 | `UpdateAsync(id, entity)` | Update existing document | `Task` (void) |
 | `DeleteAsync(id)` | Delete document | `Task` (void) |
 | `WhereAsync(field, value)` | Query by field equality | `Task<IEnumerable<T>>` |
-| `FirstOrDefaultAsync(query)` | Get first matching document | `Task<T?>` |
+| `FirstOrDefaultAsync(queryModifier)` | Apply query modifier, return first result | `Task<T?>` |
 | `GetPagedAsync(pageSize, cursor)` | Paginated results | `Task<(IEnumerable<T>, DocumentSnapshot?)>` |
 | `CreateQuery()` | Build advanced queries | `Query` |
+| `Listen(id, onSnapshot)` | Real-time listener on a single document | `FirestoreChangeListener` |
+| `ListenAll(onSnapshot)` | Real-time listener on the entire collection | `FirestoreChangeListener` |
+| `ExecuteInTransactionAsync(delegate)` | Run operations atomically in a Firestore transaction | `Task` / `Task<TResult>` |
 
 ---
 
@@ -67,14 +70,14 @@ Follow these steps to add a new model to the Firestore repository pattern.
 
 ### Step 1: Create the Model Class
 
-Create your model in the `/Models` folder with Firestore attributes.
+All models live in the **shared library** at `unicore.shared/Models/`, not inside `providerunicore/` or `consumerunicore/`. This keeps both apps in sync on the same data model.
 
-**File:** `Models/YourModel.cs`
+**File:** `unicore.shared/Models/YourModel.cs`
 
 ```csharp
 using Google.Cloud.Firestore;
 
-namespace unicoreprovider.Models;
+namespace UniCore.Shared.Models;
 
 [FirestoreData]
 public class YourModel
@@ -107,12 +110,12 @@ public class YourModel
 
 Define the business operations for your model.
 
-**File:** `Services/IYourModelService.cs`
+**File:** `YourApp/Services/IYourModelService.cs`
 
 ```csharp
-using unicoreprovider.Models;
+using UniCore.Shared.Models;
 
-namespace unicoreprovider.Services;
+namespace unicoreprovider.Services;  // or unicoreconsumer.Services
 
 public interface IYourModelService
 {
@@ -140,13 +143,13 @@ public interface IYourModelService
 
 Implement the business logic using the repository.
 
-**File:** `Services/YourModelService.cs`
+**File:** `YourApp/Services/YourModelService.cs`
 
 ```csharp
-using unicoreprovider.Models;
-using providerunicore.Repositories;
+using UniCore.Shared.Models;
+using UniCore.Shared.Repositories;
 
-namespace unicoreprovider.Services;
+namespace unicoreprovider.Services;  // or unicoreconsumer.Services
 
 public class YourModelService : IYourModelService
 {
@@ -258,8 +261,7 @@ Inject and use the service in your Blazor pages or API controllers.
 
 ```razor
 @page "/your-models"
-@using unicoreprovider.Models
-@using unicoreprovider.Services
+@* UniCore.Shared.Models is already imported via _Imports.razor — no manual @using needed *@
 @inject IYourModelService YourModelService
 
 <h3>Your Models</h3>
@@ -706,7 +708,7 @@ builder.Services.AddScoped<IYourModelService, YourModelService>();
 
 When adding a new model, ensure you've completed:
 
-- [ ] Created model class in `/Models` folder
+- [ ] Created model class in `unicore.shared/Models/` (not inside an app folder)
 - [ ] Added `[FirestoreData]` attribute to class
 - [ ] Added `[FirestoreProperty("field_name")]` to all properties
 - [ ] Used snake_case for Firestore field names
@@ -723,10 +725,10 @@ When adding a new model, ensure you've completed:
 ## Need Help?
 
 - **Firestore Documentation:** https://cloud.google.com/firestore/docs
-- **Existing Examples:** See `Provider`, `VirtualMachine`, and `Payout` models
-- **Repository Code:** `/Repositories/IFirestoreRepository.cs` and `/Repositories/FirestoreRepository.cs`
+- **Existing Examples:** See `Provider`, `VirtualMachine`, and `Payout` models in `unicore.shared/Models/`
+- **Repository Code:** `unicore.shared/Repositories/IFirestoreRepository.cs` and `unicore.shared/Repositories/FirestoreRepository.cs`
 
 ---
 
-**Last Updated:** February 2026
+**Last Updated:** April 2026
 **Maintained By:** Development Team
