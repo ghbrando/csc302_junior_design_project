@@ -83,6 +83,14 @@ public class SnapshotService : BackgroundService, ISnapshotService
         }
     }
 
+    public async Task SnapshotNowAsync(string vmId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(vmId))
+            throw new ArgumentException("VM ID is required.", nameof(vmId));
+
+        await SnapshotVmByIdAsync(vmId, ct);
+    }
+
     public async Task PullSnapshotAsync(string? imageTag, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(imageTag))
