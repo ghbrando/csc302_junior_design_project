@@ -106,6 +106,10 @@ builder.Services.AddScoped<IMachineService, MachineService>();
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers(); // Add API Controllers
 
+// Audit service — Singleton so all services share one instance.
+// Writes are fire-and-forget; never blocks callers.
+builder.Services.AddSingleton<IAuditService, AuditService>();
+
 // Docker services — registered as Singleton so the monitor can receive
 // StartMonitoring() calls from the Dashboard and persist across requests.
 builder.Services.AddSingleton<INotificationService, NotificationService>();
@@ -177,6 +181,37 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
     {
         var logger = app.Services.GetRequiredService<ILogger<Program>>();
         logger.LogWarning("notify-send not found. Install libnotify-bin for desktop notifications.");
+    }
+}
+
+// On Linux, warn if Docker is NOT running in rootless mode.
+// Windows and macOS providers already have VM-level isolation via Docker Desktop.
+// Linux providers without rootless Docker run containers directly on the host kernel,
+// meaning a sufficiently privileged container process could affect the host.
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+{
+    var startupLogger = app.Services.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        var dockerService = app.Services.GetRequiredService<IDockerService>();
+        var isRootless = await dockerService.IsRootlessAsync();
+        if (isRootless)
+        {
+            startupLogger.LogInformation(
+                "[Security] Docker rootless mode confirmed. Container-to-host isolation is active.");
+        }
+        else
+        {
+            startupLogger.LogWarning(
+                "[Security] Docker is running in root mode on Linux. Consumer containers share " +
+                "the host kernel without a VM boundary. Install Rancher Desktop or enable " +
+                "rootless Docker (dockerd-rootless-setuptool.sh install) for stronger isolation.");
+        }
+    }
+    catch (Exception ex)
+    {
+        startupLogger.LogWarning(
+            "[Security] Could not determine Docker security mode: {Message}", ex.Message);
     }
 }
 
