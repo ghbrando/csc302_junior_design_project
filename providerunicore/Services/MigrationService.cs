@@ -187,13 +187,20 @@ public class MigrationService : IMigrationService
                 effectiveRAM = oldVm.RamGB;
             }
 
-            _logger.LogInformation("[Migration] Step 7 – starting container from {Image}", imageToUse);
+            // Carry over the service relay port if the old VM had one exposed.
+            // The old container is already stopped so its FRP slot on the relay server
+            // is free; reusing the same port avoids a reallocation race.
+            var serviceRelayPort = oldVm.ServiceRelayPort;
+
+            _logger.LogInformation("[Migration] Step 7 – starting container from {Image} (serviceRelayPort={SvcPort})",
+                imageToUse, serviceRelayPort?.ToString() ?? "none");
             var (containerId, _) = await _dockerService.StartContainerAsync(
                 newVmId, newVmName, imageToUse, relayPort,
                 effectiveCPU, effectiveRAM,
                 existingVolumeName: newVolumeName,
                 consumerUid: oldVm.Client,
                 volumeGb: oldVm.VolumeRequestedGb,
+                serviceRelayPort: serviceRelayPort,
                 providerUid: request.TargetProviderUid);
 
             newContainerId = containerId;
@@ -220,6 +227,12 @@ public class MigrationService : IMigrationService
                 VolumeRequestedGb = oldVm.VolumeRequestedGb,
                 VolumeSyncStatus = "Idle",
                 OriginalVmId = request.VmId,
+                // Carry over service exposure — port stays the same, URL gets the new VM ID
+                ServicePort = oldVm.ServicePort,
+                ServiceRelayPort = serviceRelayPort,
+                ServiceUrl = serviceRelayPort.HasValue
+                    ? $"https://{newVmId}.services.cbu-unicore.com"
+                    : null,
             };
             await _vmService.CreateVmAsync(newVm);
 
