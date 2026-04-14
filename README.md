@@ -90,8 +90,10 @@ For a deep-dive, see [docs/NETWORKING_ARCHITECTURE.md](docs/NETWORKING_ARCHITECT
 
 ### For Consumers
 - **Browser-based terminal** powered by [xterm.js](https://xtermjs.org/) — full interactive shell, no local client needed
-- **VM marketplace:** browse available VMs filtered by provider, specs, and price
-- **Persistent sessions:** close the tab and reconnect; the VM keeps running
+- **Automatic matchmaking:** specify CPU, RAM, disk, and image; the platform selects the best available provider by consistency score automatically
+- **Pause & resume:** freeze a VM to stop billing without losing the session state
+- **Persistent storage:** home directory synced to GCS every 5 minutes; container snapshots every 2 hours
+- **Live migration:** move a running VM to a different provider with full file system and package state preserved
 
 ### Platform
 - **Zero provider exposure:** outbound-only FRP connections, no open ports, no NAT traversal
@@ -136,6 +138,7 @@ csc302_junior_design_project/
 │   ├── Models/               # Firestore models: Provider, Consumer, VirtualMachine, MachineSpecs, Payout
 │   └── Repositories/         # IFirestoreRepository<T> + FirestoreRepository<T>
 ├── heartbeatservice/         # ASP.NET Core Worker Service — probes VMs every 10s via TCP
+├── landingpage/              # Public marketing + docs site (Blazor Server, static SSR)
 └── docs/
     ├── NETWORKING_ARCHITECTURE.md   # How the FRP relay and SSH tunneling work
     ├── GCP_FRP_RELAY_SETUP.md       # FRP relay VM setup guide
@@ -170,7 +173,7 @@ The repository provides type-safe CRUD, advanced querying, real-time change list
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/csc302_junior_design_project.git
+git clone https://github.com/ghbrando/csc302_junior_design_project.git
 cd csc302_junior_design_project
 
 # Run the provider desktop app
@@ -225,7 +228,7 @@ The relay port (one per VM, assigned from the 2222–2300 range) is stored in Fi
 
 ## Contributing
 
-This project was built as part of **EGR 302: Team Design Project** at California Baptist University, covering the full engineering lifecycle: requirements, architecture, ethics, teamwork, and delivery.
+This project was built as part of **CSC 302: Junior Design** at California Baptist University, covering the full engineering lifecycle: requirements, architecture, ethics, teamwork, and delivery.
 
 Pull requests, issue reports, and feedback are welcome.
 
@@ -238,7 +241,7 @@ Pull requests, issue reports, and feedback are welcome.
 
 ## Acknowledgments
 
-Built by the UniCore team, Spring 2026.
+Built by Jacob Pugh, Brandon Magana, Josh Baeza, Cameron Turner, and Elijah Simmonds — Spring 2026.
 Powered by ASP.NET Core, Google Cloud Platform, Docker, and the open-source ecosystem.
 
 ---
