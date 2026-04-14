@@ -104,8 +104,8 @@
                     <th class="pb-2" style="width: 8%;">Last Sync</th>
                     <th class="pb-2" style="width: 8%;">Snapshot</th>
                     <th class="pb-2" style="width: 8%;">Last Snap</th>
-                    <th class="pb-2" style="width: 8%;">Status</th>
-                    <th class="pb-2 text-end pe-0" style="width: 10%;">Action</th>
+                    <th class="pb-2" style="width: 8%;">Migration</th>
+                    <th class="pb-2 text-end pe-0" style="width: 16%;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -158,21 +158,37 @@
                                     }
                                     else
                                     {
-                                        <button class="btn btn-migrate btn-sm rounded-1"
-                                                @onclick="() => OnMigrateClicked.InvokeAsync(vm.VmId)"
-                                                disabled="@(vm.IsPaused)">
-                                            <i class="bi bi-arrow-left-right me-1"></i>Migrate
-                                        </button>
+                                        <span style="color: var(--uc-text-dim); font-size: 0.75rem;">—</span>
                                     }
                                 </td>
 
                                 <td class="py-3 text-end pe-0">
-                                    <button class="btn btn-sm btn-outline-light rounded-1"
-                                            style="font-size: 0.7rem;"
-                                            disabled="@(OnSnapshotRequested is null || vm.SnapshotStatus == "Committing" || vm.SnapshotStatus == "Pushing")"
-                                            @onclick="() => RequestSnapshotAsync(vm.VmId)">
-                                        Snapshot Now
-                                    </button>
+                                    <div class="d-flex justify-content-end gap-2">
+                                        <button class="btn btn-sm btn-outline-light rounded-1"
+                                                style="font-size: 0.7rem;"
+                                                disabled="@(OnSnapshotRequested is null || vm.SnapshotStatus is "Committing" or "Pushing" || _snapshotQueued.Contains(vm.VmId))"
+                                                @onclick="() => RequestSnapshotAsync(vm.VmId)">
+                                            @if (_snapshotQueued.Contains(vm.VmId))
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <span>Queued</span>
+                                            }
+                                            else if (vm.SnapshotStatus is "Committing" or "Pushing")
+                                            {
+                                                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                                <span>@vm.SnapshotStatus</span>
+                                            }
+                                            else
+                                            {
+                                                <span>Snapshot Now</span>
+                                            }
+                                        </button>
+                                        <button class="btn btn-migrate btn-sm rounded-1"
+                                                disabled="@(vm.IsPaused || !string.IsNullOrEmpty(vm.MigrationStatus))"
+                                                @onclick="() => OnMigrateClicked.InvokeAsync(vm.VmId)">
+                                            <i class="bi bi-arrow-left-right me-1"></i>Migrate
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         }
@@ -187,10 +203,22 @@
     [Parameter] public EventCallback<string> OnMigrateClicked { get; set; }
     [Parameter] public Func<string, Task>? OnSnapshotRequested { get; set; }
 
-    String isPaused(VirtualMachine vm)
+    // Tracks VMs where snapshot was just queued, until Firestore confirms it started.
+    private readonly HashSet<string> _snapshotQueued = new();
+
+    protected override void OnParametersSet()
     {
-        return vm.IsPaused ? " (Paused)" : "";
+        // Once the VM's SnapshotStatus moves away from Idle (to Committing/Pushing),
+        // the Firestore listener has picked it up — clear our local "queued" indicator.
+        foreach (var vmId in _snapshotQueued.ToList())
+        {
+            var vm = Vms.FirstOrDefault(v => v.VmId == vmId);
+            if (vm == null || vm.SnapshotStatus is "Committing" or "Pushing")
+                _snapshotQueued.Remove(vmId);
+        }
     }
+
+    private string isPaused(VirtualMachine vm) => vm.IsPaused ? " (Paused)" : "";
 
     private string MigrationBadgeClass(string? status) => status switch
     {
@@ -209,7 +237,15 @@
 
     private async Task RequestSnapshotAsync(string vmId)
     {
-        if (OnSnapshotRequested is not null)
+        if (OnSnapshotRequested is null) return;
+        _snapshotQueued.Add(vmId);
+        try
+        {
             await OnSnapshotRequested(vmId);
+        }
+        catch
+        {
+            _snapshotQueued.Remove(vmId);
+        }
     }
 }
