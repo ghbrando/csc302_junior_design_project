@@ -24,7 +24,8 @@ public class DockerService : IDockerService, IDisposable
         // --- Remove from Docker defaults ---
         "NET_RAW",          // raw sockets → ARP spoofing, packet injection
         "MKNOD",            // create device files → potential escape vector
-        "AUDIT_WRITE",      // write to kernel audit log
+        // AUDIT_WRITE kept — required by PAM for sshd authentication logging.
+        // Dropping it causes sshd to abort connections immediately after handshake.
         "SETFCAP",          // set file capabilities on arbitrary files
         "SETPCAP",          // manipulate process capability bounding sets
         // --- Belt-and-suspenders: not in defaults but block explicitly ---
