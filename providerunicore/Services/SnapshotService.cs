@@ -12,6 +12,7 @@ public class SnapshotService : BackgroundService, ISnapshotService
     private readonly FirestoreDb _firestoreDb;
     private readonly IDockerService _dockerService;
     private readonly IConfiguration _configuration;
+    private readonly IAuditService _audit;
     private readonly ILogger<SnapshotService> _logger;
 
     private readonly Channel<string> _onDemandQueue = Channel.CreateUnbounded<string>();
@@ -21,11 +22,13 @@ public class SnapshotService : BackgroundService, ISnapshotService
         FirestoreDb firestoreDb,
         IDockerService dockerService,
         IConfiguration configuration,
+        IAuditService audit,
         ILogger<SnapshotService> logger)
     {
         _firestoreDb = firestoreDb;
         _dockerService = dockerService;
         _configuration = configuration;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -171,6 +174,11 @@ public class SnapshotService : BackgroundService, ISnapshotService
                 ["last_snapshot_at"] = DateTime.UtcNow,
                 ["snapshot_image"] = imageTag
             });
+
+            // Audit: provider took a snapshot of a consumer VM.
+            _audit.Log(vm.ProviderId, "snapshot_taken",
+                vmId: vm.VmId, consumerUid: vm.Client,
+                detail: $"image={imageTag}");
         }
         catch (Exception ex)
         {

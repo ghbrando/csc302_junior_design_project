@@ -14,6 +14,7 @@ public class MigrationService : IMigrationService
     private readonly VmProvisioningService _provisioningService;
     private readonly FirestoreDb _firestoreDb;
     private readonly IConfiguration _configuration;
+    private readonly IAuditService _audit;
     private readonly ILogger<MigrationService> _logger;
 
     // Tracks migration request IDs currently being processed to prevent duplicate work.
@@ -29,6 +30,7 @@ public class MigrationService : IMigrationService
         VmProvisioningService provisioningService,
         FirestoreDb firestoreDb,
         IConfiguration configuration,
+        IAuditService audit,
         ILogger<MigrationService> logger)
     {
         _dockerService = dockerService ?? throw new ArgumentNullException(nameof(dockerService));
@@ -40,6 +42,7 @@ public class MigrationService : IMigrationService
         _provisioningService = provisioningService ?? throw new ArgumentNullException(nameof(provisioningService));
         _firestoreDb = firestoreDb ?? throw new ArgumentNullException(nameof(firestoreDb));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _audit = audit ?? throw new ArgumentNullException(nameof(audit));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -70,6 +73,10 @@ public class MigrationService : IMigrationService
         {
             _logger.LogInformation("[Migration] Starting migration {Id}: VM {VmId} → provider {Target}",
                 request.MigrationRequestId, request.VmId, request.TargetProviderUid);
+
+            _audit.Log(request.SourceProviderUid, "migration_started",
+                vmId: request.VmId, consumerUid: request.ConsumerUid,
+                detail: $"target={request.TargetProviderUid} requestId={request.MigrationRequestId}");
 
             // ── Step 1: Mark request as in-progress ───────────────────────────
             await migrationRef.UpdateAsync("status", "restoring");
@@ -253,6 +260,10 @@ public class MigrationService : IMigrationService
             _logger.LogInformation("[Migration] Step 11 – migration {Id} completed. New VM: {NewVmId}",
                 request.MigrationRequestId, newVmId);
 
+            _audit.Log(request.TargetProviderUid, "migration_completed",
+                vmId: newVmId, consumerUid: request.ConsumerUid,
+                detail: $"oldVm={request.VmId} requestId={request.MigrationRequestId}");
+
             await migrationRef.UpdateAsync(new Dictionary<string, object>
             {
                 ["status"] = "Completed",
@@ -279,6 +290,10 @@ public class MigrationService : IMigrationService
         {
             _logger.LogError(ex, "[Migration] Migration {Id} failed: {Message}",
                 request.MigrationRequestId, ex.Message);
+
+            _audit.Log(request.SourceProviderUid, "migration_failed",
+                vmId: request.VmId, consumerUid: request.ConsumerUid,
+                detail: $"error={ex.Message} requestId={request.MigrationRequestId}");
 
             await CleanupPartialMigrationAsync(newContainerId, newVolumeName, newVmId);
 
