@@ -1,4 +1,5 @@
 @page "/"
+@inject IConfiguration Config
 
 <PageTitle>UniCore — Rent compute. Earn from idle hardware.</PageTitle>
 
@@ -18,8 +19,8 @@
         <p class="subtext">No cloud account. No port forwarding. Just a browser.</p>
 
         <div class="cta-buttons">
-            <button class="btn-teal">Get a VM &rarr;</button>
-            <button class="btn-green">Become a Provider &rarr;</button>
+            <button class="btn-teal" onclick="scrollToSection('get-vm')">Get a VM &rarr;</button>
+            <button class="btn-green" onclick="scrollToSection('become-provider')">Become a Provider &rarr;</button>
         </div>
     </div>
 </section>
@@ -58,18 +59,18 @@
             <div class="dual-divider">or</div>
 
             <!-- Consumer Side -->
-            <div class="dual-panel dual-panel-consumer">
+            <div id="get-vm" class="dual-panel dual-panel-consumer">
                 <img src="consumer_icon.png" alt="Consumer" class="panel-icon panel-icon-cyan" />
                 <h3>I need compute</h3>
                 <p class="panel-desc">Open a browser. Get a Linux terminal. No account setup required.</p>
-                <button class="btn-full btn-full-cyan">
+                <a href="@Config["AppUrls:ConsumerApp"]" class="btn-full btn-full-cyan">
                     Launch Consumer App &rsaquo;
-                </button>
+                </a>
                 <p class="panel-footnote">Works in any browser — nothing to install</p>
             </div>
 
             <!-- Provider Side -->
-            <div class="dual-panel dual-panel-provider">
+            <div id="become-provider" class="dual-panel dual-panel-provider">
                 <img src="provider_icon.png" alt="Provider" class="panel-icon panel-icon-green" />
                 <h3>I want to earn</h3>
                 <p class="panel-desc">Install the provider app, set your limits, and start earning.</p>
@@ -102,7 +103,7 @@
     <div class="footer-inner">
         <span class="footer-tagline">UniCore — compute for everyone.</span>
         <div class="footer-links">
-            <a href="#">GitHub</a>
+            <a href="https://github.com/ghbrando/csc302_junior_design_project" target="_blank">GitHub</a>
             <a href="/docs">Docs</a>
             <a href="#">Sign In</a>
         </div>

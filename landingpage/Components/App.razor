@@ -10,13 +10,19 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["UniCoreLanding.styles.css"]" />
     <ImportMap />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/png" href="unicore_icon.png" />
     <HeadOutlet />
 </head>
 
 <body>
     <Routes />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>
+        window.scrollToSection = function (id) {
+            var el = document.getElementById(id);
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        };
+    </script>
 </body>
 
 </html>
