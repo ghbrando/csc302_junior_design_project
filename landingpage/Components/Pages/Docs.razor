@@ -1,0 +1,370 @@
+@page "/docs"
+
+<PageTitle>UniCore — Documentation</PageTitle>
+
+<div class="docs-layout">
+
+    <!-- Sidebar -->
+    <aside class="docs-sidebar">
+        <nav class="docs-nav">
+            <p class="docs-nav-label">Getting Started</p>
+            <a href="#what-is-unicore" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('what-is-unicore');">What is UniCore?</a>
+            <a href="#architecture" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('architecture');">Architecture</a>
+
+            <p class="docs-nav-label">Consumers</p>
+            <a href="#get-a-vm" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('get-a-vm');">Getting a VM</a>
+            <a href="#terminal-access" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('terminal-access');">Terminal Access</a>
+
+            <p class="docs-nav-label">Providers</p>
+            <a href="#become-a-provider" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('become-a-provider');">Becoming a Provider</a>
+            <a href="#earning" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('earning');">Earning &amp; Payouts</a>
+
+            <p class="docs-nav-label">Platform</p>
+            <a href="#security" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('security');">Security Model</a>
+            <a href="#faq" class="docs-nav-link" onclick="event.preventDefault(); scrollToSection('faq');">FAQ</a>
+        </nav>
+    </aside>
+
+    <!-- Main content -->
+    <article class="docs-content">
+
+        <!-- Page header -->
+        <div class="docs-page-header">
+            <span class="docs-badge">Documentation</span>
+            <h1 class="docs-title">How UniCore Works</h1>
+            <p class="docs-subtitle">
+                UniCore connects people who need compute power with people who have hardware to spare —
+                through a secure relay that keeps both sides private.
+            </p>
+        </div>
+
+        <!-- What is UniCore -->
+        <section id="what-is-unicore" class="docs-section">
+            <h2>What is UniCore?</h2>
+            <p>
+                UniCore is a peer-to-peer distributed computing marketplace. Instead of paying
+                a cloud provider like AWS or GCP for a virtual machine, you rent compute time
+                directly from other people's idle hardware — at a fraction of the cost.
+            </p>
+            <p>
+                If you have a spare PC, you can list it on UniCore and earn money whenever
+                someone uses it. If you need a Linux VM for a build job, a dev environment,
+                or a quick experiment, you can spin one up in seconds from your browser —
+                no account setup, no port forwarding, no exposed IP addresses.
+            </p>
+
+            <div class="docs-callout docs-callout-cyan">
+                <p class="docs-callout-title">The core insight</p>
+                <p>
+                    Most personal computers sit idle more than 90% of the time. UniCore lets
+                    that idle capacity do useful work for someone else, and pays the owner for it.
+                </p>
+            </div>
+        </section>
+
+        <!-- Architecture -->
+        <section id="architecture" class="docs-section">
+            <h2>Architecture</h2>
+            <p>
+                UniCore has two separate communication paths: <strong>Firestore</strong> handles
+                all coordination (VM requests, status updates, pause/resume signals), and an
+                <strong>FRP relay on GCP</strong> carries the actual SSH traffic. Neither the
+                consumer nor the provider ever exposes a public IP address.
+            </p>
+
+            <div class="docs-arch-diagram">
+                <div class="arch-node arch-node-cyan">
+                    <span class="arch-node-label">Consumer</span>
+                    <span class="arch-node-sub">Browser / SSH.NET</span>
+                </div>
+                <div class="arch-arrow">&harr;</div>
+                <div class="arch-node arch-node-purple">
+                    <span class="arch-node-label">GCP FRP Relay</span>
+                    <span class="arch-node-sub">Ports 2222–2300</span>
+                </div>
+                <div class="arch-arrow">&harr;</div>
+                <div class="arch-node arch-node-green">
+                    <span class="arch-node-label">Docker Container</span>
+                    <span class="arch-node-sub">sshd + frpc</span>
+                </div>
+            </div>
+            <p style="text-align:center; font-size: 0.85rem; color: var(--color-text-muted); margin-top: -0.5rem; margin-bottom: 1.5rem;">
+                SSH path &nbsp;·&nbsp; All coordination (VM requests, pause/resume, status) flows through Firestore
+            </p>
+
+            <div class="docs-steps">
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-green">1</span>
+                    <div>
+                        <p class="docs-step-title">Provider comes online</p>
+                        <p class="docs-step-body">
+                            The provider installs the desktop app and authenticates with Firebase.
+                            Their hardware specs are detected automatically and written to the
+                            shared database. Their machine appears as available in the marketplace.
+                            No inbound firewall rules are needed.
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-cyan">2</span>
+                    <div>
+                        <p class="docs-step-title">Consumer requests a VM</p>
+                        <p class="docs-step-body">
+                            The consumer visits the web app, selects CPU cores, RAM, disk size,
+                            and a base image, then clicks "Launch VM." A matchmaking algorithm
+                            selects the best available provider by consistency score and resource
+                            availability. A VM record is created in Firestore with status
+                            "Provisioning."
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-purple">3</span>
+                    <div>
+                        <p class="docs-step-title">Container starts, FRP tunnel opens</p>
+                        <p class="docs-step-body">
+                            The provider app's Firestore listener detects the new VM record and
+                            calls Docker to create a container. Inside the container, an FRP
+                            client opens an outbound tunnel to the GCP relay, registering an SSH
+                            port in the 2222–2300 range. A background service polls the relay
+                            until the SSH banner is readable, then marks the VM "Running."
+                        </p>
+                    </div>
+                </div>
+                <div class="docs-step">
+                    <span class="docs-step-num step-color-cyan">4</span>
+                    <div>
+                        <p class="docs-step-title">Consumer gets a terminal</p>
+                        <p class="docs-step-body">
+                            The web app opens an in-browser terminal (WebShell). SSH.NET connects
+                            to <code>relay-ip:relay-port</code>, which the FRP server tunnels
+                            into the container's SSH daemon. The consumer has a full Linux shell.
+                            The provider's real IP is never disclosed.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Getting a VM -->
+        <section id="get-a-vm" class="docs-section">
+            <h2>Getting a VM</h2>
+            <p>
+                Consumers access UniCore entirely through a browser — nothing to install.
+            </p>
+
+            <ol class="docs-ol">
+                <li>Open the UniCore web app and sign in with your account.</li>
+                <li>On your dashboard, click <strong>Create VM</strong> and choose CPU cores, RAM, disk size, and a base image.</li>
+                <li>UniCore's matchmaking selects the best available provider for you automatically.</li>
+                <li>Wait while the container starts and the FRP tunnel is established (typically under 30 seconds).</li>
+                <li>Click the <strong>Terminal</strong> button on your VM card. A shell opens directly in your browser.</li>
+                <li>When you're done, click <strong>Stop VM</strong>. Your files are backed up to cloud storage automatically.</li>
+            </ol>
+
+            <div class="docs-callout docs-callout-green">
+                <p class="docs-callout-title">No SSH client required</p>
+                <p>
+                    The terminal runs directly in your browser via a web-based SSH client (WebShell).
+                    You don't need PuTTY, OpenSSH, or any other tool. You can also pause a VM
+                    to stop billing without losing your session state.
+                </p>
+            </div>
+        </section>
+
+        <!-- Terminal Access -->
+        <section id="terminal-access" class="docs-section">
+            <h2>Terminal Access</h2>
+            <p>
+                Every VM provisioned through UniCore comes with:
+            </p>
+            <ul class="docs-ul">
+                <li>A configurable base image (Ubuntu and other Linux images supported)</li>
+                <li>Full <code>sudo</code> access inside the container</li>
+                <li>Outbound internet access (for installing packages, cloning repos, etc.)</li>
+                <li>Automatic volume backups to Google Cloud Storage every 5 minutes</li>
+                <li>Container snapshots to GCP Artifact Registry every 2 hours (preserves installed packages)</li>
+                <li>Isolated filesystem — your data is not visible to the provider</li>
+            </ul>
+            <p>
+                You can <strong>pause</strong> a VM at any time to freeze billing without losing your environment.
+                If a provider goes offline unexpectedly, your most recent volume backup is preserved
+                and can be restored on a different provider via live migration.
+            </p>
+        </section>
+
+        <!-- Becoming a Provider -->
+        <section id="become-a-provider" class="docs-section">
+            <h2>Becoming a Provider</h2>
+            <p>
+                Anyone with a spare Windows or Linux machine can become a provider. The minimum
+                requirements are modest — most gaming PCs, home servers, and old workstations
+                qualify.
+            </p>
+
+            <div class="docs-specs-grid">
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Minimum RAM</p>
+                    <p class="docs-spec-value">4 GB</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Minimum CPU</p>
+                    <p class="docs-spec-value">2 cores</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">OS</p>
+                    <p class="docs-spec-value">Win 10+ / Ubuntu 20.04+</p>
+                </div>
+                <div class="docs-spec-card">
+                    <p class="docs-spec-label">Required Software</p>
+                    <p class="docs-spec-value">Docker Desktop</p>
+                </div>
+            </div>
+
+            <ol class="docs-ol">
+                <li>Download the UniCore Provider app for your platform.</li>
+                <li>Install Docker Desktop if you don't already have it.</li>
+                <li>Sign in with your UniCore account and complete provider onboarding.</li>
+                <li>Set your resource limits — how much RAM and CPU to allocate for consumer VMs.</li>
+                <li>Your hardware specs are detected automatically. Your machine is now listed in the marketplace.</li>
+            </ol>
+
+            <p>
+                You can go offline any time by closing the provider app — it marks your node
+                as offline in the marketplace automatically on shutdown. Consumer VMs that were
+                running are backed up to cloud storage before the connection drops.
+            </p>
+        </section>
+
+        <!-- Earning & Payouts -->
+        <section id="earning" class="docs-section">
+            <h2>Earning &amp; Payouts</h2>
+            <p>
+                Providers are paid per hour of active consumer usage. Billing is prorated to
+                the minute — consumers are never charged for idle time after their session ends.
+            </p>
+
+            <div class="docs-callout docs-callout-green">
+                <p class="docs-callout-title">Consistency score</p>
+                <p>
+                    UniCore tracks provider uptime with a <strong>consistency score</strong> (0–100).
+                    Every 10 seconds, a background heartbeat service probes each of your active VMs
+                    via the FRP relay. Being reliably reachable improves your score and ranks you
+                    higher in matchmaking, resulting in more VM assignments and more revenue.
+                    Going offline unexpectedly reduces it.
+                </p>
+            </div>
+
+            <p>
+                Payouts are processed on a rolling basis. Minimum payout threshold and payment
+                methods are configured in your provider dashboard.
+            </p>
+        </section>
+
+        <!-- Security Model -->
+        <section id="security" class="docs-section">
+            <h2>Security Model</h2>
+
+            <div class="docs-security-grid">
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Provider IP never exposed</p>
+                    <p class="docs-security-body">
+                        The FRP client inside each container connects <em>outbound</em> to the
+                        GCP relay on port 7000. Consumers only ever see the relay's IP.
+                        A provider's home or office IP is never transmitted to or visible by consumers.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Docker isolation</p>
+                    <p class="docs-security-body">
+                        Each consumer session runs inside a Docker container. Consumers cannot
+                        access the provider's host filesystem, processes, or network interfaces
+                        outside the container.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">Firebase JWT auth</p>
+                    <p class="docs-security-body">
+                        All API calls are authenticated with short-lived Firebase JWTs. Tokens
+                        are verified server-side on every request. Sessions expire and require
+                        re-authentication.
+                    </p>
+                </div>
+                <div class="docs-security-card">
+                    <p class="docs-security-title">GCP-backed relay</p>
+                    <p class="docs-security-body">
+                        The SSH relay is an FRP server running on a GCP Compute Engine VM.
+                        FRP relay credentials (server address and auth token) are stored in
+                        GCP Secret Manager and loaded at runtime — never committed to source control.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- FAQ -->
+        <section id="faq" class="docs-section">
+            <h2>FAQ</h2>
+
+            <div class="docs-faq">
+                <details class="docs-faq-item">
+                    <summary>Do consumers need to create an account?</summary>
+                    <p>
+                        Yes. A UniCore account is required to use the platform. Sign-up is free
+                        and takes under a minute using email and password via Firebase Authentication.
+                        Email verification is required before accessing the dashboard.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>What happens if the provider goes offline mid-session?</summary>
+                    <p>
+                        The relay detects the disconnection within seconds and the consumer's
+                        terminal will display a connection-lost message. However, your work is
+                        not lost: UniCore automatically backs up your home directory to Google
+                        Cloud Storage every 5 minutes and takes a full container snapshot
+                        every 2 hours. You can migrate your VM to a different provider and
+                        resume where you left off. The heartbeat service also tracks this event
+                        and reduces the provider's consistency score accordingly.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>Can I run GPU workloads?</summary>
+                    <p>
+                        GPU passthrough is on the roadmap. Currently, only CPU-based workloads
+                        are supported. Providers with CUDA-capable GPUs will be able to opt in
+                        to GPU listings in a future release.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>Is my data private from the provider?</summary>
+                    <p>
+                        All consumer workloads run inside Docker containers. Providers cannot
+                        inspect the container filesystem or processes during a live session.
+                        However, as with any shared compute environment, you should avoid
+                        processing highly sensitive credentials or data you wouldn't trust
+                        to a third-party VPS.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>How is pricing set?</summary>
+                    <p>
+                        Providers set their own hourly rate. UniCore takes a small platform fee.
+                        The consumer-facing price shown in the marketplace is the all-in price
+                        including the platform fee.
+                    </p>
+                </details>
+                <details class="docs-faq-item">
+                    <summary>What ports are available in a consumer VM?</summary>
+                    <p>
+                        VMs have full outbound internet access. You can also expose a web service
+                        running inside your VM (default port 8080) via a public HTTPS subdomain
+                        at <code>&lt;vmId&gt;.services.cbu-unicore.com</code>. This is tunneled
+                        through the same FRP relay and served by Caddy with a wildcard TLS
+                        certificate — no extra setup required.
+                    </p>
+                </details>
+            </div>
+        </section>
+
+    </article>
+</div>
+

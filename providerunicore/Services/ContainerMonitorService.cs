@@ -12,7 +12,7 @@ public class ContainerMonitorService : IHostedService, IDisposable
     private readonly ILogger<ContainerMonitorService> _logger;
 
     // vmId → (containerId, startedAt)
-    private readonly ConcurrentDictionary<string, (string ContainerId, DateTime StartedAt)> _monitored = new();
+    private readonly ConcurrentDictionary<string, (string ContainerId, DateTime StartedAt, TimeSpan AccumulatedUptime, bool WasPaused)> _monitored = new();
 
     private Timer? _timer;
 
@@ -29,8 +29,8 @@ public class ContainerMonitorService : IHostedService, IDisposable
     // Called by Dashboard when a new container is launched
     public void StartMonitoring(string vmId, string containerId, DateTime startedAt)
     {
-        _monitored.TryAdd(vmId, (containerId, startedAt));
-        _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
+        if (_monitored.TryAdd(vmId, (containerId, startedAt, TimeSpan.Zero, false)))
+            _logger.LogInformation("Started monitoring VM {VmId} (container {ContainerId})", vmId, containerId);
     }
 
     // Called when a container is stopped
@@ -60,23 +60,53 @@ public class ContainerMonitorService : IHostedService, IDisposable
 
     private async Task PollAllAsync()
     {
-        foreach (var (vmId, (containerId, startedAt)) in _monitored.ToList())
+        foreach (var (vmId, (containerId, startedAt, accumulatedUptime, wasPaused)) in _monitored.ToList())
         {
             try
             {
-                var (cpu, ram) = await _dockerService.GetContainerStatsAsync(containerId);
-                var uptime = DateTime.UtcNow - startedAt;
-                var uptimeStr = uptime.ToString(@"hh\:mm\:ss");
-
                 // Create a short-lived scope to resolve the scoped IVmService
                 await using var scope = _scopeFactory.CreateAsyncScope();
                 var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+
+                // Check if VM is paused; skip metrics update if it is
+                var vm = await vmService.GetByIdAsync(vmId);
+                if (vm?.IsPaused == true)
+                {
+                    if (!wasPaused && _monitored.TryGetValue(vmId, out var entry))
+                    {
+                        var accumulated = entry.AccumulatedUptime + (DateTime.UtcNow - entry.StartedAt);
+                        _monitored[vmId] = (containerId, DateTime.UtcNow, accumulated, true);
+                    }
+                    _logger.LogDebug("VM {VmId} is paused; skipping metrics update", vmId);
+                    continue;
+                }
+
+                if (wasPaused && _monitored.TryGetValue(vmId, out var resumedEntry))
+                {
+                    _monitored[vmId] = resumedEntry with { StartedAt = DateTime.UtcNow, AccumulatedUptime = resumedEntry.AccumulatedUptime, WasPaused = false };
+                }
+
+
+                var (cpu, ram) = await _dockerService.GetContainerStatsAsync(containerId);
+                var currVM = _monitored[vmId];
+                var uptime = currVM.AccumulatedUptime + (DateTime.UtcNow - currVM.StartedAt);
+                var uptimeStr = uptime.ToString(@"hh\:mm\:ss");
+
                 await vmService.UpdateVmMetricsAsync(vmId, cpu, 0, ram, uptimeStr);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
-                    containerId, vmId, ex.Message);
+                if (ex.Message.Contains("not found", StringComparison.OrdinalIgnoreCase) ||
+                    ex.Message.Contains("no such container", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("VM {VmId} no longer exists in Firestore; removing from monitor.", vmId);
+                    StopMonitoring(vmId);
+                }
+                else
+                {
+                    _logger.LogWarning("Error polling container {ContainerId} for VM {VmId}: {Message}",
+                        containerId, vmId, ex.Message);
+                }
             }
         }
     }

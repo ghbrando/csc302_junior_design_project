@@ -5,6 +5,10 @@
     --uc-bg-card: #121212;
     --uc-bg-elevated: #1a1a1a;
     --uc-bg-sidebar: #080808;
+    --uc-logo-strip-bg: #151515;
+    --uc-logo-badge-bg: #000000;
+    --uc-logo-badge-border: rgba(255, 255, 255, 0.12);
+    --uc-balance-highlight: #86efac;
 
     /* Border colors */
     --uc-border: #222;
@@ -23,6 +27,7 @@
 
     /* Accent colors */
     --uc-green: #00e676;
+    --uc-green-readable: #00e676;
     --uc-blue: #3b82f6;
     --uc-red: #ff5252;
     --uc-red-dark: #d32f2f;
@@ -37,6 +42,31 @@
     /* Fonts */
     --uc-font-base: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     --uc-font-mono: 'Consolas', 'Monaco', monospace;
+}
+
+body.light-mode {
+    /* Surface colors */
+    --uc-bg-body: #f5f5f5;
+    --uc-bg-card: #ffffff;
+    --uc-bg-elevated: #ffffff;
+    --uc-bg-sidebar: #e0e0e0;
+    --uc-logo-strip-bg: #000000;
+    --uc-logo-badge-bg: #000000;
+    --uc-logo-badge-border: rgba(255, 255, 255, 0.35);
+
+    /* Border colors */
+    --uc-border: #ccc;
+    --uc-border-light: #ddd;
+
+    /* Text colors */
+    --uc-text-primary: #212121;
+    --uc-text-white: #000000;
+    --uc-text-muted: #888;
+    --uc-text-dim: #999;
+    --uc-text-secondary: #555;
+    --uc-text-table: #333;
+    --uc-green-readable: #0f8f4f;
+    --uc-balance-highlight: #0f8f4f;
 }
 
 /* Global base styles */

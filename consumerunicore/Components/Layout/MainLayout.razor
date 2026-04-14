@@ -1,0 +1,22 @@
+@inherits LayoutComponentBase
+
+<style>
+    .layout-wrapper {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    .main-content {
+        margin-left: 220px;
+        flex: 1;
+        min-height: 100vh;
+        background-color: var(--uc-bg-body);
+    }
+</style>
+
+<div class="layout-wrapper">
+    <NavMenu />
+    <main class="main-content">
+        @Body
+    </main>
+</div>

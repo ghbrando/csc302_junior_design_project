@@ -3,40 +3,14 @@
 @rendermode RenderMode.InteractiveServer
 
 <div class="landing-logo">
-    <img src="../unicore-logo.png" alt="Unicore Logo" width="408" height="272" />
+    <div class="landing-logo-badge">
+        <img src="../unicore-logo.png" alt="Unicore Logo" class="landing-logo-image" />
+    </div>
 </div>
 
 <div class="select-label mb-4">SELECT ACCOUNT TYPE</div>
 
 <div class="account-cards">
-
-    <!-- CLIENT -->
-    <div class="account-card">
-        <div class="card-header-row">
-            <div class="card-icon"
-                 style="background:rgba(59,130,246,.12); border-color:rgba(59,130,246,.25); color:var(--uc-blue);">
-                <i class="bi bi-cpu"></i>
-            </div>
-            <div>
-                <div class="card-type">CLIENT</div>
-                <div class="card-sub">REQUEST RESOURCES</div>
-            </div>
-        </div>
-
-        <p class="card-desc">
-            Create and manage virtual machines for ML training, video rendering, data processing, and more.
-        </p>
-
-        <ul class="card-features">
-            <li>Create &amp; monitor VMs</li>
-            <li>Budget control &amp; alerts</li>
-            <li>Real-time logging</li>
-        </ul>
-
-        <a href="/client-login" class="card-continue" style="color:var(--uc-blue);">
-            CONTINUE <i class="bi bi-arrow-right"></i>
-        </a>
-    </div>
 
     <!-- PROVIDER -->
     <div class="account-card">
@@ -69,7 +43,7 @@
 
 <div class="landing-footer mt-5">
     <span class="footer-badge"><i class="bi bi-shield-check"></i> SANDBOXED</span>
-    <span style="color:#2a2a2a;">|</span>
+    <span class="footer-divider">|</span>
     <span class="footer-badge"><i class="bi bi-diagram-3"></i> DECENTRALIZED</span>
 </div>
 
@@ -79,6 +53,28 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
+    }
+
+    .landing-logo-badge {
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: var(--uc-logo-badge-bg);
+        border: 1px solid var(--uc-logo-badge-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 20px 55px rgba(0, 0, 0, 0.36);
+    }
+
+    .landing-logo-image {
+        width: 180px;
+        height: auto;
+    }
+
+    body.light-mode .landing-logo-badge {
+        background: #000000 !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
     }
 
     .logo-mark {
@@ -101,6 +97,7 @@
     }
 
     .select-label {
+        margin-top: 30px;
         font-size: 0.7rem;
         letter-spacing: 4px;
         color: var(--uc-text-dim);
@@ -217,12 +214,27 @@
         gap: 1rem;
     }
 
+    .footer-divider {
+        color: var(--uc-text-dim);
+    }
+
     .footer-badge {
         font-size: 0.58rem;
         letter-spacing: 2px;
-        color: #3a3a3a;
+        color: var(--uc-text-secondary);
         display: flex;
         align-items: center;
         gap: 5px;
+    }
+
+    @@media (max-width: 768px) {
+        .landing-logo-badge {
+            width: 170px;
+            height: 170px;
+        }
+
+        .landing-logo-image {
+            width: 136px;
+        }
     }
 </style>

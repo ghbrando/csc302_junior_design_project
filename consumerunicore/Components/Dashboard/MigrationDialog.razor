@@ -1,0 +1,577 @@
+@namespace unicoreconsumer.Components
+@using UniCore.Shared.Models
+@using consumerunicore.Services
+@using Google.Cloud.Firestore
+@implements IAsyncDisposable
+@inject IMigrationRequestService MigrationService
+@inject FirestoreDb FirestoreDb
+
+@if (IsOpen)
+{
+    <div class="mig-backdrop" @onclick="HandleBackdropClick">
+        <div class="mig-modal" @onclick:stopPropagation="true">
+
+            @switch (_step)
+            {
+                // ── Step 1: Select target provider ───────────────────────────
+                case Step.SelectTarget:
+                    <div class="mig-header">
+                        <i class="bi bi-box-arrow-right mig-icon"></i>
+                        <span class="mig-title">Migrate VM</span>
+                    </div>
+
+                    <div class="mig-warning">
+                        <i class="bi bi-info-circle"></i>
+                        <div>
+                            <strong>Your home directory will be preserved.</strong>
+                            Installed packages will be restored from the last snapshot.
+                        </div>
+                    </div>
+
+                    @if (_loadingProviders)
+                    {
+                        <div class="mig-center" style="padding: 1.5rem 0;">
+                            <div class="mig-spinner"></div>
+                            <p class="mig-status-sub">Loading available providers...</p>
+                        </div>
+                    }
+                    else if (_providers.Count == 0)
+                    {
+                        <div class="mig-center" style="padding: 1.5rem 0;">
+                            <i class="bi bi-exclamation-circle" style="color: var(--uc-text-muted); font-size: 1.5rem;"></i>
+                            <p class="mig-status-sub">No healthy providers available for migration right now.</p>
+                        </div>
+
+                        <div class="mig-actions">
+                            <button class="mig-btn-cancel" @onclick="CloseModal">Close</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mig-field">
+                            <label class="mig-label">REQUESTED CPU CORES</label>
+                            <input class="mig-input" type="number" min="@CurrentCpuCores" step="1" @bind="_requestedCpuCores" />
+                            <div class="mig-hint">Current: @CurrentCpuCores vCPU. Upgrades only.</div>
+                        </div>
+
+                        <div class="mig-field">
+                            <label class="mig-label">REQUESTED RAM (GB)</label>
+                            <input class="mig-input" type="number" min="@CurrentRamGb" step="1" @bind="_requestedRamGb" />
+                            <div class="mig-hint">Current: @CurrentRamGb GB. Upgrades only.</div>
+                        </div>
+
+                        @if (_requestedCpuCores < CurrentCpuCores || _requestedRamGb < CurrentRamGb)
+                        {
+                            <div class="mig-validation-error">
+                                Requested resources cannot be lower than current VM specs.
+                            </div>
+                        }
+
+                        <div class="mig-field">
+                            <label class="mig-label">TARGET PROVIDER</label>
+                            <div class="mig-provider-option @(_selectedProviderUid == null ? "selected" : "")"
+                                 @onclick="() => _selectedProviderUid = null">
+                                <div class="mig-provider-name">
+                                    <i class="bi bi-stars"></i> Auto-select healthiest
+                                </div>
+                                <div class="mig-provider-meta">
+                                    Recommended — picks the provider with the highest consistency score
+                                </div>
+                            </div>
+
+                            @foreach (var p in _providers)
+                            {
+                                <div class="mig-provider-option @(_selectedProviderUid == p.FirebaseUid ? "selected" : "")"
+                                     @onclick="() => _selectedProviderUid = p.FirebaseUid">
+                                    <div class="mig-provider-name">@p.Name</div>
+                                    <div class="mig-provider-meta">
+                                        @p.Region &bull; Score: @p.ConsistencyScore.ToString("F0")% &bull; @p.NodeStatus
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mig-actions">
+                            <button class="mig-btn-cancel" @onclick="CloseModal">Cancel</button>
+                            <button class="mig-btn-primary" @onclick="ConfirmMigrationAsync" disabled="@HasInvalidSizing">
+                                <i class="bi bi-arrow-right-circle"></i> Confirm Migration
+                            </button>
+                        </div>
+                    }
+                    break;
+
+                // ── Step 2: Submitting ───────────────────────────────────────
+                case Step.Submitting:
+                    <div class="mig-center">
+                        <div class="mig-spinner"></div>
+                        <p class="mig-status-text">Requesting migration...</p>
+                        <p class="mig-status-sub">Creating migration request and finding target provider.</p>
+                    </div>
+                    break;
+
+                // ── Step 3: Migrating (real-time progress) ───────────────────
+                case Step.Migrating:
+                    <div class="mig-center">
+                        <div class="mig-spinner"></div>
+                        <p class="mig-status-text">Migration in progress</p>
+                        <p class="mig-status-sub">
+                            Status: <strong>@(_migrationRequest?.Status ?? "pending")</strong>
+                        </p>
+                        <p class="mig-status-sub">Your VM is being moved to the new provider. This may take a few minutes.</p>
+                    </div>
+                    break;
+
+                // ── Step 4: Done ─────────────────────────────────────────────
+                case Step.Done:
+                    <div class="mig-center">
+                        <div class="mig-done-icon">
+                            <i class="bi bi-check-circle-fill" style="color: var(--uc-green); font-size: 2.5rem;"></i>
+                        </div>
+                        <p class="mig-status-text" style="color: var(--uc-green);">Migration Complete</p>
+                        <p class="mig-status-sub">Your VM has been migrated successfully. The dashboard will update shortly.</p>
+                        <button class="mig-btn-primary" style="margin-top: 1.5rem;" @onclick="CloseModal">
+                            Close
+                        </button>
+                    </div>
+                    break;
+
+                // ── Step 5: Error ────────────────────────────────────────────
+                case Step.Error:
+                    <div class="mig-center">
+                        <div class="mig-error-icon">
+                            <i class="bi bi-exclamation-circle-fill" style="color: var(--uc-red); font-size: 2.5rem;"></i>
+                        </div>
+                        <p class="mig-status-text" style="color: var(--uc-red);">Migration Failed</p>
+                        <p class="mig-error-msg">@_errorMessage</p>
+                        <div class="mig-actions" style="margin-top: 1.5rem;">
+                            <button class="mig-btn-cancel" @onclick="CloseModal">Close</button>
+                            <button class="mig-btn-primary" @onclick="GoBack">Try Again</button>
+                        </div>
+                    </div>
+                    break;
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private enum Step { SelectTarget, Submitting, Migrating, Done, Error }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string VmId { get; set; } = "";
+    [Parameter] public string ConsumerUid { get; set; } = "";
+    [Parameter] public string SourceProviderUid { get; set; } = "";
+    [Parameter] public int CurrentCpuCores { get; set; }
+    [Parameter] public int CurrentRamGb { get; set; }
+
+    private Step _step = Step.SelectTarget;
+    private List<Provider> _providers = new();
+    private bool _loadingProviders;
+    private string? _selectedProviderUid;
+    private string? _errorMessage;
+    private VmMigrationRequest? _migrationRequest;
+    private FirestoreChangeListener? _migrationListener;
+    private bool _providersLoaded;
+    private int _requestedCpuCores;
+    private int _requestedRamGb;
+    private bool HasInvalidSizing =>
+        _requestedCpuCores < CurrentCpuCores || _requestedRamGb < CurrentRamGb ||
+        _requestedCpuCores <= 0 || _requestedRamGb <= 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen)
+        {
+            if (_requestedCpuCores <= 0)
+                _requestedCpuCores = Math.Max(CurrentCpuCores, 1);
+            if (_requestedRamGb <= 0)
+                _requestedRamGb = Math.Max(CurrentRamGb, 1);
+        }
+
+        if (IsOpen && !_providersLoaded && !string.IsNullOrEmpty(SourceProviderUid))
+        {
+            await LoadProvidersAsync();
+        }
+        else if (!IsOpen)
+        {
+            _providersLoaded = false;
+        }
+    }
+
+    private async Task LoadProvidersAsync()
+    {
+        _loadingProviders = true;
+        _providersLoaded = true;
+        StateHasChanged();
+
+        try
+        {
+            var providers = await MigrationService.GetAvailableTargetProvidersAsync(SourceProviderUid);
+            _providers = providers.ToList();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to load providers: {ex.Message}";
+            _step = Step.Error;
+        }
+        finally
+        {
+            _loadingProviders = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ConfirmMigrationAsync()
+    {
+        if (HasInvalidSizing)
+        {
+            _errorMessage = "Requested resources cannot be lower than current VM specs.";
+            _step = Step.Error;
+            StateHasChanged();
+            return;
+        }
+
+        _step = Step.Submitting;
+        StateHasChanged();
+
+        try
+        {
+            _migrationRequest = await MigrationService.RequestMigrationAsync(
+                VmId, ConsumerUid, _selectedProviderUid, _requestedCpuCores, _requestedRamGb);
+
+            _step = Step.Migrating;
+            StateHasChanged();
+
+            // Listen for real-time updates on this migration request
+            _migrationListener = FirestoreDb
+                .Collection("vm_migration_requests")
+                .Document(_migrationRequest.MigrationRequestId)
+                .Listen(OnMigrationUpdate);
+        }
+        catch (InvalidOperationException ex)
+        {
+            _errorMessage = ex.Message;
+            _step = Step.Error;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Failed to request migration: {ex.Message}";
+            _step = Step.Error;
+            StateHasChanged();
+        }
+    }
+
+    private void OnMigrationUpdate(DocumentSnapshot snap)
+    {
+        if (!snap.Exists) return;
+
+        var status = snap.ContainsField("status") ? snap.GetValue<string>("status") : "";
+
+        _ = InvokeAsync(() =>
+        {
+            if (status is "Completed" or "completed")
+            {
+                _step = Step.Done;
+            }
+            else if (status is "Failed" or "failed")
+            {
+                _errorMessage = snap.ContainsField("error") && !string.IsNullOrWhiteSpace(snap.GetValue<string>("error"))
+                    ? snap.GetValue<string>("error")
+                    : "The migration failed unexpectedly.";
+                _step = Step.Error;
+            }
+            else
+            {
+                // Update status text for in-progress states
+                _migrationRequest = snap.ConvertTo<VmMigrationRequest>();
+            }
+
+            StateHasChanged();
+        });
+    }
+
+    private void GoBack()
+    {
+        _step = Step.SelectTarget;
+        _errorMessage = null;
+        _selectedProviderUid = null;
+        _requestedCpuCores = Math.Max(CurrentCpuCores, 1);
+        _requestedRamGb = Math.Max(CurrentRamGb, 1);
+    }
+
+    private async Task CloseModal()
+    {
+        Reset();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleBackdropClick()
+    {
+        if (_step is not Step.Submitting and not Step.Migrating)
+            await CloseModal();
+    }
+
+    private void Reset()
+    {
+        _step = Step.SelectTarget;
+        _providers = new();
+        _selectedProviderUid = null;
+        _errorMessage = null;
+        _migrationRequest = null;
+        _providersLoaded = false;
+        _requestedCpuCores = 0;
+        _requestedRamGb = 0;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_migrationListener != null)
+            await _migrationListener.StopAsync();
+    }
+}
+
+<style>
+    .mig-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mig-modal {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.75rem;
+        width: 100%;
+        max-width: 480px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .mig-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .mig-icon {
+        color: var(--uc-red);
+        font-size: 1.1rem;
+    }
+
+    .mig-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .mig-warning {
+        display: flex;
+        gap: 0.6rem;
+        align-items: flex-start;
+        background: rgba(251, 191, 36, 0.06);
+        border: 1px solid rgba(251, 191, 36, 0.2);
+        border-radius: var(--uc-radius);
+        padding: 0.7rem 0.9rem;
+        margin-bottom: 1.2rem;
+        font-size: 0.78rem;
+        color: var(--uc-text-secondary);
+        line-height: 1.5;
+    }
+
+    .mig-warning i {
+        color: var(--uc-yellow);
+        font-size: 0.9rem;
+        margin-top: 0.1rem;
+    }
+
+    .mig-warning strong {
+        color: var(--uc-text-white);
+    }
+
+    .mig-field {
+        margin-bottom: 1rem;
+    }
+
+    .mig-label {
+        display: block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+        margin-bottom: 0.5rem;
+    }
+
+    .mig-provider-option {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: 6px;
+        padding: 0.7rem 0.9rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+    }
+
+    .mig-provider-option:hover {
+        border-color: rgba(139, 92, 246, 0.35);
+    }
+
+    .mig-provider-option.selected {
+        border-color: rgba(139, 92, 246, 0.6);
+        background: rgba(139, 92, 246, 0.06);
+    }
+
+    .mig-provider-name {
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        margin-bottom: 0.15rem;
+    }
+
+    .mig-provider-meta {
+        font-size: 0.72rem;
+        color: var(--uc-text-muted);
+    }
+
+    .mig-input {
+        width: 100%;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        color: var(--uc-text-white);
+        border-radius: 6px;
+        padding: 0.55rem 0.7rem;
+        font-size: 0.8rem;
+    }
+
+    .mig-input:focus {
+        outline: none;
+        border-color: rgba(139, 92, 246, 0.6);
+    }
+
+    .mig-hint {
+        margin-top: 0.35rem;
+        font-size: 0.7rem;
+        color: var(--uc-text-muted);
+    }
+
+    .mig-validation-error {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        color: var(--uc-red);
+        font-size: 0.75rem;
+        border-radius: 6px;
+        padding: 0.55rem 0.7rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .mig-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        margin-top: 1.4rem;
+    }
+
+    .mig-btn-cancel {
+        background: transparent;
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-secondary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+
+    .mig-btn-cancel:hover {
+        border-color: var(--uc-text-muted);
+    }
+
+    .mig-btn-primary {
+        background: rgba(139, 92, 246, 0.18);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: var(--uc-text-white);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1.1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+    }
+
+    .mig-btn-primary:hover {
+        background: rgba(139, 92, 246, 0.35);
+    }
+
+    .mig-btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        background: rgba(139, 92, 246, 0.12);
+    }
+
+    .mig-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 2rem 0 1rem;
+        gap: 0.5rem;
+    }
+
+    .mig-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--uc-border);
+        border-top-color: var(--uc-purple);
+        border-radius: 50%;
+        animation: mig-spin 0.8s linear infinite;
+        margin-bottom: 0.5rem;
+    }
+
+    @@keyframes mig-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .mig-status-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+        margin: 0;
+    }
+
+    .mig-status-sub {
+        font-size: 0.78rem;
+        color: var(--uc-text-muted);
+        margin: 0;
+        max-width: 320px;
+    }
+
+    .mig-done-icon,
+    .mig-error-icon {
+        margin-bottom: 0.5rem;
+    }
+
+    .mig-error-msg {
+        font-size: 0.78rem;
+        color: var(--uc-text-muted);
+        margin: 0;
+        max-width: 320px;
+        line-height: 1.5;
+    }
+</style>

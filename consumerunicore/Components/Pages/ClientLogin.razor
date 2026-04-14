@@ -1,0 +1,494 @@
+@page "/client-login"
+@layout BlankLayout
+@rendermode RenderMode.InteractiveServer
+@inject NavigationManager Nav
+@inject IFirebaseAuthService FirebaseAuth
+@inject IConsumerService ConsumerService
+@inject IAuthStateService AuthState
+@inject IJSRuntime JS
+
+<!-- Back link -->
+<a href="/" class="back-link">
+    <i class="bi bi-arrow-left"></i> BACK TO SELECTION
+</a>
+
+<!-- Login / Register Card -->
+<div class="auth-card mt-4">
+
+    <!-- Card header -->
+    <div class="auth-card-header">
+        <div class="auth-icon">
+            <i class="bi bi-cpu"></i>
+        </div>
+        <div>
+            <div class="auth-title">@(isRegister ? "CONSUMER REGISTER" : "CONSUMER LOGIN")</div>
+            <div class="auth-subtitle">Enter your credentials</div>
+        </div>
+    </div>
+
+    <!-- Error banner -->
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="auth-error">
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>@errorMessage
+        </div>
+    }
+
+    <!-- Form -->
+    <div class="auth-form">
+
+        @if (isRegister)
+        {
+            <div class="field-group">
+                <label class="field-label">FULL NAME</label>
+                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" @onkeydown="OnKeyDown"/>
+            </div>
+        }
+
+        <div class="field-group">
+            <label class="field-label">EMAIL ADDRESS</label>
+            <input class="field-input" type="email" placeholder="john@example.com" @bind="email"
+                   @bind:event="oninput" @onkeydown="OnKeyDown"/>
+        </div>
+
+        @if (!isReset)
+        {
+            <div class="field-group">
+                <label class="field-label">PASSWORD</label>
+                <div class="password-wrapper">
+                    <input class="field-input" type="@(showPassword ? "text" : "password")" placeholder="••••••••" @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown"/>
+                    <button type="button" class="password-toggle" @onclick="TogglePassword" tabindex="-1">
+                        <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                    </button>
+                </div>
+            </div>
+        }
+
+        <button class="auth-submit" @onclick="HandleSubmit" disabled="@isLoading">
+            @if (isLoading)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+            }
+            @(isRegister ? "CREATE ACCOUNT" : isReset ? "SEND RESET LINK" : "CONTINUE AS CONSUMER")
+        </button>
+
+        <div class="auth-toggle">
+            @if (isRegister)
+            {
+                <span>Already have an account?</span>
+                <button class="toggle-btn" @onclick="() => { isRegister = false; errorMessage = string.Empty; }">
+                    Sign In
+                </button>
+            }
+            else if (isReset)
+            {
+                <span>Remember your password?</span>
+                <button class="toggle-btn" @onclick="() => { isReset = false; errorMessage = string.Empty; }">
+                    Back to Sign In
+                </button>
+            }
+            else
+            {
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div>
+                        <span>Don't have an account?</span>
+                        <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
+                            Register
+                        </button>
+                    </div>
+                    <button class="toggle-btn" @onclick="() => { isReset = true; errorMessage = string.Empty; }">
+                        Forgot Password?
+                    </button>
+                </div>
+            }
+        </div>
+
+    </div>
+</div>
+
+<TermsModal IsVisible="@showTermsModal" OnContinue="HandleTermsAcceptedAsync" OnClose="HandleTermsClosedAsync" />
+
+@code {
+    private string name = string.Empty;
+    private string email = string.Empty;
+    private string password = string.Empty;
+
+    private bool isRegister = false;
+    private bool isReset = false;
+    private bool isLoading = false;
+    private bool showPassword = false;
+    private bool showTermsModal = false;
+    private string errorMessage = string.Empty;
+    private Consumer? pendingConsumer;
+
+    private async Task HandleSubmit()
+    {
+        errorMessage = string.Empty;
+
+        var validationError = ValidateInputs();
+        if (validationError != null)
+        {
+            errorMessage = validationError;
+            return;
+        }
+
+        isLoading = true;
+
+        try
+        {
+            Consumer? authenticatedConsumer = null;
+
+            if (isReset)
+            {
+                // only email field required
+                await FirebaseAuth.SendPasswordResetEmailAsync(email);
+                errorMessage = "If the address exists, a reset link was sent.";
+                return;
+            }
+
+            if (isRegister)
+            {
+                var idToken = await FirebaseAuth.SignUpAsync(email, password);
+                var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+                var existing = await ConsumerService.GetByFirebaseUidAsync(decoded.Uid);
+
+                if (existing != null)
+                {
+                    errorMessage = "An account with this email already exists.";
+                    return;
+                }
+
+                await FirebaseAuth.SendEmailVerificationAsync(idToken);
+
+                authenticatedConsumer = await ConsumerService.CreateConsumerAsync(name, email, decoded.Uid);
+                AuthState.SetAuthState(decoded.Uid, email, name);
+                await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
+
+                errorMessage = "Account created! Please check your email to verify your account before logging in.";
+                isRegister = false;
+                return;
+            }
+            else
+            {
+                var idToken = await FirebaseAuth.SignInAsync(email, password);
+                var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
+
+                // DEV: email verification check paused
+                // if (!decoded.Claims.TryGetValue("email_verified", out var ev) || ev is not true)
+                // {
+                //     errorMessage = "Please verify your email before logging in. Check your inbox.";
+                //     return;
+                // }
+
+                var consumer = await ConsumerService.GetByFirebaseUidAsync(decoded.Uid);
+
+                if (consumer == null)
+                {
+                    errorMessage = "No consumer account found. Please register first.";
+                    return;
+                }
+
+                authenticatedConsumer = consumer;
+                await ConsumerService.UpdateLastLoginAsync(decoded.Uid);
+                AuthState.SetAuthState(decoded.Uid, email, consumer.Name);
+                await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, consumer.Name);
+            }
+
+            if (authenticatedConsumer is not null && !authenticatedConsumer.TermsAccepted)
+            {
+                pendingConsumer = authenticatedConsumer;
+                showTermsModal = true;
+                return;
+            }
+
+            await CompleteLoginAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task HandleTermsAcceptedAsync()
+    {
+        if (pendingConsumer == null)
+        {
+            showTermsModal = false;
+            return;
+        }
+
+        await ConsumerService.UpdateTermsAcceptedAsync(pendingConsumer.FirebaseUid);
+        pendingConsumer.TermsAccepted = true;
+        showTermsModal = false;
+        await CompleteLoginAsync();
+    }
+
+    private Task HandleTermsClosedAsync()
+    {
+        showTermsModal = false;
+        pendingConsumer = null;
+        return Task.CompletedTask;
+    }
+
+    private Task CompleteLoginAsync()
+    {
+        Nav.NavigateTo("/dashboard/");
+        return Task.CompletedTask;
+    }
+
+    private void TogglePassword() => showPassword = !showPassword;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await HandleSubmit();
+    }
+
+    private string? ValidateInputs()
+    {
+        // Name check (only required during registration)
+        if (isRegister && string.IsNullOrWhiteSpace(name))
+            return "Full name is required.";
+
+        // Basic email format check
+        if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            return "Please enter a valid email address.";
+
+        if (!isReset)
+        {
+            if (password.Length < 8)
+                return "Password must be at least 8 characters.";
+
+            if (!password.Any(char.IsDigit))
+                return "Password must contain at least one number.";
+
+            if (!password.Any(char.IsUpper))
+                return "Password must contain at least one uppercase letter.";
+        }
+
+        return null;
+    }
+}
+
+<style>
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.65rem;
+        letter-spacing: 2px;
+        color: var(--uc-text-dim);
+        text-decoration: none;
+        margin-bottom: 0.5rem;
+        transition: color 0.2s;
+    }
+
+    .back-link:hover {
+        color: var(--uc-text-secondary);
+        text-decoration: none;
+    }
+
+    .auth-card {
+        background-color: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 2rem;
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .auth-card-header {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+    }
+
+    .auth-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: var(--uc-radius);
+        background: rgba(59, 130, 246, .12);
+        border: 1px solid rgba(59, 130, 246, .25);
+        color: var(--uc-blue);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .auth-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        letter-spacing: 1px;
+    }
+
+    .auth-subtitle {
+        font-size: 0.65rem;
+        letter-spacing: 1.5px;
+        color: var(--uc-text-dim);
+        margin-top: 3px;
+        font-family: var(--uc-font-mono);
+    }
+
+    .auth-error {
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.25);
+        border-radius: var(--uc-radius);
+        color: var(--uc-red);
+        font-size: 0.78rem;
+        padding: 0.6rem 0.85rem;
+    }
+
+    .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 1.1rem;
+    }
+
+    .field-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+    }
+
+    .field-label {
+        font-size: 0.6rem;
+        letter-spacing: 2px;
+        color: var(--uc-text-dim);
+        font-weight: 600;
+    }
+
+    .password-wrapper {
+        display: flex;
+        align-items: center;
+        background-color: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        transition: border-color 0.2s;
+    }
+
+    .password-wrapper:focus-within {
+        border-color: var(--uc-blue);
+    }
+
+    .password-wrapper .field-input {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        padding-right: 0;
+    }
+
+    .password-wrapper .field-input:focus {
+        border-color: transparent;
+    }
+
+    .password-toggle {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--uc-text-muted);
+        cursor: pointer;
+        padding: 0 0.7rem;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        line-height: 1;
+    }
+
+    .password-toggle:hover {
+        color: var(--uc-text-secondary);
+    }
+
+    .field-input {
+        background-color: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-primary);
+        font-size: 0.85rem;
+        padding: 0.6rem 0.85rem;
+        width: 100%;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .field-input::placeholder {
+        color: var(--uc-text-dim);
+    }
+
+    .field-input:focus {
+        border-color: var(--uc-blue);
+    }
+
+    .auth-submit {
+        background-color: var(--uc-blue);
+        color: #0b1020;
+        border: none;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 2px;
+        padding: 0.75rem;
+        width: 100%;
+        cursor: pointer;
+        transition: opacity 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .auth-submit:hover:not(:disabled) {
+        opacity: 0.88;
+    }
+
+    .auth-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .auth-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        color: var(--uc-text-dim);
+    }
+
+    .toggle-btn {
+        background: none;
+        border: none;
+        color: var(--uc-blue);
+        font-size: 0.72rem;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+        text-decoration: underline;
+    }
+
+    body.light-mode .auth-card {
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+    }
+
+    body.light-mode .auth-title {
+        color: var(--uc-text-primary);
+    }
+
+    body.light-mode .auth-submit {
+        color: #ffffff;
+    }
+
+    /* Suppress browser-native password reveal button */
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+        display: none;
+    }
+</style>

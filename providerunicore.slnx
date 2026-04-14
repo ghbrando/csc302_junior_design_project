@@ -1,4 +1,6 @@
 <Solution>
   <Project Path="consumerunicore/consumerunicore.csproj" />
   <Project Path="providerunicore/providerunicore.csproj" />
+  <Project Path="unicore.shared/unicore.shared.csproj" />
+  <Project Path="heartbeatservice/heartbeatservice.csproj" />
 </Solution>

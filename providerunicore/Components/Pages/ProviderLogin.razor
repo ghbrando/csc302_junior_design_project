@@ -41,27 +41,35 @@
         {
             <div class="field-group">
                 <label class="field-label">FULL NAME</label>
-                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" />
+                <input class="field-input" type="text" placeholder="John Doe" @bind="name" @bind:event="oninput" @onkeydown="OnKeyDown" />
             </div>
         }
 
         <div class="field-group">
             <label class="field-label">EMAIL ADDRESS</label>
             <input class="field-input" type="email" placeholder="john@example.com" @bind="email"
-                   @bind:event="oninput" />
+                   @bind:event="oninput" @onkeydown="OnKeyDown" />
         </div>
 
-        <div class="field-group">
-            <label class="field-label">PASSWORD</label>
-            <input class="field-input" type="password" placeholder="••••••••" @bind="password" @bind:event="oninput" />
-        </div>
+        @if (!isReset)
+        {
+            <div class="field-group">
+                <label class="field-label">PASSWORD</label>
+                <div class="password-wrapper">
+                    <input class="field-input" type="@(showPassword ? "text" : "password")" placeholder="••••••••" @bind="password" @bind:event="oninput" @onkeydown="OnKeyDown"/>
+                    <button type="button" class="password-toggle" @onclick="TogglePassword" tabindex="-1">
+                        <i class="bi @(showPassword ? "bi-eye-slash" : "bi-eye")"></i>
+                    </button>
+                </div>
+            </div>
+        }
 
         <button class="auth-submit" @onclick="HandleSubmit" disabled="@isLoading">
             @if (isLoading)
             {
                 <span class="spinner-border spinner-border-sm me-2" role="status"></span>
             }
-            @(isRegister ? "CREATE ACCOUNT" : "CONTINUE AS PROVIDER")
+            @(isRegister ? "CREATE ACCOUNT" : isReset ? "SEND RESET LINK" : "CONTINUE AS PROVIDER")
         </button>
 
         <div class="auth-toggle">
@@ -72,17 +80,33 @@
                     Sign In
                 </button>
             }
+            else if (isReset)
+            {
+                <span>Remember your password?</span>
+                <button class="toggle-btn" @onclick="() => { isReset = false; errorMessage = string.Empty; }">
+                    Back to Sign In
+                </button>
+            }
             else
             {
-                <span>Don't have an account?</span>
-                <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
-                    Register
-                </button>
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <div>
+                        <span>Don't have an account?</span>
+                        <button class="toggle-btn" @onclick="() => { isRegister = true; errorMessage = string.Empty; }">
+                            Register
+                        </button>
+                    </div>
+                    <button class="toggle-btn" @onclick="() => { isReset = true; errorMessage = string.Empty; }">
+                        Forgot Password?
+                    </button>
+                </div>
             }
         </div>
 
     </div>
 </div>
+
+<TermsModal IsVisible="@showTermsModal" OnContinue="HandleTermsContinue" OnClose="HandleTermsClose" />
 
 @code {
     private string name = string.Empty;
@@ -90,22 +114,21 @@
     private string password = string.Empty;
 
     private bool isRegister = false;
+    private bool isReset = false;
     private bool isLoading = false;
+    private bool showPassword = false;
+    private bool showTermsModal = false;
+    private string pendingProviderUid = string.Empty;
     private string errorMessage = string.Empty;
 
     private async Task HandleSubmit()
     {
         errorMessage = string.Empty;
 
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        var validationError = ValidateInputs();
+        if (validationError != null)
         {
-            errorMessage = "Email and password are required.";
-            return;
-        }
-
-        if (isRegister && string.IsNullOrWhiteSpace(name))
-        {
-            errorMessage = "Full name is required.";
+            errorMessage = validationError;
             return;
         }
 
@@ -113,6 +136,15 @@
 
         try
         {
+            Provider? provider = null;
+
+            if (isReset)
+            {
+                await FirebaseAuth.SendPasswordResetEmailAsync(email);
+                errorMessage = "If the address exists, a reset link was sent.";
+                return;
+            }
+
             if (isRegister)
             {
                 // Create Firebase user, then save provider in Firestore
@@ -126,16 +158,30 @@
                     return;
                 }
 
-                await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
+                await FirebaseAuth.SendEmailVerificationAsync(idToken);
+
+                provider = await ProviderService.CreateProviderAsync(name, email, decoded.Uid);
                 AuthState.SetAuthState(decoded.Uid, email, name);
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, name);
+
+                errorMessage = "Account created! Please check your email to verify your account before logging in.";
+                isRegister = false;
+                return;
             }
             else
             {
                 // Verify credentials and update last login
                 var idToken = await FirebaseAuth.SignInAsync(email, password);
                 var decoded = await FirebaseAuth.VerifyIDTokenAsync(idToken);
-                var provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
+
+                // DEV: email verification check paused
+                // if (!decoded.Claims.TryGetValue("email_verified", out var ev) || ev is not true)
+                // {
+                //     errorMessage = "Please verify your email before logging in. Check your inbox.";
+                //     return;
+                // }
+
+                provider = await ProviderService.GetByFirebaseUidAsync(decoded.Uid);
 
                 if (provider == null)
                 {
@@ -148,7 +194,20 @@
                 await JS.InvokeVoidAsync("authStorage.save", decoded.Uid, email, provider.Name);
             }
 
-            Nav.NavigateTo("/dashboard/");
+            if (provider == null)
+            {
+                errorMessage = "Provider account could not be loaded.";
+                return;
+            }
+
+            if (!provider.TermsAccepted)
+            {
+                pendingProviderUid = provider.FirebaseUid;
+                showTermsModal = true;
+                return;
+            }
+
+            await CompleteLoginAndNavigateAsync(provider.FirebaseUid);
         }
         catch (Exception ex)
         {
@@ -158,6 +217,62 @@
         {
             isLoading = false;
         }
+    }
+
+    private async Task HandleTermsContinue()
+    {
+        if (string.IsNullOrWhiteSpace(pendingProviderUid))
+        {
+            showTermsModal = false;
+            return;
+        }
+
+        await ProviderService.UpdateTermsAcceptedAsync(pendingProviderUid, true);
+        showTermsModal = false;
+        await CompleteLoginAndNavigateAsync(pendingProviderUid);
+    }
+
+    private Task HandleTermsClose()
+    {
+        showTermsModal = false;
+        pendingProviderUid = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private async Task CompleteLoginAndNavigateAsync(string firebaseUid)
+    {
+        await ProviderService.UpdateNodeStatusAsync("Online", firebaseUid);
+        Nav.NavigateTo("/dashboard/");
+    }
+
+    private void TogglePassword() => showPassword = !showPassword;
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await HandleSubmit();
+    }
+
+    private string? ValidateInputs()
+    {
+        if (isRegister && string.IsNullOrWhiteSpace(name))
+            return "Full name is required.";
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            return "Please enter a valid email address.";
+
+        if (!isReset)
+        {
+            if (password.Length < 8)
+                return "Password must be at least 8 characters.";
+
+            if (!password.Any(char.IsDigit))
+                return "Password must contain at least one number.";
+
+            if (!password.Any(char.IsUpper))
+                return "Password must contain at least one uppercase letter.";
+        }
+
+        return null;
     }
 }
 
@@ -254,6 +369,48 @@
         font-weight: 600;
     }
 
+    .password-wrapper {
+        display: flex;
+        align-items: center;
+        background-color: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        transition: border-color 0.2s;
+    }
+
+    .password-wrapper:focus-within {
+        border-color: var(--uc-green);
+    }
+
+    .password-wrapper .field-input {
+        flex: 1;
+        background: none;
+        border: none;
+        outline: none;
+        padding-right: 0;
+    }
+
+    .password-wrapper .field-input:focus {
+        border-color: transparent;
+    }
+
+    .password-toggle {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        color: var(--uc-text-muted);
+        cursor: pointer;
+        padding: 0 0.7rem;
+        font-size: 0.95rem;
+        display: flex;
+        align-items: center;
+        line-height: 1;
+    }
+
+    .password-toggle:hover {
+        color: var(--uc-text-secondary);
+    }
+
     .field-input {
         background-color: var(--uc-bg-elevated);
         border: 1px solid var(--uc-border);
@@ -276,7 +433,7 @@
 
     .auth-submit {
         background-color: var(--uc-green);
-        color: #000;
+        color: #04160d;
         border: none;
         border-radius: var(--uc-radius);
         font-size: 0.7rem;
@@ -318,5 +475,23 @@
         cursor: pointer;
         padding: 0;
         text-decoration: underline;
+    }
+
+    body.light-mode .auth-card {
+        box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+    }
+
+    body.light-mode .auth-title {
+        color: var(--uc-text-primary);
+    }
+
+    body.light-mode .auth-submit {
+        color: #ffffff;
+    }
+
+    /* Suppress browser-native password reveal button */
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear {
+        display: none;
     }
 </style>

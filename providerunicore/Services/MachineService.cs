@@ -2,8 +2,6 @@ using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Google.Cloud.Firestore;
-using providerunicore.Repositories;
-using unicoreprovider.Models;
 
 namespace unicoreprovider.Services;
 

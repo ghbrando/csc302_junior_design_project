@@ -1,0 +1,285 @@
+@using Microsoft.AspNetCore.Components.Routing
+@inject IAuthStateService AuthState
+@inject NavigationManager Nav
+@rendermode RenderMode.InteractiveServer
+@inject IJSRuntime JS
+@implements IDisposable
+
+<nav class="sidebar d-flex flex-column">
+    <!-- Removed default bottom margin from logo container -->
+    <div class="sidebar-brand pb-0">
+        <div class="sidebar-logo-badge">
+            <img src="/unicore-logo.png" alt="Unicore Logo" class="sidebar-logo-image" />
+        </div>
+    </div>
+
+    <!-- Removed default top margin and padding from the list -->
+    <ul class="nav flex-column sidebar-nav pt-0">
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-display"></i>
+                <span>MY VMS</span>
+            </NavLink>
+
+        </li>
+        <li class="nav-item">
+            <NavLink class="nav-link sidebar-link" href="settings" Match="NavLinkMatch.Prefix">
+                <i class="bi bi-gear"></i>
+                <span>SETTINGS</span>
+            </NavLink>
+        </li>
+    </ul>
+
+    <div class="sidebar-user">
+        <div class="user-info">
+            <div class="user-avatar">@(UserName.Length > 0 ? UserName[0] : '?')</div>
+            <div class="user-details">
+                <span class="user-name">@UserName</span>
+                <span class="user-email">@UserEmail</span>
+            </div>
+        </div>
+        <button class="logout-btn" @onclick="HandleLogout" @onclick:stopPropagation="true">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>LOGOUT</span>
+        </button>
+    </div>
+</nav>
+
+
+@code {
+    private string UserName => AuthState.Name ?? "Consumer";
+    private string UserEmail => AuthState.Email ?? "";
+
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && string.IsNullOrEmpty(AuthState.FirebaseUid))
+        {
+            var authData = await JS.InvokeAsync<AuthData>("authStorage.load");
+            if (!string.IsNullOrEmpty(authData?.uid))
+            {
+                AuthState.SetAuthState(authData.uid, authData.email ?? "", authData.name ?? "");
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        AuthState.ClearAuthState();
+        await JS.InvokeVoidAsync("authStorage.clear");
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+
+    // Lowercase property names to match the JS object from authStorage.load()
+    private class AuthData
+    {
+        public string? uid { get; set; }
+        public string? email { get; set; }
+        public string? name { get; set; }
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+    }
+}
+
+<style>
+    .sidebar {
+        width: 220px;
+        min-height: 100vh;
+        background-color: var(--uc-bg-sidebar);
+        border-right: 1px solid var(--uc-border);
+        padding: 0;
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 1000;
+    }
+
+    .sidebar-brand {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 1.5rem 1.25rem;
+        margin-bottom: 30px;
+        background: var(--uc-logo-strip-bg);
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .sidebar-logo-badge {
+        width: 118px;
+        height: 118px;
+        border-radius: 50%;
+        background: var(--uc-logo-badge-bg);
+        border: 1px solid var(--uc-logo-badge-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar-logo-image {
+        width: 96px;
+        height: auto;
+    }
+
+    body.light-mode .sidebar-logo-badge {
+        background: #000000 !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+    }
+
+    .brand-icon {
+        font-size: 1.5rem;
+        color: var(--uc-blue);
+    }
+
+    .brand-text {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        letter-spacing: 1px;
+    }
+
+    .sidebar-nav {
+        padding: 0 0.75rem;
+        margin-top: 30px;
+        gap: 2px;
+        flex: 1;
+    }
+
+    .sidebar-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0.7rem 1rem;
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted) !important;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-link i {
+        font-size: 1.05rem;
+    }
+
+    .sidebar-link:hover {
+        color: #aaa !important;
+        background-color: #111;
+    }
+
+    .sidebar-link.active {
+        color: var(--uc-blue) !important;
+        background-color: rgba(59, 130, 246, .12);
+
+    }
+
+    .sidebar-link.active i {
+        color: var(--uc-blue);
+    }
+
+    .sidebar-user {
+        margin: 0.75rem;
+        padding: 0.75rem;
+        background-color: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .sidebar-user:hover {
+        background-color: rgba(255, 255, 255, 0.07);
+        border-color: #444;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .user-avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: var(--uc-radius);
+        background-color: var(--uc-blue);
+        color: #000;
+        font-weight: 700;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        text-transform: uppercase;
+    }
+
+    .user-details {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .user-name {
+        color: var(--uc-text-white);
+        font-size: 0.78rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .user-email {
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .logout-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        width: 100%;
+        padding: 0.45rem 0.75rem;
+        background-color: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        color: var(--uc-text-muted);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 1.5px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .logout-btn:hover {
+        background-color: rgba(255, 255, 255, 0.09);
+        color: #aaa;
+        border-color: #444;
+    }
+
+    .logout-btn i {
+        font-size: 0.85rem;
+    }
+</style>

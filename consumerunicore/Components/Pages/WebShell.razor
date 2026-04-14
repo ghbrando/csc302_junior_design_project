@@ -1,0 +1,435 @@
+@page "/webshell/{VmId}"
+@using consumerunicore.Services
+@using Renci.SshNet
+@implements IAsyncDisposable
+@inject IWebShellService WebShellService
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreconsumer.Services.AuthorizedPageBase
+
+<PageTitle>Shell — @_vmName</PageTitle>
+
+<div class="ws-page">
+
+    <div class="ws-header">
+        <button class="ws-back" @onclick="@(() => Nav.NavigateTo("/dashboard/"))">
+            <i class="bi bi-arrow-left"></i> Dashboard
+        </button>
+        <div class="ws-title-group">
+            <span class="ws-vm-name">@_vmName</span>
+            @if (_connected)
+            {
+                <span class="ws-status-dot"></span>
+                <span class="ws-status-label">connected</span>
+            }
+        </div>
+    </div>
+
+    @if (_connected)
+    {
+        <div class="ws-terminal-wrap">
+            <div id="@_terminalId" class="ws-terminal"></div>
+        </div>
+    }
+    else if (_error != null)
+    {
+        <div class="ws-center">
+            <div class="ws-error-box">
+                <i class="bi bi-exclamation-triangle"></i>
+                @_error
+            </div>
+            <button class="ws-retry-btn" @onclick="RetryAsync">Retry</button>
+        </div>
+    }
+    else
+    {
+        <div class="ws-center">
+            <div class="ws-spinner"></div>
+            <span class="ws-status-text">@_statusText</span>
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter] public string VmId { get; set; } = string.Empty;
+
+    // ── Terminal state ────────────────────────────────────────────────────────
+    private readonly string _terminalId = "uc-terminal";
+    private string _vmName = "Web Shell";
+    private string _statusText = "Authenticating...";
+    private string? _error;
+    private bool _connected;
+
+    // ── Lifecycle guards ──────────────────────────────────────────────────────
+    private bool _started;
+    private bool _jsInitialized;
+
+    // ── SSH resources ─────────────────────────────────────────────────────────
+    private SshClient? _ssh;
+    private ShellStream? _shell;
+    private CancellationTokenSource _cts = new();
+    private DotNetObjectReference<WebShell>? _dotNetRef;
+
+    // Buffers SSH output from the DataReceived callback (SSH thread) until xterm.js is ready.
+    // DataReceived is subscribed immediately after CreateShellStream so no bytes are ever lost.
+    private System.Threading.Channels.Channel<byte[]> _outputChannel =
+        System.Threading.Channels.Channel.CreateUnbounded<byte[]>();
+
+    // ── Auth wiring ───────────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        // Auth just became available (loaded from localStorage by AuthorizedPageBase).
+        if (!string.IsNullOrEmpty(AuthState.FirebaseUid) && !_started)
+            _ = InvokeAsync(BeginConnectAsync);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // AuthorizedPageBase handles redirect-if-unauthenticated.
+        await base.OnAfterRenderAsync(firstRender);
+
+        // If auth was already set on first render, start immediately.
+        if (firstRender && !string.IsNullOrEmpty(AuthState.FirebaseUid) && !_started)
+        {
+            await BeginConnectAsync();
+            // StateHasChanged() inside BeginConnectAsync queued a re-render that adds
+            // the terminal <div> to the DOM.  Return now so Blazor can apply that render
+            // before we try to call terminalInterop.init in the *next* OnAfterRenderAsync.
+            return;
+        }
+
+        // Once _connected flips to true the terminal <div> is in the DOM.
+        // Initialize xterm.js exactly once.
+        if (_connected && !_jsInitialized)
+        {
+            _jsInitialized = true;
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("terminalInterop.init", _dotNetRef, _terminalId, 80, 24);
+
+            // Drain the channel: forward buffered + future SSH output to xterm.js.
+            // DataReceived was subscribed right after CreateShellStream so MOTD bytes
+            // already sit in the channel, and subsequent output arrives here in order.
+            _ = DrainOutputChannelAsync(_cts.Token);
+
+            // Nudge the shell to re-display the prompt (some PTYs are silent until input).
+            var nudgeShell = _shell;
+            await Task.Run(() => nudgeShell!.Write(new byte[] { (byte)'\n' }, 0, 1));
+        }
+    }
+
+    // ── Connection ────────────────────────────────────────────────────────────
+    private async Task BeginConnectAsync()
+    {
+        if (_started) return;
+        _started = true;
+
+        _statusText = "Verifying VM access...";
+        StateHasChanged();
+
+        var (info, error) = await WebShellService.GetConnectionInfoAsync(VmId, AuthState.FirebaseUid!);
+        if (error != null)
+        {
+            _error = error;
+            StateHasChanged();
+            return;
+        }
+
+        _vmName = info!.VmName;
+
+        var attempts = 0;
+        var maxAttempts = 3;
+        while (attempts < maxAttempts)
+        {
+            attempts++;
+            _statusText = attempts == 1 ? "Connecting..." : $"Retrying ({attempts}/{maxAttempts})...";
+            StateHasChanged();
+
+            try
+            {
+                var connInfo = new Renci.SshNet.ConnectionInfo(
+                    info.Host, info.Port, info.Username, info.AuthMethods)
+                {
+                    Timeout = TimeSpan.FromSeconds(8),
+                };
+
+                _ssh = new SshClient(connInfo);
+                _ssh.Connect();
+
+                // Open a PTY-backed shell stream (xterm-256color so ANSI colours work).
+                _shell = _ssh.CreateShellStream("xterm-256color", 80, 24, 0, 0, 4096);
+
+                // Subscribe before any data can arrive so the MOTD is never missed.
+                // The handler just enqueues — no blocking, safe to call from SSH thread.
+                _shell.DataReceived += (_, e) => _outputChannel.Writer.TryWrite(e.Data);
+
+                _connected = true;
+                StateHasChanged();   // Causes re-render → terminal div appears → OnAfterRenderAsync runs next
+                return;
+            }
+            catch (Exception ex) when (attempts < maxAttempts && ShouldRetry(ex))
+            {
+                _ssh?.Dispose();
+                _ssh = null;
+                await Task.Delay(1500);
+            }
+            catch (Exception ex)
+            {
+                _ssh?.Dispose();
+                _ssh = null;
+                _error = $"SSH connection failed: {ex.Message}";
+                StateHasChanged();
+                return;
+            }
+        }
+
+        _error = "Could not connect after multiple attempts.";
+        StateHasChanged();
+    }
+
+    private async Task RetryAsync()
+    {
+        _cts.Cancel();
+        _outputChannel.Writer.TryComplete();
+        _error = null;
+        _started = false;
+        _connected = false;
+        _jsInitialized = false;
+        _shell?.Dispose();
+        _shell = null;
+        if (_ssh?.IsConnected == true) _ssh.Disconnect();
+        _ssh?.Dispose();
+        _ssh = null;
+        _cts = new CancellationTokenSource();
+        _outputChannel = System.Threading.Channels.Channel.CreateUnbounded<byte[]>();
+        StateHasChanged();
+        await BeginConnectAsync();
+    }
+
+    // ── SSH output → xterm.js ─────────────────────────────────────────────────
+    // DataReceived is subscribed immediately after CreateShellStream in BeginConnectAsync
+    // and enqueues bytes into _outputChannel (non-blocking, safe from SSH thread).
+    // This method drains the channel and forwards each chunk to xterm.js via JS interop.
+    private async Task DrainOutputChannelAsync(CancellationToken ct)
+    {
+        await foreach (var data in _outputChannel.Reader.ReadAllAsync(ct))
+        {
+            try
+            {
+                var b64 = Convert.ToBase64String(data);
+                await InvokeAsync(() =>
+                    JS.InvokeVoidAsync("terminalInterop.write", _terminalId, b64).AsTask());
+            }
+            catch { break; }
+        }
+    }
+
+    // ── xterm.js → SSH input ──────────────────────────────────────────────────
+    [JSInvokable]
+    public async Task ReceiveInput(string base64Data)
+    {
+        if (_shell == null || _cts.IsCancellationRequested) return;
+        var bytes = Convert.FromBase64String(base64Data);
+        var shell = _shell;
+        try
+        {
+            await Task.Run(() => { shell.Write(bytes, 0, bytes.Length); shell.Flush(); });
+        }
+        catch { /* ignore errors after disposal */ }
+    }
+
+    [JSInvokable]
+    public void ReceiveResize(int cols, int rows)
+    {
+        // SSH.NET 2024 exposes window-change only through the underlying channel,
+        // not directly on ShellStream. Resize support can be added later via
+        // IChannelSession if needed. Terminal defaults to 80×24.
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private static bool ShouldRetry(Exception ex)
+    {
+        var msg = ex.Message.ToLowerInvariant();
+        return msg.Contains("actively refused")
+            || msg.Contains("timed out")
+            || msg.Contains("connection reset")
+            || msg.Contains("ssh identification");
+    }
+
+    // ── Cleanup ───────────────────────────────────────────────────────────────
+    public async ValueTask DisposeAsync()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        _cts.Cancel();
+        _outputChannel.Writer.TryComplete();
+
+        try { await JS.InvokeVoidAsync("terminalInterop.dispose", _terminalId); }
+        catch { /* page may already be unloaded */ }
+
+        _shell?.Dispose();
+        if (_ssh?.IsConnected == true) _ssh.Disconnect();
+        _ssh?.Dispose();
+        _dotNetRef?.Dispose();
+        _cts.Dispose();
+    }
+}
+
+<style>
+    /* Full-viewport shell page — sits inside MainLayout's main-content area */
+    .ws-page {
+        display: flex;
+        flex-direction: column;
+        height: 100dvh;
+        max-height: 100dvh;
+        overflow: hidden;
+        overscroll-behavior: contain;
+        background: #050914;
+    }
+
+    /* ── Header bar ── */
+    .ws-header {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.65rem 1.25rem;
+        background: var(--uc-bg-card);
+        border-bottom: 1px solid var(--uc-border);
+        flex-shrink: 0;
+    }
+
+    .ws-back {
+        background: transparent;
+        border: 1px solid var(--uc-border);
+        color: var(--uc-text-secondary);
+        border-radius: var(--uc-radius);
+        padding: 0.4rem 0.75rem;
+        font-size: 0.75rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        transition: color 0.15s, border-color 0.15s;
+    }
+
+    .ws-back:hover {
+        color: var(--uc-text-white);
+        border-color: #445;
+    }
+
+    .ws-title-group {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .ws-vm-name {
+        font-family: var(--uc-font-mono);
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .ws-status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--uc-green);
+        animation: ws-pulse 2s infinite;
+    }
+
+    .ws-status-label {
+        font-size: 0.7rem;
+        color: var(--uc-green);
+        font-family: var(--uc-font-mono);
+        letter-spacing: 0.06em;
+    }
+
+    /* ── Terminal area ── */
+    .ws-terminal-wrap {
+        flex: 1;
+        min-height: 0;        /* required for flex child to shrink */
+        padding: 0.5rem;
+        overflow: hidden;
+    }
+
+    .ws-terminal {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .ws-terminal .xterm,
+    .ws-terminal .xterm-screen,
+    .ws-terminal .xterm-viewport {
+        height: 100% !important;
+    }
+
+    .ws-terminal .xterm-viewport {
+        overflow-y: auto !important;
+    }
+
+    /* ── Loading / error states ── */
+    .ws-center {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1.2rem;
+    }
+
+    .ws-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid rgba(0, 230, 118, 0.2);
+        border-top-color: var(--uc-green);
+        border-radius: 50%;
+        animation: ws-spin 0.8s linear infinite;
+    }
+
+    .ws-status-text {
+        color: var(--uc-text-muted);
+        font-family: var(--uc-font-mono);
+        font-size: 0.8rem;
+    }
+
+    .ws-error-box {
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.3);
+        color: var(--uc-red);
+        border-radius: var(--uc-radius);
+        padding: 0.8rem 1.2rem;
+        font-size: 0.82rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        max-width: 480px;
+        text-align: center;
+    }
+
+    .ws-retry-btn {
+        background: rgba(59, 130, 246, 0.12);
+        color: var(--uc-text-white);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 0.5rem 1.4rem;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .ws-retry-btn:hover { background: #2563eb; }
+
+    @@keyframes ws-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @@keyframes ws-pulse {
+        0%, 100% { opacity: 1; }
+        50%       { opacity: 0.35; }
+    }
+</style>

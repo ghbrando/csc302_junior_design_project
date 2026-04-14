@@ -1,0 +1,651 @@
+@namespace unicoreconsumer.Components
+@using consumerunicore.Models
+@using consumerunicore.Services
+@using Google.Cloud.Firestore
+@implements IAsyncDisposable
+@inject IMatchmakingService MatchmakingService
+@inject FirestoreDb FirestoreDb
+
+@if (IsOpen)
+{
+    <div class="cvm-backdrop" @onclick="HandleBackdropClick">
+        <div class="cvm-modal" @onclick:stopPropagation="true">
+
+            @switch (_step)
+            {
+                // ── Step 1: Form ───────────────────────────────────────────────
+                case Step.Form:
+                    <div class="cvm-header">
+                        <i class="bi bi-hdd-stack cvm-icon"></i>
+                        <span class="cvm-title">Launch Virtual Machine</span>
+                    </div>
+
+                    <div class="cvm-field">
+                        <label class="cvm-label">VM NAME (optional)</label>
+                        <input class="cvm-input" type="text" placeholder="my-ubuntu-vm"
+                               @bind="_vmName" @bind:event="oninput" maxlength="40" />
+                    </div>
+
+                    <div class="cvm-field">
+                        <label class="cvm-label">CONTAINER IMAGE</label>
+                        <select class="cvm-select" @bind="_selectedImage">
+                            @foreach (var img in Images)
+                            {
+                                <option value="@img.Value">@img.Label</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="cvm-field">
+                        <label class="cvm-label">REGION</label>
+                        <select class="cvm-select" @bind="_selectedRegion">
+                            <option value="US-West">US-West</option>
+                            <option value="US-East">US-East</option>
+                            <option value="EU-Central">EU-Central</option>
+                        </select>
+                    </div>
+
+                    <div class="cvm-row">
+                        <div class="cvm-field">
+                            <label class="cvm-label">CPU CORES</label>
+                            <select class="cvm-select" @bind="_cpuCores">
+                                @for (int c = 1; c <= 8; c++)
+                                {
+                                    var val = c;
+                                    <option value="@val">@val core@(val == 1 ? "" : "s")</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="cvm-field">
+                            <label class="cvm-label">RAM (GB)</label>
+                            <select class="cvm-select" @bind="_ramGb">
+                                @foreach (var r in new[] { 1, 2, 4, 8, 16, 32 })
+                                {
+                                    <option value="@r">@r GB</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="cvm-field">
+                        <label class="cvm-label">VOLUME SIZE (GB) — optional</label>
+                        <input class="cvm-input" type="number" min="10" max="500" placeholder="e.g. 50"
+                               @bind="_volumeGb" @bind:event="oninput" />
+                        @if (_volumeGb.HasValue && (_volumeGb < 10 || _volumeGb > 500))
+                        {
+                            <span class="cvm-validation-error">Must be between 10 and 500 GB</span>
+                        }
+                    </div>
+
+                    <div class="cvm-field">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="exposeServiceCheck"
+                                   @bind="_exposeService" />
+                            <label class="form-check-label" for="exposeServiceCheck"
+                                   style="font-size: 0.82rem; color: #94a3b8;">
+                                Expose port 8080 publicly
+                                <span style="color: #64748b; font-size: 0.75rem;">— https://[vmid].services.cbu-unicore.com</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="cvm-actions">
+                        <button class="cvm-btn-cancel" @onclick="CloseModal">Cancel</button>
+                        <button class="cvm-btn-primary" @onclick="FindMatchAsync">
+                            <i class="bi bi-search"></i> Find Provider
+                        </button>
+                    </div>
+                    break;
+
+                // ── Step 2: Searching ──────────────────────────────────────────
+                case Step.Searching:
+                    <div class="cvm-center">
+                        <div class="cvm-spinner"></div>
+                        <p class="cvm-status-text">Finding the best provider for your request...</p>
+                    </div>
+                    break;
+
+                // ── Step 3: Choose Provider ──────────────────────────────────────
+                case Step.Confirm:
+                    <div class="cvm-header">
+                        <i class="bi bi-people cvm-icon"></i>
+                        <span class="cvm-title">Choose Provider</span>
+                    </div>
+
+                    <div class="cvm-request-summary" style="margin-bottom: 1rem;">
+                        <span class="cvm-label">YOUR REQUEST</span>
+                        <span class="cvm-summary-text">@_cpuCores vCPU / @_ramGb GB RAM@(_volumeGb.HasValue ? $" / {_volumeGb} GB Storage" : "") &bull; @_selectedImage</span>
+                    </div>
+
+                    @if (_matches.Count == 0)
+                    {
+                        <div class="cvm-center" style="padding: 1.5rem 0;">
+                            <i class="bi bi-exclamation-circle" style="font-size: 2rem; color: var(--uc-text-muted);"></i>
+                            <p class="cvm-status-text" style="color: var(--uc-text-muted); margin-top: 0.75rem;">No Available Providers</p>
+                            <p class="cvm-status-sub">No available providers in your region. Please try again later.</p>
+                        </div>
+                        <div class="cvm-actions">
+                            <button class="cvm-btn-cancel" @onclick="GoBack">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button class="cvm-btn-cancel" @onclick="CloseModal">Close</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="cvm-provider-list">
+                            @for (int i = 0; i < _matches.Count; i++)
+                            {
+                                var match = _matches[i];
+                                var isRecommended = i == 0;
+                                <div class="cvm-provider-card">
+                                    <div class="cvm-provider-info">
+                                        <div class="cvm-provider-name-row">
+                                            <span class="cvm-provider-name">@match.Provider.Name</span>
+                                            @if (isRecommended)
+                                            {
+                                                <span class="cvm-recommended-badge">RECOMMENDED</span>
+                                            }
+                                        </div>
+                                        <div class="cvm-provider-meta">
+                                            <span>@match.Provider.Region</span>
+                                            <span class="cvm-meta-sep">&bull;</span>
+                                            <span>@match.ConsistencyScore.ToString("F0")% consistency</span>
+                                        </div>
+                                        <div class="cvm-provider-resources">
+                                            <span>@match.AvailableCpuCores cores available</span>
+                                            <span class="cvm-meta-sep">&bull;</span>
+                                            <span>@match.AvailableRamGb.ToString("F1") GB RAM available</span>
+                                        </div>
+                                    </div>
+                                    <button class="cvm-btn-primary"
+                                            aria-label="Select @match.Provider.Name"
+                                            @onclick="() => SelectProviderAsync(match)">
+                                        Select
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                        <div class="cvm-actions">
+                            <button class="cvm-btn-cancel" @onclick="GoBack">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                        </div>
+                    }
+                    break;
+
+                // ── Step 4: Provisioning ───────────────────────────────────────
+                case Step.Provisioning:
+                    <div class="cvm-center">
+                        <div class="cvm-spinner"></div>
+                        <p class="cvm-status-text">Provisioning your VM...</p>
+                        <p class="cvm-status-sub">Your provider is setting up the container. This may take a minute.</p>
+                    </div>
+                    break;
+
+                // ── Step 5: Done ───────────────────────────────────────────────
+                case Step.Done:
+                    <div class="cvm-center">
+                        <div class="cvm-done-icon">
+                            <i class="bi bi-check-circle-fill" style="color: var(--uc-green); font-size: 2.5rem;"></i>
+                        </div>
+                        <p class="cvm-status-text" style="color: var(--uc-green);">VM Launched</p>
+                        <p class="cvm-status-sub">Your VM will appear on the dashboard momentarily.</p>
+                        <button class="cvm-btn-primary" style="margin-top: 1.5rem;" @onclick="CloseModal">
+                            Close
+                        </button>
+                    </div>
+                    break;
+
+                // ── Step 6: Error ──────────────────────────────────────────────
+                case Step.Error:
+                    <div class="cvm-center">
+                        <div class="cvm-error-icon">
+                            <i class="bi bi-exclamation-circle-fill" style="color: var(--uc-red); font-size: 2.5rem;"></i>
+                        </div>
+                        <p class="cvm-status-text" style="color: var(--uc-red);">Error</p>
+                        <p class="cvm-error-msg">@_errorMessage</p>
+                        <div class="cvm-actions" style="margin-top: 1.5rem;">
+                            <button class="cvm-btn-cancel" @onclick="CloseModal">Close</button>
+                            <button class="cvm-btn-primary" @onclick="GoBack">Try Again</button>
+                        </div>
+                    </div>
+                    break;
+            }
+
+        </div>
+    </div>
+}
+
+@code {
+    private enum Step { Form, Searching, Confirm, Provisioning, Done, Error }
+
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public string ConsumerUid { get; set; } = "";
+
+    private Step _step = Step.Form;
+    private string _vmName = "";
+    private string _selectedImage = "ubuntu:22.04";
+    private string _selectedRegion = "US-West";
+    private int _cpuCores = 2;
+    private int _ramGb = 4;
+    private int? _volumeGb;
+    private bool _exposeService = false;
+    private MatchmakingResult? _match;
+    private List<MatchmakingResult> _matches = new();
+    private string? _errorMessage;
+    private FirestoreChangeListener? _requestListener;
+
+    private static readonly (string Label, string Value)[] Images =
+    [
+        ("Debian 12 (Bookworm Slim)", "debian:bookworm-slim"),
+        ("Ubuntu 22.04 LTS",         "ubuntu:22.04"),
+        ("Ubuntu 24.04 LTS",         "ubuntu:24.04"),
+    ];
+
+    // ── Step transitions ──────────────────────────────────────────────────────
+
+    private async Task FindMatchAsync()
+    {
+        if (_volumeGb.HasValue && (_volumeGb < 10 || _volumeGb > 500))
+        {
+            _errorMessage = "Volume size must be between 10 and 500 GB.";
+            _step = Step.Error;
+            return;
+        }
+
+        _errorMessage = null;
+        _step = Step.Searching;
+        StateHasChanged();
+
+        try
+        {
+            _matches = await MatchmakingService.FindTopMatchesAsync(new MatchmakingRequest
+            {
+                Region         = _selectedRegion,
+                CpuCoresNeeded = _cpuCores,
+                RamGbNeeded    = _ramGb,
+            });
+
+            _step = Step.Confirm;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _step = Step.Error;
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SelectProviderAsync(MatchmakingResult match)
+    {
+        _match = match;
+        await SubmitRequestAsync();
+    }
+
+    private async Task SubmitRequestAsync()
+    {
+        if (_match == null) return;
+
+        _step = Step.Provisioning;
+        StateHasChanged();
+
+        try
+        {
+            var requestId = Guid.NewGuid().ToString();
+            var vmName    = string.IsNullOrWhiteSpace(_vmName)
+                ? $"vm-{requestId[..8]}"
+                : _vmName.Trim();
+
+            await FirestoreDb.Collection("vm_requests").Document(requestId).SetAsync(
+                new Dictionary<string, object>
+                {
+                    ["request_id"]   = requestId,
+                    ["consumer_uid"] = ConsumerUid,
+                    ["provider_uid"] = _match.Provider.FirebaseUid,
+                    ["status"]       = "pending",
+                    ["vm_name"]      = vmName,
+                    ["image"]        = _selectedImage,
+                    ["cpu_cores"]    = _cpuCores,
+                    ["ram_gb"]       = _ramGb,
+                    ["volume_gb"]       = _volumeGb.HasValue ? (object)_volumeGb.Value : null,
+                    ["expose_service"]  = _exposeService,
+                    ["vm_id"]           = "",
+                    ["error"]           = "",
+                });
+
+            _requestListener = FirestoreDb
+                .Collection("vm_requests")
+                .Document(requestId)
+                .Listen(OnRequestUpdate);
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _step = Step.Error;
+            StateHasChanged();
+        }
+    }
+
+    private void OnRequestUpdate(DocumentSnapshot snap)
+    {
+        if (!snap.Exists) return;
+
+        var status = snap.ContainsField("status") ? snap.GetValue<string>("status") : "";
+
+        _ = InvokeAsync(() =>
+        {
+            if (status == "completed")
+            {
+                _step = Step.Done;
+                StateHasChanged();
+            }
+            else if (status == "failed")
+            {
+                _errorMessage = snap.ContainsField("error") && !string.IsNullOrWhiteSpace(snap.GetValue<string>("error"))
+                    ? snap.GetValue<string>("error")
+                    : "The provider failed to launch the VM.";
+                _step = Step.Error;
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void GoBack()
+    {
+        _step = Step.Form;
+        _match = null;
+        _matches = new();
+        _errorMessage = null;
+    }
+
+    private async Task CloseModal()
+    {
+        Reset();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleBackdropClick()
+    {
+        if (_step is not Step.Searching and not Step.Provisioning)
+            await CloseModal();
+    }
+
+    private void Reset()
+    {
+        _step = Step.Form;
+        _match = null;
+        _matches = new();
+        _errorMessage = null;
+        _vmName = "";
+        _cpuCores = 2;
+        _ramGb = 4;
+        _volumeGb = null;
+        _selectedRegion = "US-West";
+        _selectedImage = "ubuntu:22.04";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_requestListener != null)
+            await _requestListener.StopAsync();
+    }
+}
+
+<style>
+    .cvm-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .cvm-modal {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.75rem;
+        width: 100%;
+        max-width: 440px;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .cvm-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1.4rem;
+    }
+
+    .cvm-icon {
+        color: var(--uc-purple);
+        font-size: 1.1rem;
+    }
+
+    .cvm-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .cvm-field {
+        margin-bottom: 1rem;
+        flex: 1;
+    }
+
+    .cvm-row {
+        display: flex;
+        gap: 0.75rem;
+    }
+
+    .cvm-label {
+        display: block;
+        font-size: 0.65rem;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        color: var(--uc-text-muted);
+        margin-bottom: 0.35rem;
+    }
+
+    .cvm-input,
+    .cvm-select {
+        width: 100%;
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        color: var(--uc-text-white);
+        font-size: 0.82rem;
+        padding: 0.45rem 0.65rem;
+        border-radius: 4px;
+        outline: none;
+        box-sizing: border-box;
+    }
+
+    .cvm-input:focus,
+    .cvm-select:focus {
+        border-color: rgba(139, 92, 246, 0.5);
+    }
+
+    .cvm-validation-error {
+        display: block;
+        font-size: 0.7rem;
+        color: var(--uc-red);
+        margin-top: 0.25rem;
+    }
+
+    .cvm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+        margin-top: 1.4rem;
+    }
+
+    .cvm-btn-cancel {
+        background: transparent;
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-secondary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+
+    .cvm-btn-cancel:hover {
+        border-color: var(--uc-text-muted);
+    }
+
+    .cvm-btn-primary {
+        background: rgba(139, 92, 246, 0.18);
+        border: 1px solid rgba(139, 92, 246, 0.4);
+        color: var(--uc-text-white);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1.1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+    }
+
+    .cvm-btn-primary:hover {
+        background: rgba(139, 92, 246, 0.35);
+    }
+
+
+    .cvm-request-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .cvm-summary-text {
+        font-size: 0.82rem;
+        color: var(--uc-text-secondary);
+        font-family: var(--uc-font-mono);
+    }
+
+    /* Centered states (loading, done, error) */
+    .cvm-center {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        padding: 2rem 0 1rem;
+        gap: 0.5rem;
+    }
+
+    .cvm-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--uc-border);
+        border-top-color: var(--uc-purple);
+        border-radius: 50%;
+        animation: cvm-spin 0.8s linear infinite;
+        margin-bottom: 0.5rem;
+    }
+
+    @@keyframes cvm-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .cvm-status-text {
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+        margin: 0;
+    }
+
+    .cvm-status-sub {
+        font-size: 0.78rem;
+        color: var(--uc-text-muted);
+        margin: 0;
+        max-width: 300px;
+    }
+
+    .cvm-done-icon,
+    .cvm-error-icon {
+        margin-bottom: 0.5rem;
+    }
+
+    .cvm-error-msg {
+        font-size: 0.78rem;
+        color: var(--uc-text-muted);
+        margin: 0;
+        max-width: 320px;
+        line-height: 1.5;
+    }
+
+    /* Provider selection list */
+    .cvm-provider-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .cvm-provider-card {
+        background: var(--uc-bg-elevated);
+        border: 1px solid var(--uc-border);
+        border-radius: 6px;
+        padding: 0.75rem 0.9rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .cvm-provider-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+    }
+
+    .cvm-provider-name-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .cvm-provider-name {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .cvm-recommended-badge {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        color: var(--uc-purple);
+        background: rgba(139, 92, 246, 0.15);
+        border: 1px solid rgba(139, 92, 246, 0.35);
+        border-radius: 3px;
+        padding: 0.1rem 0.35rem;
+    }
+
+    .cvm-provider-meta,
+    .cvm-provider-resources {
+        font-size: 0.75rem;
+        color: var(--uc-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        flex-wrap: wrap;
+    }
+
+    .cvm-meta-sep {
+        color: var(--uc-border-light);
+    }
+</style>

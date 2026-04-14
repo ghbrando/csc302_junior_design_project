@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationIcon>wwwroot/icons/unicore-notification-icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,10 +12,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\unicore.shared\unicore.shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Docker.DotNet" Version="3.125.15" />
     <PackageReference Include="FirebaseAdmin" Version="3.*" />
     <PackageReference Include="Google.Cloud.Firestore" Version="4.1.0" />
     <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.*" />
+    <PackageReference Include="Google.Cloud.Storage.V1" Version="4.14.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
     <PackageReference Include="System.Management" Version="10.0.3" />
   </ItemGroup>

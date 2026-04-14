@@ -1,4 +1,3 @@
-@using unicoreprovider.Models
 @namespace unicoreprovider.Components
 
 <style>
@@ -23,11 +22,69 @@
         border: 1px solid var(--uc-border) !important;
         border-radius: var(--uc-radius) !important;
     }
+
+    .btn-migrate {
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        color: var(--uc-blue);
+        font-size: 0.7rem;
+        font-weight: bold;
+        letter-spacing: 0.5px;
+        padding: 0.3rem 0.7rem;
+        transition: all 0.2s;
+        background: transparent;
+    }
+
+    .btn-migrate:hover:not(:disabled) {
+        background-color: rgba(59, 130, 246, 0.15);
+        color: var(--uc-blue);
+    }
+
+    .btn-migrate:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    .badge-migration-pending {
+        background-color: rgba(255, 171, 0, 0.1);
+        color: var(--uc-amber);
+        border: 1px solid rgba(255, 171, 0, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-restoring {
+        background-color: rgba(59, 130, 246, 0.1);
+        color: var(--uc-blue);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-done {
+        background-color: rgba(0, 230, 118, 0.1);
+        color: var(--uc-green);
+        border: 1px solid rgba(0, 230, 118, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-migration-failed {
+        background-color: rgba(255, 82, 82, 0.1);
+        color: var(--uc-red);
+        border: 1px solid rgba(255, 82, 82, 0.3);
+        font-size: 0.65rem;
+        padding: 0.3em 0.7em;
+        letter-spacing: 0.5px;
+    }
 </style>
 
 <div class="card vm-list-card h-100 p-3">
     <div class="d-flex align-items-center mb-3">
-        <h6 class="text-uppercase fw-bold mb-0" style="letter-spacing: 1px; font-size: 0.75rem; color: var(--uc-text-muted);">
+        <h6 class="text-uppercase fw-bold mb-0"
+            style="letter-spacing: 1px; font-size: 0.75rem; color: var(--uc-text-muted);">
             Active VMs — Docker Sandbox
         </h6>
     </div>
@@ -35,53 +92,124 @@
     <div class="table-responsive">
         <table class="table table-dark-override align-middle mb-0">
             <thead>
-                <tr class="text-uppercase" style="font-size: 0.7rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
-                    <th class="pb-2 ps-0" style="width: 10%;">VM ID</th>
-                    <th class="pb-2" style="width: 25%;">Name</th>
-                    <th class="pb-2" style="width: 20%;">Client</th>
-                    <th class="pb-2" style="width: 20%;">CPU</th>
-                    <th class="pb-2" style="width: 10%;">RAM</th>
-                    <th class="pb-2" style="width: 10%;">Duration</th>
-                    <th class="pb-2 text-end pe-0" style="width: 5%;">Revenue</th>
+                <tr class="text-uppercase"
+                    style="font-size: 0.7rem; color: var(--uc-text-dim); border-bottom: 1px solid var(--uc-border);">
+                    <th class="pb-2 ps-0" style="width: 5%;">VM ID</th>
+                    <th class="pb-2" style="width: 12%;">Name</th>
+                    <th class="pb-2" style="width: 10%;">Client</th>
+                    <th class="pb-2" style="width: 10%;">CPU</th>
+                    <th class="pb-2" style="width: 6%;">RAM</th>
+                    <th class="pb-2" style="width: 7%;">Duration</th>
+                    <th class="pb-2" style="width: 8%;">Vol Sync</th>
+                    <th class="pb-2" style="width: 8%;">Last Sync</th>
+                    <th class="pb-2" style="width: 8%;">Snapshot</th>
+                    <th class="pb-2" style="width: 8%;">Last Snap</th>
+                    <th class="pb-2" style="width: 8%;">Status</th>
+                    <th class="pb-2 text-end pe-0" style="width: 10%;">Action</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var vm in Vms)
                 {
                     <tr>
-                        <td class="py-3 ps-0" style="font-family: var(--uc-font-mono); color: var(--uc-text-muted); font-size: 0.8rem;">@vm.VmId</td>
+                        <td class="py-3 ps-0"
+                            style="font-family: var(--uc-font-mono); color: var(--uc-text-muted); font-size: 0.8rem;">
+                            @vm.VmId</td>
 
-                        <td class="py-3 fw-bold" style="color: var(--uc-text-white); font-size: 0.9rem;">@vm.Name</td>
+                            <td class="py-3 fw-bold" style="color: var(--uc-text-white); font-size: 0.9rem;">
+                                @vm.Name@isPaused(vm)</td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.Client</td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.Client</td>
 
-                        <td class="py-3">
-                            <div class="d-flex align-items-center">
-                                <div class="progress me-3" style="height: 5px; width: 80px; background-color: var(--uc-border); border-radius: 2px;">
-                                    <div class="progress-bar"
-                                         style="width: @vm.CurrentCpuUsage%; background-color: var(--uc-blue); border-radius: 2px;">
+                                <td class="py-3">
+                                    @{
+                                        var vmCpu = HostCpuCores > 0 && vm.CpuCores > 0
+                                            ? Math.Min(100.0, vm.CurrentCpuUsage * HostCpuCores / vm.CpuCores)
+                                            : vm.CurrentCpuUsage;
+                                    }
+                                    <div class="d-flex align-items-center">
+                                        <div class="progress me-3"
+                                             style="height: 5px; width: 80px; background-color: var(--uc-border); border-radius: 2px;">
+                                            <div class="progress-bar"
+                                                 style="width: @vmCpu%; background-color: var(--uc-blue); border-radius: 2px;">
+                                            </div>
+                                        </div>
+                                        <span class="small" style="color: var(--uc-text-muted);">@vmCpu.ToString("0")%</span>
                                     </div>
-                                </div>
-                                <span class="small" style="color: var(--uc-text-muted);">@vm.CurrentCpuUsage.ToString("0")%</span>
-                            </div>
-                        </td>
+                                </td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.RamGB GB</td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">@vm.RamGB GB</td>
 
-                        <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
-                            @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
-                        </td>
+                                <td class="py-3" style="color: var(--uc-text-secondary); font-size: 0.85rem;">
+                                    @(vm.Uptime.Hours)h @(vm.Uptime.Minutes)m
+                                </td>
 
-                        <td class="py-3 text-end pe-0 fw-bold" style="color: var(--uc-green); font-family: var(--uc-font-mono); font-size: 0.95rem;">
-                            @vm.CurrentSessionCost.ToString("C")
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </div>
-</div>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayStatus(vm.VolumeSyncStatus)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayTime(vm.LastVolumeSyncAt)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayStatus(vm.SnapshotStatus)</td>
+                                <td class="py-3" style="font-size: 0.8rem; color: var(--uc-text-secondary);">@DisplayTime(vm.LastSnapshotAt)</td>
+
+                                <td class="py-3">
+                                    @if (!string.IsNullOrEmpty(vm.MigrationStatus))
+                                    {
+                                        <span class="badge rounded-pill @MigrationBadgeClass(vm.MigrationStatus)">
+                                            @vm.MigrationStatus
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <button class="btn btn-migrate btn-sm rounded-1"
+                                                @onclick="() => OnMigrateClicked.InvokeAsync(vm.VmId)"
+                                                disabled="@(vm.IsPaused)">
+                                            <i class="bi bi-arrow-left-right me-1"></i>Migrate
+                                        </button>
+                                    }
+                                </td>
+
+                                <td class="py-3 text-end pe-0">
+                                    <button class="btn btn-sm btn-outline-light rounded-1"
+                                            style="font-size: 0.7rem;"
+                                            disabled="@(OnSnapshotRequested is null || vm.SnapshotStatus == "Committing" || vm.SnapshotStatus == "Pushing")"
+                                            @onclick="() => RequestSnapshotAsync(vm.VmId)">
+                                        Snapshot Now
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
 @code {
     [Parameter] public List<VirtualMachine> Vms { get; set; } = new();
+    [Parameter] public int HostCpuCores { get; set; }
+    [Parameter] public EventCallback<string> OnMigrateClicked { get; set; }
+    [Parameter] public Func<string, Task>? OnSnapshotRequested { get; set; }
+
+    String isPaused(VirtualMachine vm)
+    {
+        return vm.IsPaused ? " (Paused)" : "";
+    }
+
+    private string MigrationBadgeClass(string? status) => status switch
+    {
+        "Requested" => "badge-migration-pending",
+        "Restoring" => "badge-migration-restoring",
+        "Migrated"  => "badge-migration-done",
+        "Failed"    => "badge-migration-failed",
+        _           => "badge-migration-pending",
+    };
+
+    private static string DisplayStatus(string? value) => string.IsNullOrWhiteSpace(value) ? "Idle" : value;
+
+    private static string DisplayTime(DateTime? value) => value.HasValue
+        ? value.Value.ToLocalTime().ToString("MM/dd HH:mm")
+        : "—";
+
+    private async Task RequestSnapshotAsync(string vmId)
+    {
+        if (OnSnapshotRequested is not null)
+            await OnSnapshotRequested(vmId);
+    }
 }

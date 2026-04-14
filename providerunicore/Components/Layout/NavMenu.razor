@@ -1,18 +1,23 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using providerunicore.Components.Dashboard
+@using Google.Cloud.Firestore
 @inject IAuthStateService AuthState
+@inject IProviderService ProviderService
 @inject NavigationManager Nav
 @rendermode RenderMode.InteractiveServer
 @inject IJSRuntime JS
+@implements IDisposable
 
 <nav class="sidebar d-flex flex-column">
     <!-- Removed default bottom margin from logo container -->
-    <div class="sidebar-brand mb-0 pb-0">
-        <img src="/unicore-logo.png" alt="Unicore Logo" width="204" height="136" />
+    <div class="sidebar-brand pb-0">
+        <div class="sidebar-logo-badge">
+            <img src="/unicore-logo.png" alt="Unicore Logo" class="sidebar-logo-image" />
+        </div>
     </div>
 
     <!-- Removed default top margin and padding from the list -->
-    <ul class="nav flex-column sidebar-nav mt-0 pt-0">
+    <ul class="nav flex-column sidebar-nav pt-0">
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="dashboard" Match="NavLinkMatch.Prefix">
                 <i class="bi bi-display"></i>
@@ -21,14 +26,8 @@
         </li>
         <li class="nav-item">
             <NavLink class="nav-link sidebar-link" href="revenue" Match="NavLinkMatch.Prefix">
-                <i class="bi bi-currency-dollar"></i>
+                <span class="currency-symbol">@CurrencySymbol</span>
                 <span>REVENUE</span>
-            </NavLink>
-        </li>
-        <li class="nav-item">
-            <NavLink class="nav-link sidebar-link" href="scheduling" Match="NavLinkMatch.Prefix">
-                <i class="bi bi-calendar3"></i>
-                <span>SCHEDULING</span>
             </NavLink>
         </li>
         <li class="nav-item">
@@ -58,6 +57,22 @@
 @code {
     private string UserName => AuthState.Name ?? "Provider";
     private string UserEmail => AuthState.Email ?? "";
+    private string CurrencySymbol { get; set; } = "$";
+    private FirestoreChangeListener? _providerListener;
+
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await StartProviderCurrencyListenerAsync();
+            StateHasChanged();
+        });
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -70,10 +85,41 @@
                 StateHasChanged();
             }
         }
+
+        if (firstRender)
+            await StartProviderCurrencyListenerAsync();
+    }
+
+    private async Task StartProviderCurrencyListenerAsync()
+    {
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid)) return;
+
+        if (_providerListener != null)
+        {
+            await _providerListener.StopAsync();
+            _providerListener = null;
+        }
+
+        _providerListener = ProviderService.ListenByFirebaseUid(AuthState.FirebaseUid, provider =>
+        {
+            var currencyCode = provider?.Currency ?? "USD";
+            CurrencySymbol = currencyCode switch
+            {
+                "EUR" => "€",
+                "GBP" => "£",
+                "JPY" => "¥",
+                "CAD" => "C$",
+                "AUD" => "A$",
+                _ => "$"
+            };
+            _ = InvokeAsync(StateHasChanged);
+        });
     }
 
     private async Task HandleLogout()
     {
+        String firebaseUid = AuthState.FirebaseUid ?? "unknown-uid";
+        await ProviderService.UpdateNodeStatusAsync("Offline", firebaseUid);
         AuthState.ClearAuthState();
         await JS.InvokeVoidAsync("authStorage.clear");
         Nav.NavigateTo("/", forceLoad: true);
@@ -85,6 +131,12 @@
         public string? uid { get; set; }
         public string? email { get; set; }
         public string? name { get; set; }
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        _ = _providerListener?.StopAsync();
     }
 }
 
@@ -104,9 +156,35 @@
     .sidebar-brand {
         display: flex;
         align-items: center;
+        justify-content: center;
         gap: 10px;
         padding: 1.5rem 1.25rem;
-        margin-bottom: 0.5rem;
+        margin-bottom: 30px;
+        background: var(--uc-logo-strip-bg);
+        border-bottom: 1px solid var(--uc-border);
+    }
+
+    .sidebar-logo-badge {
+        width: 118px;
+        height: 118px;
+        border-radius: 50%;
+        background: var(--uc-logo-badge-bg);
+        border: 1px solid var(--uc-logo-badge-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+
+    .sidebar-logo-image {
+        width: 96px;
+        height: auto;
+    }
+
+    body.light-mode .sidebar-logo-badge {
+        background: #000000 !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
     }
 
     .brand-icon {
@@ -123,6 +201,7 @@
 
     .sidebar-nav {
         padding: 0 0.75rem;
+        margin-top: 30px;
         gap: 2px;
         flex: 1;
     }
@@ -130,7 +209,7 @@
     .sidebar-link {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 9px;
         padding: 0.7rem 1rem;
         border-radius: var(--uc-radius);
         color: var(--uc-text-muted) !important;
@@ -145,18 +224,28 @@
         font-size: 1.05rem;
     }
 
+    .currency-symbol {
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        min-width: 1.2rem;
+        text-align: center;
+        color: inherit;
+        transform: translateY(-2px);
+    }
+
     .sidebar-link:hover {
         color: #aaa !important;
         background-color: #111;
     }
 
     .sidebar-link.active {
-        color: var(--uc-green) !important;
-        background-color: rgba(0, 230, 118, 0.08);
+        color: var(--uc-green-readable) !important;
+        background-color: color-mix(in srgb, var(--uc-green-readable) 14%, transparent);
     }
 
     .sidebar-link.active i {
-        color: var(--uc-green);
+        color: var(--uc-green-readable);
     }
 
     .sidebar-user {

@@ -1,0 +1,691 @@
+@page "/dashboard"
+@using unicoreconsumer.Services
+@using unicoreconsumer.Components
+@using UniCore.Shared.Models
+@using Google.Cloud.Firestore
+@implements IAsyncDisposable
+@inject IConsumerService ConsumerService
+@inject IConsumerVmService ConsumerVmService
+@inject INotificationService NotificationService
+@inject IConfiguration Configuration
+@inject FirestoreDb FirestoreDb
+@rendermode @(new InteractiveServerRenderMode(prerender: false))
+@inherits unicoreconsumer.Services.AuthorizedPageBase
+
+<ConsumerOnboardingModal IsVisible="_showOnboarding"
+                         InitialStep="_onboardingStep"
+                         FirebaseUid="@AuthState.FirebaseUid"
+                         OnComplete="@(() => _showOnboarding = false)" />
+
+<div class="dashboard">
+
+    <DashboardHeader Title="Virtual Machines" RunningCount="@_runningVms.Count" OnCreate="HandleCreateVm" />
+
+    <!-- Stat Cards -->
+    <div class="stat-grid">
+        <StatCard Label="RUNNING VMS" Icon="bi-hdd-stack" IconColor="var(--uc-purple)"
+                  Value="@_runningVms.Count.ToString()" SubText=" active" />
+
+        <StatCard Label="TOTAL SPENT" Icon="bi-activity" IconColor="var(--uc-purple)"
+                  Value="@FormatCurrency(_totalSpent)" Accent="true" />
+
+        <StatCard Label="STOPPED" Icon="bi-clock" IconColor="var(--uc-text-muted)" Value="@_stoppedVms.Count.ToString()"
+                  SubText=" vm(s)" />
+
+        <StatCard Label="ALERTS" Icon="bi-exclamation-triangle" IconColor="var(--uc-amber)" Value="0"
+                  SubText=" over budget" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_backupMessage))
+    {
+        <div class="backup-toast @(_backupMessageIsError ? "backup-toast-error" : "backup-toast-success")">
+            <i class="bi @(_backupMessageIsError ? "bi-exclamation-circle" : "bi-check-circle")"></i>
+            @_backupMessage
+            <button class="backup-toast-close" @onclick="() => _backupMessage = null">&times;</button>
+        </div>
+    }
+
+    <!-- Running VMs -->
+    <div class="section-title">RUNNING INSTANCES</div>
+
+    @if (_loading)
+    {
+        <div class="empty-state">Loading your virtual machines...</div>
+    }
+    else if (_runningVms.Count == 0)
+    {
+        <div class="empty-state">No running instances. Create a VM to get started.</div>
+    }
+    else
+    {
+        <div class="vm-grid">
+            @foreach (var vm in _runningVms)
+            {
+                <VmCard Name="@vm.Name" Os="@vm.Os" Specs="@vm.Specs" IpAddress="@vm.Connection" Cost="@($"${vm.Cost:F2}")"
+                        Uptime="@vm.Uptime" VmId="@vm.VmId" ResumeSuccess="@vm.ResumeSuccess"
+                        IsResumeInProgress="@_resumingVmIds.Contains(vm.VmId)" IsRunning="true"
+                        IsStopInProgress="@_stoppingVmIds.Contains(vm.VmId)" IsPaused="@vm.IsPaused" ShowBudget="false"
+                        ShowBackupButton="true" IsBackupInProgress="@(vm.VolumeSyncStatus is "Syncing" or "Requested")"
+                        LastBackup="@vm.LastBackup"
+                        ShowMigrateButton="@(vm.ProviderUnhealthy && vm.MigrationStatus is not ("Requested" or "Restoring"))"
+                        IsMigrating="@(vm.MigrationStatus is "Requested" or "Restoring" || _activeMigrations.ContainsKey(vm.VmId))"
+                        MigrationStatusText="@(GetMigrationStatusText(vm.VmId, vm.MigrationStatus))"
+                        OnSsh="@(() => Nav.NavigateTo($"/webshell/{vm.VmId}"))"
+                        OnPause="@(() => HandlePauseVm(vm.VmId, vm.IsPaused))" OnStop="@(() => HandleStopVm(vm.VmId))"
+                        OnBackup="@(() => HandleBackupVm(vm.VmId))"
+                        OnMigrate="@(() => OpenMigrationDialog(vm.VmId, vm.ProviderId, vm.CpuCores, vm.RamGb))"
+                        ServiceUrl="@vm.ServiceUrl" IsProvisioning="@vm.IsProvisioning" IsFailed="@vm.IsFailed" />
+            }
+        </div>
+    }
+
+    <!-- Stopped VMs -->
+    <div class="section-title" style="margin-top: 2rem;">STOPPED INSTANCES</div>
+
+    @if (!_loading && _stoppedVms.Count == 0)
+    {
+        <div class="empty-state">No stopped instances.</div>
+    }
+    else
+    {
+        <StoppedVmTable Vms="@_stoppedVms" OnDelete="@HandleDeleteVm" />
+    }
+
+</div>
+
+<CreateVmModal IsOpen="@_showCreateModal" ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+               OnClose="@(() => _showCreateModal = false)" />
+
+<MigrationDialog IsOpen="@_showMigrateDialog" VmId="@_migrateVmId" ConsumerUid="@(AuthState.FirebaseUid ?? "")"
+                 SourceProviderUid="@_migrateSourceProvider" CurrentCpuCores="@_migrateCurrentCpuCores"
+                 CurrentRamGb="@_migrateCurrentRamGb" OnClose="@(() => _showMigrateDialog = false)" />
+
+@code {
+    // ── Display models ────────────────────────────────────────────────────────
+    record RunningVm(string VmId, string Name, string Os, string Specs,
+                     string Connection, double Cost, string Uptime, bool IsPaused, bool ResumeSuccess,
+                     string? VolumeSyncStatus, string LastBackup,
+                     string? MigrationStatus, string ProviderId, bool ProviderUnhealthy,
+                     string? ServiceUrl, bool IsProvisioning, bool IsFailed,
+                     int CpuCores, int RamGb);
+
+    // ── State ─────────────────────────────────────────────────────────────────
+    private List<RunningVm> _runningVms = new();
+    private List<StoppedVmTable.StoppedVm> _stoppedVms = new();
+    private List<VirtualMachine> _allVms = new(); // Track all for global total calculation
+    private bool _loading = true;
+    private bool _listenerStarted;
+    private FirestoreChangeListener? _vmListener;
+    private readonly HashSet<string> _stoppingVmIds = new();
+    private readonly HashSet<string> _resumingVmIds = new();
+    private FirestoreChangeListener? _consumerListener;
+    private FirestoreChangeListener? _providerListener;
+    private FirestoreChangeListener? _migrationListener;
+    private string _currencyCode = "USD";
+    private bool _showOnboarding;
+    private int _onboardingStep;
+    private string? _backupMessage;
+    private bool _backupMessageIsError;
+    private readonly HashSet<string> _backupPendingVmIds = new();
+    private Dictionary<string, string> _providerStatuses = new(); // providerId -> NodeStatus
+    private Dictionary<string, VmMigrationRequest> _activeMigrations = new(); // vmId -> request
+    private readonly Dictionary<string, string> _lastVmStatuses = new(); // vmId -> last status
+    private readonly HashSet<string> _startedNotifiedVmIds = new();
+    private readonly HashSet<string> _completedNotifiedVmIds = new();
+    private bool _hasInitialVmSnapshot;
+    private bool _notifyVmStartedPref = true;
+    private bool _notifyVmCompletedPref = true;
+    private bool _showMigrateDialog;
+    private string _migrateVmId = "";
+    private string _migrateSourceProvider = "";
+    private int _migrateCurrentCpuCores;
+    private int _migrateCurrentRamGb;
+    private double totalProviderHourlyRevenue;
+
+    // ── Pricing Logic ─────────────────────────────────────────────────────────
+    private double CalculateVmTotalCost(VirtualMachine vm)
+    {
+        // Use the null-coalescing operator (??) to treat nulls as 0
+        double cores = vm.CpuCores;
+        double ram = vm.RamGB;
+        double volume = vm.VolumeRequestedGb ?? 0; // Fixes CS0266
+        int? port = vm.ServicePort;
+
+        // 1. Calculate Hourly Rate: (Cores * 0.04) + (RAM * 0.006)
+        double hourlyRate = (cores * 0.04) + (ram * 0.006);
+
+        // 2. Total Hourly Accrual
+        double hoursUsed = 0;
+        if (TimeSpan.TryParse(vm.UptimeString, out var ts))
+        {
+            hoursUsed = ts.TotalHours;
+        }
+        double totalHourly = hourlyRate * hoursUsed;
+
+        // 3. One-time Storage Fee: (Volume * 0.08)
+        double storageFee = volume * 0.08;
+
+        // 4. WebHost Opt-in Fee: $5 if port is 8080
+        double webHostFee = (port == 8080) ? 5.00 : 0.00;
+
+        return totalHourly + storageFee + webHostFee;
+    }
+
+    private double _totalSpent => _allVms.Sum(v => CalculateVmTotalCost(v));
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += OnAuthStateChanged;
+    }
+
+    private void OnAuthStateChanged()
+    {
+        if (!string.IsNullOrEmpty(AuthState.FirebaseUid) && !_listenerStarted)
+            _ = InvokeAsync(StartListenerAsync);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await base.OnAfterRenderAsync(firstRender);
+
+        if (firstRender && !string.IsNullOrEmpty(AuthState.FirebaseUid) && !_listenerStarted)
+            await StartListenerAsync();
+    }
+
+    // ── Firestore real-time listener ──────────────────────────────────────────
+    private Task StartListenerAsync()
+    {
+        if (_listenerStarted) return Task.CompletedTask;
+        _listenerStarted = true;
+
+        var uid = AuthState.FirebaseUid;
+        if (string.IsNullOrWhiteSpace(uid))
+            return Task.CompletedTask;
+
+        var query = FirestoreDb
+            .Collection("virtual_machines")
+            .WhereEqualTo("client", uid);
+
+        _vmListener = query.Listen(OnVmSnapshot);
+        _consumerListener = ConsumerService.ListenByFirebaseUid(uid, OnConsumerChanged);
+
+        // Listen for provider status changes
+        _providerListener = FirestoreDb
+            .Collection("providers")
+            .Listen(OnProviderSnapshot);
+
+        // Listen for migration request updates
+        var migrationQuery = FirestoreDb
+            .Collection("vm_migration_requests")
+            .WhereEqualTo("consumer_uid", uid);
+        _migrationListener = migrationQuery.Listen(OnMigrationSnapshot);
+
+        return Task.CompletedTask;
+    }
+
+    private void OnConsumerChanged(Consumer? consumer)
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!string.IsNullOrWhiteSpace(consumer?.Currency))
+                _currencyCode = consumer.Currency;
+            if (consumer != null)
+            {
+                _notifyVmStartedPref = consumer.NotifyVmStarted;
+                _notifyVmCompletedPref = consumer.NotifyVmCompleted;
+                _onboardingStep = consumer.OnboardingStep;
+                _showOnboarding = consumer.OnboardingStep < 2;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void OnVmSnapshot(QuerySnapshot snapshot)
+    {
+        // Line 167: This sets the global variable
+        _allVms = snapshot.Documents
+            .Select(d => d.ConvertTo<VirtualMachine>())
+            .ToList();
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_hasInitialVmSnapshot)
+            {
+                // Fix: Changed 'all' to '_allVms'
+                await NotifyVmTransitionsAsync(_allVms);
+            }
+
+            _lastVmStatuses.Clear();
+            // Fix: Changed 'all' to '_allVms'
+            foreach (var vm in _allVms)
+                _lastVmStatuses[vm.VmId] = vm.Status;
+
+            _hasInitialVmSnapshot = true;
+            
+            // Fix: Changed 'all' to '_allVms'
+            totalProviderHourlyRevenue = _allVms.Sum(vm => (vm.CpuCores * 0.04) + (vm.RamGB * 0.006));
+            StateHasChanged();
+
+            // Detect backup completion/error for VMs we triggered
+            // Fix: Changed 'all' to '_allVms'
+            foreach (var vm in _allVms)
+            {
+                if (!_backupPendingVmIds.Contains(vm.VmId))
+                    continue;
+
+                if (vm.VolumeSyncStatus == "Idle" && vm.LastVolumeSyncAt.HasValue)
+                {
+                    _backupPendingVmIds.Remove(vm.VmId);
+                    _backupMessage = $"Backup completed for {(string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name)}.";
+                    _backupMessageIsError = false;
+                }
+                else if (vm.VolumeSyncStatus == "Error")
+                {
+                    _backupPendingVmIds.Remove(vm.VmId);
+                    _backupMessage = $"Backup failed for {(string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name)}.";
+                    _backupMessageIsError = true;
+                }
+            }
+
+            _runningVms = _allVms
+                .Where(vm => vm.Status is "Running" or "Provisioning")
+                .Select(MapRunning)
+                .ToList();
+
+            _stoppedVms = _allVms
+                .Where(vm => vm.Status is not ("Running" or "Provisioning")
+                           && vm.MigrationStatus != "Migrated")
+                .Select(MapStopped)
+                .ToList();
+
+            _loading = false;
+            StateHasChanged();
+        });
+    }
+
+    private async Task NotifyVmTransitionsAsync(List<VirtualMachine> all)
+    {
+        var activeVmIds = all.Select(v => v.VmId).ToHashSet();
+        _startedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+        _completedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+
+        foreach (var vm in all)
+        {
+            var currentStatus = vm.Status ?? string.Empty;
+            var hasPrevious = _lastVmStatuses.TryGetValue(vm.VmId, out var previousStatus);
+            var previousWasActive = hasPrevious && IsRunningLike(previousStatus!);
+            var transitionedToRunning =
+                currentStatus.Equals("Running", StringComparison.OrdinalIgnoreCase)
+                && (!hasPrevious || !previousStatus!.Equals("Running", StringComparison.OrdinalIgnoreCase));
+
+            if (_notifyVmStartedPref
+                && transitionedToRunning
+                && !_startedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStartedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _startedNotifiedVmIds.Add(vm.VmId);
+                _completedNotifiedVmIds.Remove(vm.VmId);
+            }
+
+            if (_notifyVmCompletedPref
+                && previousWasActive
+                && IsCompletedStatus(currentStatus)
+                && !_completedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStoppedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _completedNotifiedVmIds.Add(vm.VmId);
+                _startedNotifiedVmIds.Remove(vm.VmId);
+            }
+        }
+    }
+
+    private static bool IsRunningLike(string status)
+    {
+        return status.Equals("Running", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Provisioning", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompletedStatus(string status)
+    {
+        return status.Equals("Stopped", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Failed", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Error", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveVmName(VirtualMachine vm)
+    {
+        return string.IsNullOrWhiteSpace(vm.Name) ? vm.VmId : vm.Name;
+    }
+
+    private void OnProviderSnapshot(QuerySnapshot snapshot)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _providerStatuses = snapshot.Documents
+                .ToDictionary(
+                    d => d.GetValue<string>("firebase_uid"),
+                    d => d.ContainsField("node_status") ? d.GetValue<string>("node_status") : "Offline"
+                );
+            StateHasChanged();
+        });
+    }
+
+    private void OnMigrationSnapshot(QuerySnapshot snapshot)
+    {
+        var allMigrations = snapshot.Documents
+            .Select(d => d.ConvertTo<VmMigrationRequest>())
+            .ToList();
+
+        _ = InvokeAsync(() =>
+        {
+            // Detect completion/failure for active migrations
+            foreach (var m in allMigrations)
+            {
+                var wasActive = _activeMigrations.ContainsKey(m.VmId);
+
+                if (wasActive && m.Status is "Completed" or "completed")
+                {
+                    _backupMessage = $"Migration complete! Your VM has been migrated successfully.";
+                    _backupMessageIsError = false;
+                }
+                else if (wasActive && m.Status is "Failed" or "failed")
+                {
+                    _backupMessage = $"Migration failed: {m.Error ?? "Unknown error"}";
+                    _backupMessageIsError = true;
+                }
+            }
+
+            _activeMigrations = allMigrations
+                .Where(m => m.Status is "pending" or "restoring" or "Requested")
+                .GroupBy(m => m.VmId)
+                .ToDictionary(g => g.Key, g => g.OrderByDescending(m => m.RequestedAt).First());
+
+            StateHasChanged();
+        });
+    }
+
+    // ── Mapping ───────────────────────────────────────────────────────────────
+    private RunningVm MapRunning(VirtualMachine vm)
+    {
+        var providerUnhealthy = !string.IsNullOrEmpty(vm.ProviderId)
+            && _providerStatuses.TryGetValue(vm.ProviderId, out var status)
+            && !string.Equals(status, "Online", StringComparison.OrdinalIgnoreCase);
+
+        return new(
+            VmId: vm.VmId,
+            Name: string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+            Os: FormatImage(vm.Image),
+            Specs: $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+            Connection: FormatConnection(vm),
+            Cost: CalculateVmTotalCost(vm),
+            Uptime: FormatUptime(vm.UptimeString),
+            IsPaused: vm.IsPaused,
+            ResumeSuccess: vm.ResumeSuccess,
+            VolumeSyncStatus: vm.VolumeSyncStatus,
+            LastBackup: FormatLastBackup(vm.LastVolumeSyncAt),
+            MigrationStatus: vm.MigrationStatus,
+            ProviderId: vm.ProviderId,
+            ProviderUnhealthy: providerUnhealthy,
+            ServiceUrl: vm.ServiceUrl,
+            IsProvisioning: vm.Status == "Provisioning",
+            IsFailed: vm.Status == "Failed",
+            CpuCores: vm.CpuCores,
+            RamGb: vm.RamGB
+        );
+    }
+
+    private StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
+    {
+        VmId = vm.VmId,
+        Name = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
+        Os = FormatImage(vm.Image),
+        Specs = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
+        IpAddress = FormatConnection(vm),
+        TotalCost = FormatCurrency(CalculateVmTotalCost(vm)),
+    };
+
+    // ── Formatters ────────────────────────────────────────────────────────────
+    private static string FormatImage(string image)
+    {
+        if (string.IsNullOrWhiteSpace(image)) return "Linux";
+        var name = image.Split(':')[0];
+        var tag = image.Contains(':') ? " " + image.Split(':')[1] : "";
+        return char.ToUpper(name[0]) + name[1..].Replace("-", " ") + tag;
+    }
+
+    private static string FormatConnection(VirtualMachine vm)
+    {
+        if (vm.RelayPort.HasValue) return $"relay:{vm.RelayPort}";
+        if (vm.SshPort.HasValue) return $"ssh:{vm.SshPort}";
+        return "—";
+    }
+
+    private static string FormatUptime(string uptimeString)
+    {
+        if (!TimeSpan.TryParse(uptimeString, out var ts)) return uptimeString;
+        if (ts.TotalDays >= 1) return $"{(int)ts.TotalDays}d {ts.Hours}h";
+        if (ts.TotalHours >= 1) return $"{(int)ts.TotalHours}h {ts.Minutes}m";
+        return $"{ts.Minutes}m";
+    }
+
+    private static string FormatLastBackup(DateTime? lastSync)
+    {
+        if (!lastSync.HasValue) return "";
+        var ago = DateTime.UtcNow - lastSync.Value;
+        if (ago.TotalMinutes < 1) return "just now";
+        if (ago.TotalMinutes < 60) return $"{(int)ago.TotalMinutes} min ago";
+        if (ago.TotalHours < 24) return $"{(int)ago.TotalHours}h ago";
+        return $"{(int)ago.TotalDays}d ago";
+    }
+
+    private string FormatCurrency(double amount)
+    {
+        var symbol = _currencyCode switch
+        {
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" => "¥",
+            "CAD" => "C$",
+            "AUD" => "A$",
+            _ => "$"
+        };
+
+        return $"{symbol}{amount:F2}";
+    }
+
+    private bool _showCreateModal = false;
+
+    private void HandleCreateVm() => _showCreateModal = true;
+
+    private async Task HandlePauseVm(string vmId, bool isPaused)
+    {
+        try
+        {
+            if (isPaused)
+            {
+                if (_resumingVmIds.Contains(vmId))
+                    return;
+
+                _resumingVmIds.Add(vmId);
+                await ConsumerVmService.ResumeVmAsync(vmId);
+            }
+            else
+            {
+                await ConsumerVmService.PauseVmAsync(vmId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error pausing/resuming VM: {ex.Message}");
+        }
+        finally
+        {
+            _resumingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleBackupVm(string vmId)
+    {
+        try
+        {
+            _backupPendingVmIds.Add(vmId);
+            _backupMessage = null;
+            var vmRef = FirestoreDb.Collection("virtual_machines").Document(vmId);
+            await vmRef.UpdateAsync(new Dictionary<string, object>
+            {
+                { "volume_sync_status", "Requested" }
+            });
+        }
+        catch (Exception ex)
+        {
+            _backupPendingVmIds.Remove(vmId);
+            _backupMessage = $"Failed to request backup: {ex.Message}";
+            _backupMessageIsError = true;
+            Console.WriteLine($"Error requesting backup for VM: {ex.Message}");
+        }
+    }
+
+    private async Task HandleStopVm(string vmId)
+    {
+        if (_stoppingVmIds.Contains(vmId))
+            return;
+
+        try
+        {
+            _stoppingVmIds.Add(vmId);
+            await ConsumerVmService.StopVmAsync(vmId);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error stopping VM: {ex.Message}");
+        }
+        finally
+        {
+            _stoppingVmIds.Remove(vmId);
+        }
+    }
+
+    private async Task HandleDeleteVm(string vmId)
+    {
+        try
+        {
+            var vmName = _stoppedVms
+                .FirstOrDefault(v => v.VmId == vmId)?.Name ?? vmId;
+
+            await ConsumerVmService.DeleteVmAsync(vmId);
+            _backupMessage = $"VM '{vmName}' has been deleted.";
+            _backupMessageIsError = false;
+        }
+        catch (Exception ex)
+        {
+            _backupMessage = $"Failed to delete VM: {ex.Message}";
+            _backupMessageIsError = true;
+            Console.WriteLine($"Error deleting VM: {ex.Message}");
+        }
+    }
+
+    // ── Migration ─────────────────────────────────────────────────────────
+    private void OpenMigrationDialog(string vmId, string providerId, int currentCpuCores, int currentRamGb)
+    {
+        _migrateVmId = vmId;
+        _migrateSourceProvider = providerId;
+        _migrateCurrentCpuCores = currentCpuCores;
+        _migrateCurrentRamGb = currentRamGb;
+        _showMigrateDialog = true;
+    }
+
+    private string GetMigrationStatusText(string vmId, string? vmMigrationStatus)
+    {
+        if (_activeMigrations.TryGetValue(vmId, out var req))
+            return req.Status;
+        return vmMigrationStatus ?? "pending";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        AuthState.OnChange -= OnAuthStateChanged;
+        if (_vmListener != null)
+            await _vmListener.StopAsync();
+        if (_consumerListener != null)
+            await _consumerListener.StopAsync();
+        if (_providerListener != null)
+            await _providerListener.StopAsync();
+        if (_migrationListener != null)
+            await _migrationListener.StopAsync();
+    }
+}
+
+<style>
+    .dashboard {
+        padding: 2rem 2.5rem;
+        max-width: 1200px;
+        margin: 0 auto;
+        font-family: var(--uc-font-base);
+    }
+
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .section-title {
+        font-size: 0.65rem;
+        letter-spacing: 0.12em;
+        color: var(--uc-text-muted);
+        font-weight: 600;
+        margin-bottom: 1rem;
+    }
+
+    .vm-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    .empty-state {
+        color: var(--uc-text-muted);
+        font-size: 0.82rem;
+        padding: 1.5rem 0;
+    }
+
+    .backup-toast {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.7rem 1rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.82rem;
+        margin-bottom: 1rem;
+    }
+
+    .backup-toast-success {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.3);
+        color: #10b981;
+    }
+
+    .backup-toast-error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: var(--uc-red);
+    }
+
+    .backup-toast-close {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: inherit;
+        font-size: 1.1rem;
+        cursor: pointer;
+        opacity: 0.6;
+        padding: 0;
+        line-height: 1;
+    }
+
+    .backup-toast-close:hover {
+        opacity: 1;
+    }
+</style>

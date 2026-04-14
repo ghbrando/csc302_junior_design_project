@@ -1,0 +1,629 @@
+@namespace unicoreconsumer.Components
+
+<div class="vm-card @(IsOverBudget ? "alert-card" : "")">
+
+    <div class="vm-card-header">
+        <div class="vm-name">
+            <span class="terminal-caret">&gt;_</span>
+            @Name
+        </div>
+        @if (IsOverBudget)
+        {
+            <span class="alert-badge">ALERT</span>
+        }
+    </div>
+
+    <div class="vm-meta">@Os &bull; @Specs</div>
+
+    <div class="vm-status">
+        @if (IsFailed)
+        {
+            <span class="running-dot failed-dot"></span>
+            <span class="running-label failed-label">FAILED</span>
+        }
+        else if (IsProvisioning)
+        {
+            <span class="running-dot provisioning-dot"></span>
+            <span class="running-label provisioning-label">SETTING UP</span>
+        }
+        else
+        {
+            <span class="running-dot @(IsPaused ? "paused" : "")"></span>
+            <span class="running-label @(IsPaused ? "paused-label" : "")">@(IsPaused ? "PAUSED" : "RUNNING")</span>
+        }
+        <span class="vm-ip">&bull; @IpAddress</span>
+    </div>
+
+    <div class="vm-cost-row">
+        <span class="vm-cost">@Cost</span>
+        @if (ShowBudget)
+        {
+            <span class="vm-budget">/ @Budget</span>
+        }
+        <span class="vm-uptime">&#8679; @Uptime</span>
+    </div>
+
+    @if (ShowBudget)
+    {
+        <div class="progress-bar-wrap">
+            <div class="progress-bar">
+                <div class="progress-fill @ProgressColor" style="width: @(Math.Min(BudgetPercent, 100))%;"></div>
+            </div>
+            <div class="progress-labels">
+                <span>0%</span>
+                <span>50%</span>
+                <span>75%</span>
+                <span class="label-end @(IsOverBudget ? "red-text" : "")">@BudgetPercent.ToString("F1")%</span>
+            </div>
+        </div>
+
+        @if (IsOverBudget)
+        {
+            <div class="over-budget-banner">
+                <i class="bi bi-exclamation-triangle"></i> Over budget by @OverBy
+            </div>
+        }
+    }
+
+    @if (!string.IsNullOrEmpty(LastBackup) || ShowBackupButton)
+    {
+        <div class="vm-backup-row">
+            @if (!string.IsNullOrEmpty(LastBackup))
+            {
+                <span class="vm-backup-label"><i class="bi bi-cloud-check"></i> Last backup: @LastBackup</span>
+            }
+            @if (ShowBackupButton)
+            {
+                <button class="btn-backup" @onclick="OnBackup" disabled="@IsBackupInProgress">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                    @(IsBackupInProgress ? "BACKING UP..." : "BACKUP NOW")
+                </button>
+            }
+        </div>
+    }
+
+    @if (IsMigrating)
+    {
+        <div class="vm-migrate-row migrating">
+            <i class="bi bi-arrow-repeat spin"></i>
+            <span>MIGRATING — @(MigrationStatusText ?? "pending")</span>
+        </div>
+    }
+    else if (ShowMigrateButton)
+    {
+        <div class="vm-migrate-row">
+            <span class="vm-migrate-label"><i class="bi bi-exclamation-triangle"></i> Provider unhealthy</span>
+            <button class="btn-migrate" @onclick="OnMigrate">
+                <i class="bi bi-box-arrow-right"></i> MIGRATE VM
+            </button>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(ServiceUrl))
+    {
+        <div class="vm-service-row">
+            <i class="bi bi-globe"></i>
+            <a class="vm-service-link" href="@ServiceUrl" target="_blank" rel="noopener noreferrer">@ServiceUrl</a>
+            <button class="btn-service" onclick="window.open('@ServiceUrl', '_blank')">
+                <i class="bi bi-box-arrow-up-right"></i> OPEN SERVICE
+            </button>
+        </div>
+    }
+
+    <div class="vm-actions">
+        <button class="btn-ssh" @onclick="OnSsh" disabled="@(!ResumeSuccess || IsPaused || IsProvisioning || IsFailed)"><i class="bi bi-terminal"></i>
+            SSH</button>
+            <button class="btn-pause" @onclick="OnPause" disabled="@(IsPaused && IsResumeInProgress)"><i
+                class="@(IsPaused ? "bi bi-play-fill" : "bi bi-pause-fill")"></i> @((IsPaused && IsResumeInProgress) ?
+                            "RESUMING..." : (IsPaused ? "RESUME" : "PAUSE"))</button>
+                <button class="btn-stop" @onclick="OnStop" disabled="@(!IsRunning || IsStopInProgress)">
+                    <i class="bi bi-stop-fill"></i> @(IsStopInProgress ? "STOPPING..." : "STOP")
+                </button>
+            </div>
+
+        </div>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string Os { get; set; } = "";
+    [Parameter] public string Specs { get; set; } = "";
+    [Parameter] public string IpAddress { get; set; } = "";
+    [Parameter] public string Cost { get; set; } = "";
+    [Parameter] public string Budget { get; set; } = "";
+    [Parameter] public string Uptime { get; set; } = "";
+    [Parameter] public double BudgetPercent { get; set; } = 0;
+    [Parameter] public bool IsOverBudget { get; set; } = false;
+    [Parameter] public string OverBy { get; set; } = "";
+    [Parameter] public string VmId { get; set; } = "";
+    [Parameter] public bool IsPaused { get; set; } = false;
+    [Parameter] public bool ResumeSuccess { get; set; } = false;
+    [Parameter] public bool IsResumeInProgress { get; set; } = false;
+    [Parameter] public bool IsRunning { get; set; } = true;
+    [Parameter] public bool IsStopInProgress { get; set; } = false;
+    [Parameter] public EventCallback OnSsh { get; set; }
+    [Parameter] public EventCallback OnPause { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+    [Parameter] public EventCallback OnBackup { get; set; }
+    [Parameter] public EventCallback OnMigrate { get; set; }
+    [Parameter] public bool ShowBudget { get; set; } = true;
+    [Parameter] public bool ShowBackupButton { get; set; } = false;
+    [Parameter] public bool IsBackupInProgress { get; set; } = false;
+    [Parameter] public string LastBackup { get; set; } = "";
+    [Parameter] public bool ShowMigrateButton { get; set; } = false;
+    [Parameter] public bool IsMigrating { get; set; } = false;
+    [Parameter] public string? MigrationStatusText { get; set; }
+    [Parameter] public string? ServiceUrl { get; set; }
+    [Parameter] public bool IsProvisioning { get; set; } = false;
+    [Parameter] public bool IsFailed { get; set; } = false;
+
+    private string ProgressColor => IsOverBudget ? "red" : BudgetPercent >= 75 ? "yellow" : "green";
+}
+
+<style>
+    .vm-card {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.4rem;
+    }
+
+    .alert-card {
+        border-color: rgba(255, 82, 82, 0.3);
+    }
+
+    .vm-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.4rem;
+    }
+
+    .vm-name {
+        font-family: var(--uc-font-mono);
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+
+    .terminal-caret {
+        color: var(--uc-green);
+        font-size: 0.85rem;
+    }
+
+    .alert-badge {
+        background: var(--uc-amber);
+        color: #000;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+    }
+
+    .vm-meta {
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+        margin-bottom: 0.5rem;
+    }
+
+    .vm-status {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        margin-bottom: 1rem;
+    }
+
+    .running-dot {
+        width: 7px;
+        height: 7px;
+        background: var(--uc-green);
+        border-radius: 50%;
+        display: inline-block;
+        animation: pulse 2s infinite;
+    }
+
+    .running-dot.paused {
+        background: var(--uc-yellow);
+        animation: none;
+    }
+
+    .running-label {
+        color: var(--uc-green-readable);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        font-size: 0.7rem;
+    }
+
+    .running-label.paused-label {
+        color: var(--uc-yellow);
+    }
+
+    .running-dot.provisioning-dot {
+        background: var(--uc-purple);
+        animation: none;
+    }
+
+    .running-label.provisioning-label {
+        color: var(--uc-purple);
+    }
+
+    .running-dot.failed-dot {
+        background: var(--uc-red);
+        animation: none;
+    }
+
+    .running-label.failed-label {
+        color: var(--uc-red);
+    }
+
+    .vm-ip {
+        color: var(--uc-text-muted);
+    }
+
+    .vm-cost-row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+    }
+
+    .vm-cost {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--uc-text-white);
+        line-height: 1;
+    }
+
+    .vm-budget {
+        font-size: 0.8rem;
+        color: var(--uc-text-muted);
+    }
+
+    .vm-uptime {
+        margin-left: auto;
+        font-size: 0.75rem;
+        color: var(--uc-text-secondary);
+    }
+
+    .progress-bar-wrap {
+        margin-bottom: 1.2rem;
+    }
+
+    .progress-bar {
+        height: 6px;
+        background: var(--uc-bg-elevated);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-bottom: 0.35rem;
+    }
+
+    .progress-fill {
+        height: 100%;
+        border-radius: 3px;
+    }
+
+    .progress-fill.yellow {
+        background: var(--uc-yellow);
+    }
+
+    .progress-fill.red {
+        background: var(--uc-red);
+    }
+
+    .progress-fill.green {
+        background: var(--uc-green);
+    }
+
+    .progress-labels {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.65rem;
+        color: var(--uc-text-muted);
+    }
+
+    .label-end {
+        color: var(--uc-text-secondary);
+    }
+
+    .label-end.red-text {
+        color: var(--uc-red);
+    }
+
+    .over-budget-banner {
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.25);
+        color: var(--uc-red);
+        font-size: 0.78rem;
+        padding: 0.6rem 0.9rem;
+        border-radius: var(--uc-radius);
+        margin-bottom: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .vm-backup-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+        padding: 0.5rem 0.7rem;
+        background: rgba(59, 130, 246, 0.05);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        border-radius: var(--uc-radius);
+        font-size: 0.75rem;
+    }
+
+    .vm-backup-label {
+        color: var(--uc-text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    .btn-backup {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: none;
+        padding: 0.3rem 0.7rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: background 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-backup:hover:not(:disabled) {
+        background: rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-backup:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .vm-migrate-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+        padding: 0.5rem 0.7rem;
+        background: rgba(239, 68, 68, 0.05);
+        border: 1px solid rgba(239, 68, 68, 0.15);
+        border-radius: var(--uc-radius);
+        font-size: 0.75rem;
+    }
+
+    .vm-migrate-row.migrating {
+        background: rgba(251, 191, 36, 0.08);
+        border-color: rgba(251, 191, 36, 0.25);
+        color: var(--uc-yellow);
+        gap: 0.4rem;
+        justify-content: flex-start;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+    }
+
+    .vm-migrate-label {
+        color: var(--uc-red);
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.72rem;
+    }
+
+    .btn-migrate {
+        background: rgba(239, 68, 68, 0.12);
+        color: #ef4444;
+        border: none;
+        padding: 0.3rem 0.7rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: background 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-migrate:hover {
+        background: rgba(239, 68, 68, 0.25);
+    }
+
+    .spin {
+        animation: vm-spin 1s linear infinite;
+    }
+
+    @@keyframes vm-spin {
+        to { transform: rotate(360deg); }
+    }
+
+    .vm-service-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.8rem;
+        padding: 0.5rem 0.7rem;
+        background: rgba(16, 185, 129, 0.05);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        border-radius: var(--uc-radius);
+        font-size: 0.75rem;
+        color: var(--uc-text-muted);
+    }
+
+    .vm-service-link {
+        color: #10b981;
+        text-decoration: none;
+        font-family: var(--uc-font-mono);
+        font-size: 0.7rem;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .vm-service-link:hover {
+        text-decoration: underline;
+    }
+
+    .btn-service {
+        background: rgba(16, 185, 129, 0.12);
+        color: #10b981;
+        border: none;
+        padding: 0.3rem 0.7rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.7rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+        transition: background 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-service:hover {
+        background: rgba(16, 185, 129, 0.25);
+    }
+
+    .vm-actions {
+        display: flex;
+        gap: 0.6rem;
+    }
+
+    .btn-ssh {
+        background: rgba(59, 130, 246, .12);
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-blue) 40%, transparent);
+        padding: 0.5rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        font-family: var(--uc-font-mono);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-ssh:hover:not(:disabled) {
+        background: #2563eb;
+    }
+
+    .btn-ssh:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .btn-pause {
+        background: rgba(168, 85, 247, .12);
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-purple) 38%, transparent);
+        padding: 0.5rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        font-family: var(--uc-font-mono);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-pause:hover:not(:disabled) {
+        background: #a855f7;
+        color: #ffffff;
+    }
+
+    .btn-stop {
+        background: rgba(239, 68, 68, .12);
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-red) 38%, transparent);
+        padding: 0.5rem 1.2rem;
+        border-radius: var(--uc-radius);
+        font-size: 0.8rem;
+        font-weight: 600;
+        font-family: var(--uc-font-mono);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+        flex: 1;
+        justify-content: center;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+        background: #ef4444;
+        color: #ffffff;
+    }
+
+    .btn-stop:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    body.light-mode .btn-ssh,
+    body.light-mode .btn-pause,
+    body.light-mode .btn-stop {
+        color: #1f2937;
+        border-color: #cbd5e1;
+    }
+
+    body.light-mode .btn-ssh {
+        background: rgba(59, 130, 246, 0.14);
+    }
+
+    body.light-mode .btn-pause {
+        background: rgba(168, 85, 247, 0.14);
+    }
+
+    body.light-mode .btn-stop {
+        background: rgba(239, 68, 68, 0.14);
+    }
+
+    body.light-mode .btn-ssh:hover:not(:disabled) {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+    body.light-mode .btn-pause:hover:not(:disabled) {
+        background: #9333ea;
+        color: #ffffff;
+    }
+
+    body.light-mode .btn-stop:hover:not(:disabled) {
+        background: #dc2626;
+        color: #ffffff;
+    }
+
+    @@keyframes pulse {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.4;
+        }
+    }
+</style>

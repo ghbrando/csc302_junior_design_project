@@ -1,0 +1,57 @@
+FROM debian:bookworm
+
+LABEL maintainer="UniCore Team"
+LABEL description="Base image for UniCore consumer VMs with pre-installed tools"
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install required system packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-server \
+    sudo \
+    cron \
+    vim \
+    curl \
+    wget \
+    net-tools \
+    ca-certificates \
+    gnupg \
+    apt-transport-https \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Google Cloud CLI
+RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+    | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" \
+    > /etc/apt/sources.list.d/google-cloud-sdk.list \
+    && apt-get update && apt-get install -y --no-install-recommends google-cloud-cli \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure SSH
+RUN mkdir -p /var/run/sshd \
+    && sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config \
+    && sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config \
+    && ssh-keygen -A
+
+# Create directories for FRP config and UniCore logs
+RUN mkdir -p /etc/frpc /var/log/unicore
+
+# Create consumer user with home directory
+RUN useradd -m -s /bin/bash consumer
+
+# Set up sudoers for consumer (allow package management, deny dangerous ops)
+COPY sudoers-consumer /etc/sudoers.d/consumer
+RUN chmod 440 /etc/sudoers.d/consumer \
+    && visudo -c -f /etc/sudoers.d/consumer
+
+# Copy the container startup script
+COPY container-startup.sh /usr/local/bin/container-startup.sh
+RUN chmod 755 /usr/local/bin/container-startup.sh
+
+# Expose SSH port
+EXPOSE 22
+
+# Default entrypoint runs the startup script
+ENTRYPOINT ["/usr/local/bin/container-startup.sh"]

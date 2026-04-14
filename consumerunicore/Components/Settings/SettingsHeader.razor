@@ -1,0 +1,30 @@
+@namespace unicoreconsumer.Components
+<div class="settings-header">
+    <h1 class="settings-title">@Title</h1>
+    <p class="settings-subtitle">@Subtitle</p>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Settings";
+    [Parameter] public string Subtitle { get; set; } = "Manage account and preferences";
+}
+
+<style>
+    .settings-header {
+        margin-bottom: 2rem;
+    }
+
+    .settings-title {
+        font-size: 1.8rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+        margin: 0 0 0.3rem 0;
+    }
+
+    .settings-subtitle {
+        font-size: 0.85rem;
+        color: var(--uc-text-secondary);
+        margin: 0;
+        font-family: var(--uc-font-mono);
+    }
+</style>
