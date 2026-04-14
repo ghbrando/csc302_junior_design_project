@@ -6,6 +6,7 @@
 @implements IAsyncDisposable
 @inject IConsumerService ConsumerService
 @inject IConsumerVmService ConsumerVmService
+@inject INotificationService NotificationService
 @inject IConfiguration Configuration
 @inject FirestoreDb FirestoreDb
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
@@ -111,6 +112,7 @@
     // ── State ─────────────────────────────────────────────────────────────────
     private List<RunningVm> _runningVms = new();
     private List<StoppedVmTable.StoppedVm> _stoppedVms = new();
+    private List<VirtualMachine> _allVms = new(); // Track all for global total calculation
     private bool _loading = true;
     private bool _listenerStarted;
     private FirestoreChangeListener? _vmListener;
@@ -127,13 +129,49 @@
     private readonly HashSet<string> _backupPendingVmIds = new();
     private Dictionary<string, string> _providerStatuses = new(); // providerId -> NodeStatus
     private Dictionary<string, VmMigrationRequest> _activeMigrations = new(); // vmId -> request
+    private readonly Dictionary<string, string> _lastVmStatuses = new(); // vmId -> last status
+    private readonly HashSet<string> _startedNotifiedVmIds = new();
+    private readonly HashSet<string> _completedNotifiedVmIds = new();
+    private bool _hasInitialVmSnapshot;
+    private bool _notifyVmStartedPref = true;
+    private bool _notifyVmCompletedPref = true;
     private bool _showMigrateDialog;
     private string _migrateVmId = "";
     private string _migrateSourceProvider = "";
     private int _migrateCurrentCpuCores;
     private int _migrateCurrentRamGb;
+    private double totalProviderHourlyRevenue;
 
-    private double _totalSpent => _runningVms.Sum(v => v.Cost);
+    // ── Pricing Logic ─────────────────────────────────────────────────────────
+    private double CalculateVmTotalCost(VirtualMachine vm)
+    {
+        // Use the null-coalescing operator (??) to treat nulls as 0
+        double cores = vm.CpuCores;
+        double ram = vm.RamGB;
+        double volume = vm.VolumeRequestedGb ?? 0; // Fixes CS0266
+        int? port = vm.ServicePort;
+
+        // 1. Calculate Hourly Rate: (Cores * 0.04) + (RAM * 0.006)
+        double hourlyRate = (cores * 0.04) + (ram * 0.006);
+
+        // 2. Total Hourly Accrual
+        double hoursUsed = 0;
+        if (TimeSpan.TryParse(vm.UptimeString, out var ts))
+        {
+            hoursUsed = ts.TotalHours;
+        }
+        double totalHourly = hourlyRate * hoursUsed;
+
+        // 3. One-time Storage Fee: (Volume * 0.08)
+        double storageFee = volume * 0.08;
+
+        // 4. WebHost Opt-in Fee: $5 if port is 8080
+        double webHostFee = (port == 8080) ? 5.00 : 0.00;
+
+        return totalHourly + storageFee + webHostFee;
+    }
+
+    private double _totalSpent => _allVms.Sum(v => CalculateVmTotalCost(v));
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
     protected override void OnInitialized()
@@ -194,6 +232,8 @@
                 _currencyCode = consumer.Currency;
             if (consumer != null)
             {
+                _notifyVmStartedPref = consumer.NotifyVmStarted;
+                _notifyVmCompletedPref = consumer.NotifyVmCompleted;
                 _onboardingStep = consumer.OnboardingStep;
                 _showOnboarding = consumer.OnboardingStep < 2;
             }
@@ -203,14 +243,33 @@
 
     private void OnVmSnapshot(QuerySnapshot snapshot)
     {
-        var all = snapshot.Documents
+        // Line 167: This sets the global variable
+        _allVms = snapshot.Documents
             .Select(d => d.ConvertTo<VirtualMachine>())
             .ToList();
 
-        _ = InvokeAsync(() =>
+        _ = InvokeAsync(async () =>
         {
+            if (_hasInitialVmSnapshot)
+            {
+                // Fix: Changed 'all' to '_allVms'
+                await NotifyVmTransitionsAsync(_allVms);
+            }
+
+            _lastVmStatuses.Clear();
+            // Fix: Changed 'all' to '_allVms'
+            foreach (var vm in _allVms)
+                _lastVmStatuses[vm.VmId] = vm.Status;
+
+            _hasInitialVmSnapshot = true;
+            
+            // Fix: Changed 'all' to '_allVms'
+            totalProviderHourlyRevenue = _allVms.Sum(vm => (vm.CpuCores * 0.04) + (vm.RamGB * 0.006));
+            StateHasChanged();
+
             // Detect backup completion/error for VMs we triggered
-            foreach (var vm in all)
+            // Fix: Changed 'all' to '_allVms'
+            foreach (var vm in _allVms)
             {
                 if (!_backupPendingVmIds.Contains(vm.VmId))
                     continue;
@@ -229,12 +288,12 @@
                 }
             }
 
-            _runningVms = all
+            _runningVms = _allVms
                 .Where(vm => vm.Status is "Running" or "Provisioning")
                 .Select(MapRunning)
                 .ToList();
 
-            _stoppedVms = all
+            _stoppedVms = _allVms
                 .Where(vm => vm.Status is not ("Running" or "Provisioning")
                            && vm.MigrationStatus != "Migrated")
                 .Select(MapStopped)
@@ -243,6 +302,60 @@
             _loading = false;
             StateHasChanged();
         });
+    }
+
+    private async Task NotifyVmTransitionsAsync(List<VirtualMachine> all)
+    {
+        var activeVmIds = all.Select(v => v.VmId).ToHashSet();
+        _startedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+        _completedNotifiedVmIds.RemoveWhere(id => !activeVmIds.Contains(id));
+
+        foreach (var vm in all)
+        {
+            var currentStatus = vm.Status ?? string.Empty;
+            var hasPrevious = _lastVmStatuses.TryGetValue(vm.VmId, out var previousStatus);
+            var previousWasActive = hasPrevious && IsRunningLike(previousStatus!);
+            var transitionedToRunning =
+                currentStatus.Equals("Running", StringComparison.OrdinalIgnoreCase)
+                && (!hasPrevious || !previousStatus!.Equals("Running", StringComparison.OrdinalIgnoreCase));
+
+            if (_notifyVmStartedPref
+                && transitionedToRunning
+                && !_startedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStartedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _startedNotifiedVmIds.Add(vm.VmId);
+                _completedNotifiedVmIds.Remove(vm.VmId);
+            }
+
+            if (_notifyVmCompletedPref
+                && previousWasActive
+                && IsCompletedStatus(currentStatus)
+                && !_completedNotifiedVmIds.Contains(vm.VmId))
+            {
+                await NotificationService.SendVmStoppedNotificationAsync(ResolveVmName(vm), vm.VmId);
+                _completedNotifiedVmIds.Add(vm.VmId);
+                _startedNotifiedVmIds.Remove(vm.VmId);
+            }
+        }
+    }
+
+    private static bool IsRunningLike(string status)
+    {
+        return status.Equals("Running", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Provisioning", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompletedStatus(string status)
+    {
+        return status.Equals("Stopped", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Failed", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("Error", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ResolveVmName(VirtualMachine vm)
+    {
+        return string.IsNullOrWhiteSpace(vm.Name) ? vm.VmId : vm.Name;
     }
 
     private void OnProviderSnapshot(QuerySnapshot snapshot)
@@ -305,7 +418,7 @@
             Os: FormatImage(vm.Image),
             Specs: $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
             Connection: FormatConnection(vm),
-            Cost: vm.CurrentSessionCost,
+            Cost: CalculateVmTotalCost(vm),
             Uptime: FormatUptime(vm.UptimeString),
             IsPaused: vm.IsPaused,
             ResumeSuccess: vm.ResumeSuccess,
@@ -322,14 +435,14 @@
         );
     }
 
-    private static StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
+    private StoppedVmTable.StoppedVm MapStopped(VirtualMachine vm) => new()
     {
         VmId = vm.VmId,
         Name = string.IsNullOrEmpty(vm.Name) ? vm.VmId : vm.Name,
         Os = FormatImage(vm.Image),
         Specs = $"{vm.CpuCores} vCPU / {vm.RamGB}GB RAM",
         IpAddress = FormatConnection(vm),
-        TotalCost = $"${vm.CurrentSessionCost:F2}",
+        TotalCost = FormatCurrency(CalculateVmTotalCost(vm)),
     };
 
     // ── Formatters ────────────────────────────────────────────────────────────
@@ -489,7 +602,6 @@
         return vmMigrationStatus ?? "pending";
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
     public async ValueTask DisposeAsync()
     {
         AuthState.OnChange -= OnAuthStateChanged;

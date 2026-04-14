@@ -8,14 +8,20 @@ namespace unicoreprovider.Services;
 
 public class DockerService : IDockerService, IDisposable
 {
+    private readonly ILogger<DockerService> _logger;
     private readonly string _relayAddr;
     private readonly int _relayServerPort;
     private readonly string _relayToken;
     private readonly INotificationService _notificationService;
     private readonly IServiceScopeFactory _scopeFactory;
 
-    public DockerService(IConfiguration config, INotificationService notificationService, IServiceScopeFactory scopeFactory)
+    public DockerService(
+        IConfiguration config,
+        INotificationService notificationService,
+        IServiceScopeFactory scopeFactory,
+        ILogger<DockerService> logger)
     {
+        _logger = logger;
         _relayAddr = config["FrpRelay:ServerAddr"] ?? "136.116.172.0";
         _relayServerPort = config.GetValue<int>("FrpRelay:ServerPort", 7000);
         _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
@@ -66,7 +72,8 @@ public class DockerService : IDockerService, IDisposable
     public async Task<(string ContainerId, string VolumeName)> StartContainerAsync(
         string vmId, string name, string image, int relayPort, int cpuCores, int ramGB,
         string? existingVolumeName = null, string? consumerUid = null,
-        int? volumeGb = null, int? serviceRelayPort = null, CancellationToken ct = default)
+        int? volumeGb = null, int? serviceRelayPort = null, string? providerUid = null,
+        CancellationToken ct = default)
     {
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
@@ -236,8 +243,26 @@ public class DockerService : IDockerService, IDisposable
 
         await client.Containers.StartContainerAsync(response.ID, new ContainerStartParameters());
 
-        // Notify the provider that a new VM is running
-        await _notificationService.SendVmStartedNotificationAsync(name, response.ID);
+        var canSendStartNotification = await IsNotificationEnabledAsync(
+            providerUid,
+            vmId,
+            p => p.NotifyVmStarted,
+            "vm-started");
+
+        if (canSendStartNotification)
+        {
+            _logger.LogInformation(
+                "Sending VM-started notification for VM {VmId} (container {ContainerId}).",
+                vmId,
+                response.ID);
+            await _notificationService.SendVmStartedNotificationAsync(name, response.ID);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Skipping VM-started notification for VM {VmId} due to provider preference.",
+                vmId);
+        }
 
         return (response.ID, volumeName);
     }
@@ -262,7 +287,8 @@ public class DockerService : IDockerService, IDisposable
         return null;
     }
 
-    public async Task StopContainerAsync(string containerId, string vmName, string? volumeName = null)
+    public async Task StopContainerAsync(string containerId, string vmName, string? volumeName = null,
+        string? vmId = null, string? providerUid = null)
     {
         var client = await GetClientAsync();
 
@@ -311,8 +337,100 @@ public class DockerService : IDockerService, IDisposable
             }
         }
 
-        // Notify the provider that a VM is stopping
-        await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
+        var canSendStoppedNotification = await IsNotificationEnabledAsync(
+            providerUid,
+            vmId,
+            p => p.NotifyVmCompleted,
+            "vm-completed");
+
+        if (canSendStoppedNotification)
+        {
+            _logger.LogInformation(
+                "Sending VM-completed notification for VM {VmId} (container {ContainerId}).",
+                vmId ?? "(unknown)",
+                containerId);
+            await _notificationService.SendVmStoppedNotificationAsync(vmName, containerId);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "Skipping VM-completed notification for VM {VmId} due to provider preference.",
+                vmId ?? "(unknown)");
+        }
+    }
+
+    private async Task<bool> IsNotificationEnabledAsync(
+        string? providerUid,
+        string? vmId,
+        Func<Provider, bool> selector,
+        string notificationKind)
+    {
+        try
+        {
+            var resolvedProviderUid = await ResolveProviderUidAsync(providerUid, vmId);
+
+            if (string.IsNullOrWhiteSpace(resolvedProviderUid))
+            {
+                _logger.LogWarning(
+                    "Could not resolve provider UID while checking {NotificationKind} notification for VM {VmId}; defaulting to disabled.",
+                    notificationKind,
+                    vmId ?? "(unknown)");
+                return false;
+            }
+
+            using var providerScope = _scopeFactory.CreateScope();
+            var providerService = providerScope.ServiceProvider.GetRequiredService<IProviderService>();
+            var provider = await providerService.GetByFirebaseUidAsync(resolvedProviderUid);
+
+            if (provider == null)
+            {
+                _logger.LogWarning(
+                    "Provider {ProviderUid} not found while checking {NotificationKind} preference; defaulting to enabled.",
+                    resolvedProviderUid,
+                    notificationKind);
+                return true;
+            }
+
+            var enabled = selector(provider);
+            _logger.LogInformation(
+                "Notification preference {NotificationKind} for provider {ProviderUid}: {Enabled}",
+                notificationKind,
+                resolvedProviderUid,
+                enabled);
+            return enabled;
+        }
+        catch (Exception ex)
+        {
+            // Fail closed so notification toggles are respected even if preference lookup fails.
+            _logger.LogWarning(
+                ex,
+                "Failed to evaluate {NotificationKind} preference for VM {VmId}; defaulting to disabled.",
+                notificationKind,
+                vmId ?? "(unknown)");
+            return false;
+        }
+    }
+
+    private async Task<string?> ResolveProviderUidAsync(string? providerUid, string? vmId)
+    {
+        if (!string.IsNullOrWhiteSpace(providerUid))
+            return providerUid;
+
+        if (!string.IsNullOrWhiteSpace(vmId))
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var vmService = scope.ServiceProvider.GetRequiredService<IVmService>();
+            var vm = await vmService.GetByIdAsync(vmId);
+            if (!string.IsNullOrWhiteSpace(vm?.ProviderId))
+                return vm.ProviderId;
+        }
+
+        using var authScope = _scopeFactory.CreateScope();
+        var authState = authScope.ServiceProvider.GetService<IAuthStateService>();
+        if (!string.IsNullOrWhiteSpace(authState?.FirebaseUid))
+            return authState.FirebaseUid;
+
+        return null;
     }
 
     public async Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId)

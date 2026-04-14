@@ -15,8 +15,7 @@
     </div>
 
     <div class="mt-2">
-        <h2 class="fw-bold mb-0"
-            style="font-size: 1.75rem; font-family: var(--uc-font-mono); color: @(IsOnline ? "var(--uc-green)" : "var(--uc-text-muted)"); text-shadow: @(IsOnline ? "0 0 10px rgba(0,230,118,0.4)" : "none");">
+        <h2 class="fw-bold mb-0 node-status-text @(IsOnline ? "is-online" : "is-offline")">
             @(IsOnline ? "ONLINE" : "OFFLINE")
         </h2>
     </div>
@@ -67,6 +66,31 @@
         transform: translateX(24px);
         background-color: var(--uc-green);
         box-shadow: 0 0 10px var(--uc-green);
+    }
+</style>
+
+<style>
+    .node-status-text {
+        font-size: 1.75rem;
+        font-family: var(--uc-font-mono);
+    }
+
+    .node-status-text.is-online {
+        color: #ffffff;
+        text-shadow: 0 0 10px rgba(0, 230, 118, 0.24);
+    }
+
+    .node-status-text.is-offline {
+        color: #a3a3a3;
+    }
+
+    body.light-mode .node-status-text.is-online {
+        color: #0f8f4f;
+        text-shadow: none;
+    }
+
+    body.light-mode .node-status-text.is-offline {
+        color: #64748b;
     }
 </style>
 

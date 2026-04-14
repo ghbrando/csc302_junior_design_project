@@ -54,6 +54,7 @@ builder.Services.AddScoped<IAuthStateService, AuthStateService>();
 
 // Configure HttpClient for API calls with BaseAddress and register service with it
 builder.Services.AddScoped<IConsumerVmService, ConsumerVmService>();
+builder.Services.AddSingleton<INotificationService, NotificationService>();
 
 builder.Services.AddHttpClient();   // For Firebase REST API calls
 builder.Services.AddControllers();  // Add API Controllers

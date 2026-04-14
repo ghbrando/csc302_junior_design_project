@@ -155,7 +155,7 @@ public class PauseResumeListenerService : IDisposable
         try
         {
             _logger.LogInformation("Stopping Docker container {ContainerId} for VM {VmId}", containerId, vmId);
-            await _dockerService.StopContainerAsync(containerId, vmName);
+            await _dockerService.StopContainerAsync(containerId, vmName, vmId: vmId);
         }
         catch (Exception ex)
         {

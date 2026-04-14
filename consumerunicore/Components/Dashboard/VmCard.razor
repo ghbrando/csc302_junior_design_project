@@ -232,7 +232,7 @@
     }
 
     .running-label {
-        color: var(--uc-green);
+        color: var(--uc-green-readable);
         font-weight: 700;
         letter-spacing: 0.06em;
         font-size: 0.7rem;
@@ -505,8 +505,8 @@
 
     .btn-ssh {
         background: rgba(59, 130, 246, .12);
-        color: white;
-        border: none;
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-blue) 40%, transparent);
         padding: 0.5rem 1.2rem;
         border-radius: var(--uc-radius);
         font-size: 0.8rem;
@@ -532,8 +532,8 @@
 
     .btn-pause {
         background: rgba(168, 85, 247, .12);
-        color: white;
-        border: none;
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-purple) 38%, transparent);
         padding: 0.5rem 1.2rem;
         border-radius: var(--uc-radius);
         font-size: 0.8rem;
@@ -548,14 +548,15 @@
         justify-content: center;
     }
 
-    .btn-pause:hover {
+    .btn-pause:hover:not(:disabled) {
         background: #a855f7;
+        color: #ffffff;
     }
 
     .btn-stop {
         background: rgba(239, 68, 68, .12);
-        color: white;
-        border: none;
+        color: var(--uc-text-primary);
+        border: 1px solid color-mix(in srgb, var(--uc-red) 38%, transparent);
         padding: 0.5rem 1.2rem;
         border-radius: var(--uc-radius);
         font-size: 0.8rem;
@@ -570,13 +571,48 @@
         justify-content: center;
     }
 
-    .btn-stop:hover {
+    .btn-stop:hover:not(:disabled) {
         background: #ef4444;
+        color: #ffffff;
     }
 
     .btn-stop:disabled {
         opacity: 0.5;
         cursor: not-allowed;
+    }
+
+    body.light-mode .btn-ssh,
+    body.light-mode .btn-pause,
+    body.light-mode .btn-stop {
+        color: #1f2937;
+        border-color: #cbd5e1;
+    }
+
+    body.light-mode .btn-ssh {
+        background: rgba(59, 130, 246, 0.14);
+    }
+
+    body.light-mode .btn-pause {
+        background: rgba(168, 85, 247, 0.14);
+    }
+
+    body.light-mode .btn-stop {
+        background: rgba(239, 68, 68, 0.14);
+    }
+
+    body.light-mode .btn-ssh:hover:not(:disabled) {
+        background: #2563eb;
+        color: #ffffff;
+    }
+
+    body.light-mode .btn-pause:hover:not(:disabled) {
+        background: #9333ea;
+        color: #ffffff;
+    }
+
+    body.light-mode .btn-stop:hover:not(:disabled) {
+        background: #dc2626;
+        color: #ffffff;
     }
 
     @@keyframes pulse {
