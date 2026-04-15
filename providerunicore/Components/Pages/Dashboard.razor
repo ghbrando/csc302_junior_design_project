@@ -447,7 +447,6 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private string _currencyCode = "USD";
     private bool _showOnboarding;
     private int _onboardingStep;
-    private FirestoreChangeListener? _migrationListener;
     private readonly HashSet<string> _processedMigrationIds = new();
     private readonly HashSet<string> _processedRequestIds = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _activeBackupVmIds = new();
