@@ -478,10 +478,54 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         _limitsLoaded = true;
         _specs = await MachineService.GetCachedSpecsAsync();
 
+        // If specs are missing or CPU count is zero (failed/missing detection), re-run live detection
+        // so AvailableCpuCores never evaluates to 0 and incorrectly rejects incoming VM requests.
+        if (_specs == null || _specs.CpuCores == 0)
+        {
+            try
+            {
+                _specs = await MachineService.GetSpecsAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[WARNING] Could not detect machine specs: {ex.Message}");
+            }
+        }
+
         if (_specs != null && _specs.RamGB > 0 && _ramLimit > _specs.RamGB)
         {
             _ramLimit = _specs.RamGB;
             await ProviderService.UpdateResourceLimitsAsync(_cpuLimit, _ramLimit, AuthState.FirebaseUid);
+        }
+
+        await ReconcileStaleVmsAsync(AuthState.FirebaseUid);
+    }
+
+    // On startup, find any VMs that Firestore still considers Running or Provisioning
+    // for this provider but whose Docker containers no longer exist (e.g. the provider
+    // was restarted while VMs were live). Mark those VMs as Failed so they are removed
+    // from the "live" list and the snapshot scheduler stops attempting them.
+    private async Task ReconcileStaleVmsAsync(string? providerId)
+    {
+        if (string.IsNullOrWhiteSpace(providerId)) return;
+        try
+        {
+            var vms = await VmService.GetVmsByProviderIdAsync(providerId);
+            foreach (var vm in vms)
+            {
+                if (vm.Status is not ("Running" or "Provisioning")) continue;
+                if (string.IsNullOrWhiteSpace(vm.ContainerId)) continue;
+
+                if (!await DockerService.ContainerExistsAsync(vm.ContainerId))
+                {
+                    Console.WriteLine($"[Reconcile] Container for VM {vm.VmId} not found; marking as Failed.");
+                    await VmService.UpdateVmStatusAsync(vm.VmId, "Failed");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Reconcile] Startup reconciliation failed: {ex.Message}");
         }
     }
 
@@ -707,7 +751,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             };
 
             await VmService.CreateVmAsync(vm);
-            ProvisioningService.StartProvisioning(vmId, containerId, relayPort, startedAt);
+            ProvisioningService.StartProvisioning(vmId, containerId, relayPort, startedAt, sshPort);
 
             Console.WriteLine($"[DEBUG] Request {request.RequestId} completed successfully with VM {vmId}");
             await docRef.UpdateAsync(new Dictionary<string, object>

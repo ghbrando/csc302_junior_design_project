@@ -158,12 +158,15 @@ public class DockerService : IDockerService, IDisposable
 
         // Writes frpc.toml line by line using echo, then starts frpc in the background.
         // Wrapped in () || true so that SSH still starts even if the relay setup fails.
+        // loginFailExit = false tells frpc to keep retrying if the initial login fails
+        // (e.g. token mismatch, relay temporarily unavailable) instead of exiting immediately.
         var frpSetup =
             $"(curl -sL -o {frpTar} {frpUrl} && " +
             $"tar -xzf {frpTar} -C /tmp && " +
             $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
             $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
             $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+            $"echo 'loginFailExit = false' >> {frpCfg} && " +
             $"echo '' >> {frpCfg} && " +
             $"echo '[[proxies]]' >> {frpCfg} && " +
             $"echo 'name = \"{name}\"' >> {frpCfg} && " +
@@ -182,6 +185,7 @@ public class DockerService : IDockerService, IDisposable
                 $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
                 $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
                 $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+                $"echo 'loginFailExit = false' >> {frpCfg} && " +
                 $"echo '' >> {frpCfg} && " +
                 $"echo '[[proxies]]' >> {frpCfg} && " +
                 $"echo 'name = \"{name}\"' >> {frpCfg} && " +
@@ -852,6 +856,20 @@ public class DockerService : IDockerService, IDisposable
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "[Security] Non-fatal: could not clean up consumer network after container {Id}", removedContainerId);
+        }
+    }
+
+    public async Task<bool> ContainerExistsAsync(string containerId, CancellationToken ct = default)
+    {
+        try
+        {
+            var client = await GetClientAsync();
+            await client.Containers.InspectContainerAsync(containerId, ct);
+            return true;
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
         }
     }
 

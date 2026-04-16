@@ -254,7 +254,7 @@ public class MigrationService : IMigrationService
 
             // ── Step 10: Wire new VM into monitoring ───────────────────────────
             _logger.LogInformation("[Migration] Step 10 – starting monitor for new VM {VmId}", newVmId);
-            _provisioningService.StartProvisioning(newVmId, containerId, relayPort, startedAt);
+            _provisioningService.StartProvisioning(newVmId, containerId, relayPort, startedAt, sshPort);
 
             // ── Step 11: Mark request as completed ────────────────────────────
             _logger.LogInformation("[Migration] Step 11 – migration {Id} completed. New VM: {NewVmId}",
