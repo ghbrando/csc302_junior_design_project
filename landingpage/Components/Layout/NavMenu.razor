@@ -3,9 +3,14 @@
         <img src="unicore_icon.png" alt="UniCore logo" class="brand-icon" />
         <span class="brand-name">UniCore</span>
     </a>
-    <div class="nav-links">
-        <a href="/docs">Docs</a>
-        <a href="/about">About</a>
-        <a href="https://github.com/ghbrando/csc302_junior_design_project" target="_blank">GitHub</a>
+    <button type="button" class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="primary-nav" onclick="window.toggleNav(this)">
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+        <span class="nav-toggle-bar"></span>
+    </button>
+    <div id="primary-nav" class="nav-links">
+        <a href="/docs" onclick="window.closeNav()">Docs</a>
+        <a href="/about" onclick="window.closeNav()">About</a>
+        <a href="https://github.com/ghbrando/csc302_junior_design_project" target="_blank" onclick="window.closeNav()">GitHub</a>
     </div>
 </nav>
