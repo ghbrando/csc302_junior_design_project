@@ -1,0 +1,12 @@
+**/bin
+**/obj
+**/.vs
+**/.vscode
+**/.idea
+**/node_modules
+**/.git
+**/.github
+**/*.md
+**/.DS_Store
+**/Thumbs.db
+**/figma design
