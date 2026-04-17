@@ -436,6 +436,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private VirtualMachine? _migrateVm = null;
     private string? _migrateRequestId = null;
     private FirestoreChangeListener? _migrationListener;
+    private FirestoreChangeListener? _sourceMigrationListener;
 
     private bool _isStopping = false;
     private string? _stopError = null;
@@ -447,6 +448,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     private string _currencyCode = "USD";
     private bool _showOnboarding;
     private int _onboardingStep;
+    private readonly HashSet<string> _processedSourceMigrationIds = new();
     private readonly HashSet<string> _processedMigrationIds = new();
     private readonly HashSet<string> _processedRequestIds = new();
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, bool> _activeBackupVmIds = new();
@@ -622,7 +624,26 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             Console.WriteLine($"[ERROR] Failed to start request listener: {ex.Message}");
         }
 
-        // Migration listener: pick up pending migration requests targeting this provider
+        // Source migration listener: pick up pending requests where THIS provider
+        // is the source — snapshot, back up, stop the old container, then hand off.
+        try
+        {
+            if (_sourceMigrationListener != null)
+                await _sourceMigrationListener.StopAsync();
+
+            _sourceMigrationListener = FirestoreDb
+                .Collection("vm_migration_requests")
+                .WhereEqualTo("source_provider_uid", uid)
+                .WhereEqualTo("status", "pending")
+                .Listen(OnSourceMigrationSnapshot);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[ERROR] Failed to start source migration listener: {ex.Message}");
+        }
+
+        // Target migration listener: pick up requests that are ready_for_restore
+        // (source has finished snapshot + backup) where THIS provider is the target.
         try
         {
             if (_migrationListener != null)
@@ -631,7 +652,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
             _migrationListener = FirestoreDb
                 .Collection("vm_migration_requests")
                 .WhereEqualTo("target_provider_uid", uid)
-                .WhereEqualTo("status", "pending")
+                .WhereEqualTo("status", "ready_for_restore")
                 .Listen(OnMigrationSnapshot);
         }
         catch (Exception ex)
@@ -773,6 +794,19 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
     }
 
     // ── Migration request processing ──────────────────────────────────────────
+
+    private void OnSourceMigrationSnapshot(QuerySnapshot snapshot)
+    {
+        foreach (var doc in snapshot.Documents)
+        {
+            var req = doc.ConvertTo<VmMigrationRequest>();
+            if (_processedSourceMigrationIds.Add(req.MigrationRequestId) &&
+                !MigrationService.IsMigrationInProgress(req.MigrationRequestId))
+            {
+                _ = InvokeAsync(() => MigrationService.PrepareSourceForMigrationAsync(req));
+            }
+        }
+    }
 
     private void OnMigrationSnapshot(QuerySnapshot snapshot)
     {
@@ -1010,6 +1044,7 @@ new("Ubuntu 24.04 LTS", "ubuntu:24.04"),
         _ = _vmListener?.StopAsync();
         _ = _providerListener?.StopAsync();
         _ = _requestListener?.StopAsync();
+        _ = _sourceMigrationListener?.StopAsync();
         _ = _migrationListener?.StopAsync();
         _ = PauseResumeListenerService.StopListening();
         lock (_saveLock)
