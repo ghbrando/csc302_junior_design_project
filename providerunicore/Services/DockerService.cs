@@ -244,8 +244,8 @@ public class DockerService : IDockerService, IDisposable
         var pythonScriptUnix = pythonScript.Replace("\r\n", "\n");
 
         var gcsSetup =
-            "apt-get install -y cron curl python3-pip > /dev/null 2>&1 && " +
-            "pip3 install --quiet google-cloud-storage > /dev/null 2>&1 && " +
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true install -y cron curl python3-pip && " +
+            "pip3 install google-cloud-storage && " +
             "mkdir -p /var/log/unicore && " +
             $"cat > /usr/local/bin/unicore-backup.py << 'ENDPY'\n{pythonScriptUnix}ENDPY\n" +
             "chmod 755 /usr/local/bin/unicore-backup.py && " +
@@ -257,7 +257,11 @@ public class DockerService : IDockerService, IDisposable
         {
             "/bin/sh",
             "-c",
-            "apt-get update && apt-get install -y openssh-server curl sudo > /dev/null 2>&1 && " +
+            // ForceIPv4 + retries: Canonical mirrors intermittently drop connections
+            // over IPv6 / NAT'd Docker bridges on Windows; without this, apt-get
+            // update fails silently and sshd never starts.
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update && " +
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true install -y openssh-server curl sudo && " +
             "mkdir -p /run/sshd && " +
             "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
             "echo 'consumer:consumer123' | chpasswd && " +
@@ -270,11 +274,12 @@ public class DockerService : IDockerService, IDisposable
             "/usr/sbin/sshd -D"
         };
 
-        // Ensure an isolated bridge network exists for this consumer.
-        // Containers from different consumers cannot reach each other at
-        // the network layer even if they share the same provider host.
-        var consumerNetworkName = $"unicore-net-{(string.IsNullOrWhiteSpace(consumerUid) ? "shared" : consumerUid)}";
-        await EnsureConsumerNetworkAsync(client, consumerNetworkName);
+        // Containers use Docker's default bridge. Custom per-consumer bridges were
+        // tried for network-layer isolation between consumers, but Docker Desktop on
+        // Windows (WSL2) doesn't fully wire up MASQUERADE for custom bridges, causing
+        // egress to parts of Canonical's archive CDN to fail and breaking apt-get at
+        // VM-start time. Isolation against inter-consumer traffic belongs in the
+        // pre-baked image / host firewall layer instead.
 
         var response = await client.Containers.CreateContainerAsync(new CreateContainerParameters
         {
@@ -302,7 +307,7 @@ public class DockerService : IDockerService, IDisposable
                 Memory       = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap   = (long)(ramGB * 1024L * 1024L * 1024L),
                 PidsLimit    = 512,
-                NetworkMode  = consumerNetworkName,
+                NetworkMode  = "bridge",
 
                 // Drop capabilities with known escape or host-attack potential.
                 // Normal consumer workloads (SSH, apt, web servers) are unaffected.
