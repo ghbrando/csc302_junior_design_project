@@ -148,7 +148,9 @@
     }
 </style>
 
-<ProviderOnboardingModal IsVisible="_showOnboarding" InitialStep="_onboardingStep" FirebaseUid="@AuthState.FirebaseUid"
+<ProviderOnboardingModal IsVisible="_showOnboarding"
+                         InitialStep="_onboardingStep"
+                         FirebaseUid="@AuthState.FirebaseUid"
                          OnComplete="@(() => _showOnboarding = false)" />
 
 <div class="container-fluid px-4 py-3">
