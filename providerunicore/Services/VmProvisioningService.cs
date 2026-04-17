@@ -9,13 +9,12 @@ public class VmProvisioningService : IHostedService, IDisposable
     private readonly ILogger<VmProvisioningService> _logger;
     private readonly ContainerMonitorService _monitorService;
     private readonly IDockerService _dockerService;
-    private readonly string _relayIp;
     private readonly int _timeoutSeconds;
     private readonly int _pollIntervalSeconds;
     private readonly int _connectTimeoutSeconds;
 
-    // vmId → (ContainerId, RelayPort, StartedAt)
-    private readonly ConcurrentDictionary<string, (string ContainerId, int RelayPort, DateTime StartedAt)> _pending = new();
+    // vmId → (ContainerId, RelayPort, SshPort, StartedAt)
+    private readonly ConcurrentDictionary<string, (string ContainerId, int RelayPort, int? SshPort, DateTime StartedAt)> _pending = new();
 
     private Timer? _timer;
 
@@ -30,16 +29,16 @@ public class VmProvisioningService : IHostedService, IDisposable
         _logger = logger;
         _monitorService = monitorService;
         _dockerService = dockerService;
-        _relayIp = configuration["FrpRelay:ServerAddr"] ?? "localhost";
         _timeoutSeconds = configuration.GetValue<int>("Provisioning:TimeoutSeconds", 120);
         _pollIntervalSeconds = configuration.GetValue<int>("Provisioning:PollIntervalSeconds", 5);
         _connectTimeoutSeconds = configuration.GetValue<int>("Provisioning:ConnectTimeoutSeconds", 3);
     }
 
-    public void StartProvisioning(string vmId, string containerId, int relayPort, DateTime startedAt)
+    public void StartProvisioning(string vmId, string containerId, int relayPort, DateTime startedAt, int? sshPort = null)
     {
-        if (_pending.TryAdd(vmId, (containerId, relayPort, startedAt)))
-            _logger.LogInformation("Provisioning started for VM {VmId} on relay port {Port}", vmId, relayPort);
+        if (_pending.TryAdd(vmId, (containerId, relayPort, sshPort, startedAt)))
+            _logger.LogInformation("Provisioning started for VM {VmId} on relay port {Port} (local SSH port {SshPort})",
+                vmId, relayPort, sshPort?.ToString() ?? "unknown");
     }
 
     public Task StartAsync(CancellationToken cancellationToken)
@@ -61,7 +60,7 @@ public class VmProvisioningService : IHostedService, IDisposable
 
     private async Task PollAllAsync()
     {
-        foreach (var (vmId, (containerId, relayPort, startedAt)) in _pending.ToList())
+        foreach (var (vmId, (containerId, relayPort, sshPort, startedAt)) in _pending.ToList())
         {
             try
             {
@@ -75,7 +74,7 @@ public class VmProvisioningService : IHostedService, IDisposable
                     // Stop and remove the container from Docker
                     try
                     {
-                        await _dockerService.StopContainerAsync(containerId, vmId);
+                        await _dockerService.StopContainerAsync(containerId, vmId, vmId: vmId);
                         _monitorService.StopMonitoring(vmId);
                     }
                     catch (Exception ex)
@@ -87,12 +86,24 @@ public class VmProvisioningService : IHostedService, IDisposable
                     continue;
                 }
 
-                var sshReady = await TcpProbeAsync(_relayIp, relayPort);
+                // Probe the local Docker-mapped SSH port to determine if the container's
+                // SSH daemon is up. This is more reliable than checking the relay tunnel
+                // because it only depends on Docker, not the external FRP relay. The relay
+                // client (frpc) retries in the background and will establish the tunnel
+                // once the relay server is reachable.
+                var probePort = sshPort ?? await LookupSshPortAsync(containerId);
+                if (probePort == null)
+                {
+                    _logger.LogDebug("VM {VmId} SSH port not yet mapped (elapsed {Elapsed:F0}s)", vmId, elapsed.TotalSeconds);
+                    continue;
+                }
+
+                var sshReady = await TcpProbeAsync("localhost", probePort.Value);
 
                 if (sshReady)
                 {
                     _pending.TryRemove(vmId, out _);
-                    _logger.LogInformation("VM {VmId} is ready; promoting to Running", vmId);
+                    _logger.LogInformation("VM {VmId} is ready (local SSH port {Port}); promoting to Running", vmId, probePort.Value);
                     await UpdateStatusAsync(vmId, "Running");
                     _monitorService.StartMonitoring(vmId, containerId, startedAt);
                 }
@@ -108,6 +119,27 @@ public class VmProvisioningService : IHostedService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Falls back to querying Docker for the container's mapped SSH port when
+    /// the caller didn't supply one (e.g. older code paths).
+    /// </summary>
+    private async Task<int?> LookupSshPortAsync(string containerId)
+    {
+        try
+        {
+            return await _dockerService.GetContainerSshPortAsync(containerId);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Connects to the given host:port and waits for an SSH banner (a line starting
+    /// with "SSH-"). A bare TCP accept (Docker port mapping) is NOT enough — sshd
+    /// must be fully started and sending its identification string.
+    /// </summary>
     private async Task<bool> TcpProbeAsync(string host, int port)
     {
         using var client = new TcpClient();
@@ -115,7 +147,31 @@ public class VmProvisioningService : IHostedService, IDisposable
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_connectTimeoutSeconds));
             await client.ConnectAsync(host, port, cts.Token);
-            return true;
+
+            var stream = client.GetStream();
+            var buffer = new byte[256];
+            var totalRead = 0;
+
+            // Read until we see a newline (end of banner) or fill the buffer.
+            while (totalRead < buffer.Length)
+            {
+                var bytesRead = await stream.ReadAsync(
+                    buffer.AsMemory(totalRead, buffer.Length - totalRead), cts.Token);
+
+                if (bytesRead == 0)
+                    return false; // Connection closed before sending banner
+
+                totalRead += bytesRead;
+
+                // Check if we've received a complete line
+                var text = System.Text.Encoding.ASCII.GetString(buffer, 0, totalRead);
+                if (text.Contains('\n'))
+                    return text.StartsWith("SSH-", StringComparison.Ordinal);
+            }
+
+            // Buffer full without newline — check what we got
+            var partial = System.Text.Encoding.ASCII.GetString(buffer, 0, totalRead);
+            return partial.StartsWith("SSH-", StringComparison.Ordinal);
         }
         catch
         {

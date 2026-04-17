@@ -141,49 +141,66 @@
 
         _vmName = info!.VmName;
 
-        var attempts = 0;
-        var maxAttempts = 3;
-        while (attempts < maxAttempts)
+        // Try primary endpoint (relay), then fallback (local Docker SSH port).
+        var endpoints = new List<(string Host, int Port)> { (info.Host, info.Port) };
+        if (info.FallbackHost != null && info.FallbackPort.HasValue)
+            endpoints.Add((info.FallbackHost, info.FallbackPort.Value));
+
+        foreach (var (host, port) in endpoints)
         {
-            attempts++;
-            _statusText = attempts == 1 ? "Connecting..." : $"Retrying ({attempts}/{maxAttempts})...";
-            StateHasChanged();
-
-            try
+            var attempts = 0;
+            var maxAttempts = endpoints.Count > 1 ? 2 : 3;
+            while (attempts < maxAttempts)
             {
-                var connInfo = new Renci.SshNet.ConnectionInfo(
-                    info.Host, info.Port, info.Username, info.AuthMethods)
-                {
-                    Timeout = TimeSpan.FromSeconds(8),
-                };
-
-                _ssh = new SshClient(connInfo);
-                _ssh.Connect();
-
-                // Open a PTY-backed shell stream (xterm-256color so ANSI colours work).
-                _shell = _ssh.CreateShellStream("xterm-256color", 80, 24, 0, 0, 4096);
-
-                // Subscribe before any data can arrive so the MOTD is never missed.
-                // The handler just enqueues — no blocking, safe to call from SSH thread.
-                _shell.DataReceived += (_, e) => _outputChannel.Writer.TryWrite(e.Data);
-
-                _connected = true;
-                StateHasChanged();   // Causes re-render → terminal div appears → OnAfterRenderAsync runs next
-                return;
-            }
-            catch (Exception ex) when (attempts < maxAttempts && ShouldRetry(ex))
-            {
-                _ssh?.Dispose();
-                _ssh = null;
-                await Task.Delay(1500);
-            }
-            catch (Exception ex)
-            {
-                _ssh?.Dispose();
-                _ssh = null;
-                _error = $"SSH connection failed: {ex.Message}";
+                attempts++;
+                _statusText = host == info.Host
+                    ? (attempts == 1 ? "Connecting..." : $"Retrying ({attempts}/{maxAttempts})...")
+                    : (attempts == 1 ? "Trying direct connection..." : $"Retrying direct ({attempts}/{maxAttempts})...");
                 StateHasChanged();
-                return;
+
+                try
+                {
+                    var connInfo = new Renci.SshNet.ConnectionInfo(
+                        host, port, info.Username, info.AuthMethods)
+                    {
+                        Timeout = TimeSpan.FromSeconds(8),
+                    };
+
+                    _ssh = new SshClient(connInfo);
+                    _ssh.Connect();
+
+                    // Open a PTY-backed shell stream (xterm-256color so ANSI colours work).
+                    _shell = _ssh.CreateShellStream("xterm-256color", 80, 24, 0, 0, 4096);
+
+                    // Subscribe before any data can arrive so the MOTD is never missed.
+                    // The handler just enqueues — no blocking, safe to call from SSH thread.
+                    _shell.DataReceived += (_, e) => _outputChannel.Writer.TryWrite(e.Data);
+
+                    _connected = true;
+                    StateHasChanged();   // Causes re-render → terminal div appears → OnAfterRenderAsync runs next
+                    return;
+                }
+                catch (Exception ex) when (attempts < maxAttempts && ShouldRetry(ex))
+                {
+                    _ssh?.Dispose();
+                    _ssh = null;
+                    await Task.Delay(1500);
+                }
+                catch (Exception) when (endpoints.IndexOf((host, port)) < endpoints.Count - 1)
+                {
+                    // Primary failed — fall through to try the next endpoint
+                    _ssh?.Dispose();
+                    _ssh = null;
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _ssh?.Dispose();
+                    _ssh = null;
+                    _error = $"SSH connection failed: {ex.Message}";
+                    StateHasChanged();
+                    return;
+                }
             }
         }
 

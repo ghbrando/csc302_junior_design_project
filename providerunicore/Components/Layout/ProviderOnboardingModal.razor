@@ -1,4 +1,5 @@
 @inject IProviderService ProviderService
+@inject IMachineService MachineService
 
 @if (IsVisible)
 {
@@ -84,11 +85,83 @@
                     </div>
                 }
 
+                @if (_step == 3)
+                {
+                    <div class="ob-question">
+                        <div class="ob-question-label">
+                            <i class="bi bi-cpu"></i> Hardware Detection
+                        </div>
+                        <p class="ob-question-hint">Scan this machine so consumers see accurate CPU, RAM, and storage specs in the marketplace.</p>
+
+                        @if (_specState == SpecState.Idle)
+                        {
+                            <div class="ob-spec-prompt">
+                                <i class="bi bi-hdd-rack ob-spec-big-icon"></i>
+                                <p class="ob-spec-prompt-text">Ready to scan your hardware.</p>
+                                <button class="ob-btn ob-btn--scan" @onclick="DetectSpecs">
+                                    <i class="bi bi-search me-1"></i> Detect Hardware
+                                </button>
+                            </div>
+                        }
+                        else if (_specState == SpecState.Detecting)
+                        {
+                            <div class="ob-spec-prompt">
+                                <span class="spinner-border ob-spec-spinner" role="status"></span>
+                                <p class="ob-spec-prompt-text">Scanning hardware&hellip;</p>
+                            </div>
+                        }
+                        else if (_specState == SpecState.Error)
+                        {
+                            <div class="ob-spec-prompt">
+                                <i class="bi bi-exclamation-triangle ob-spec-big-icon ob-spec-big-icon--error"></i>
+                                <p class="ob-spec-prompt-text ob-spec-error-text">Detection failed. You can retry or finish and detect later from Settings.</p>
+                                <button class="ob-btn ob-btn--scan" @onclick="DetectSpecs">
+                                    <i class="bi bi-arrow-clockwise me-1"></i> Retry
+                                </button>
+                            </div>
+                        }
+                        else if (_specState == SpecState.Done && _detectedSpecs != null)
+                        {
+                            <div class="ob-spec-grid">
+                                <div class="ob-spec-card">
+                                    <i class="bi bi-cpu ob-spec-card-icon" style="color:#3b82f6;"></i>
+                                    <div class="ob-spec-card-body">
+                                        <span class="ob-spec-card-label">CPU</span>
+                                        <span class="ob-spec-card-value">@_detectedSpecs.CpuName</span>
+                                        <span class="ob-spec-card-sub">@_detectedSpecs.CpuCores cores &middot; @_detectedSpecs.CpuThreads threads &middot; @_detectedSpecs.CpuClockSpeedGHz GHz</span>
+                                    </div>
+                                </div>
+                                <div class="ob-spec-card">
+                                    <i class="bi bi-hdd-rack ob-spec-card-icon" style="color:#a855f7;"></i>
+                                    <div class="ob-spec-card-body">
+                                        <span class="ob-spec-card-label">RAM</span>
+                                        <span class="ob-spec-card-value">@_detectedSpecs.RamGB GB</span>
+                                    </div>
+                                </div>
+                                <div class="ob-spec-card">
+                                    <i class="bi bi-device-hdd ob-spec-card-icon" style="color:#f59e0b;"></i>
+                                    <div class="ob-spec-card-body">
+                                        <span class="ob-spec-card-label">Storage</span>
+                                        <span class="ob-spec-card-value">@_detectedSpecs.DiskGB GB</span>
+                                    </div>
+                                </div>
+                                <div class="ob-spec-card">
+                                    <i class="bi bi-window ob-spec-card-icon" style="color:#00e5ff;"></i>
+                                    <div class="ob-spec-card-body">
+                                        <span class="ob-spec-card-label">OS</span>
+                                        <span class="ob-spec-card-value">@_detectedSpecs.OsName</span>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
             </div>
 
             <!-- Footer -->
             <div class="ob-footer">
-                <button class="ob-btn ob-btn--back" @onclick="GoBack" disabled="@(_step == 0)">
+                <button class="ob-btn ob-btn--back" @onclick="GoBack" disabled="@(_step == 0 || _specState == SpecState.Detecting)">
                     ← Back
                 </button>
                 <div class="ob-step-dots">
@@ -99,7 +172,7 @@
                     }
                 </div>
                 <button class="ob-btn ob-btn--next @(CanAdvance ? "" : "ob-btn--locked")"
-                        disabled="@(!CanAdvance || _saving)"
+                        disabled="@(!CanAdvance || _saving || _specState == SpecState.Detecting)"
                         @onclick="GoNext">
                     @if (_saving)
                     {
@@ -114,7 +187,9 @@
 }
 
 @code {
-    private const int TotalSteps = 3;
+    private const int TotalSteps = 4;
+
+    private enum SpecState { Idle, Detecting, Done, Error }
 
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public int InitialStep { get; set; } = 0;
@@ -128,11 +203,16 @@
     private string _timeZone = "UTC-08:00";
     private string _currency = "USD";
 
+    private SpecState _specState = SpecState.Idle;
+    private MachineSpecs? _detectedSpecs;
+
     private bool CanAdvance => _step switch
     {
         0 => !string.IsNullOrEmpty(_region),
         1 => !string.IsNullOrEmpty(_timeZone),
         2 => !string.IsNullOrEmpty(_currency),
+        // Step 3: allow finishing whether detection succeeded or errored (skip is acceptable)
+        3 => _specState is SpecState.Done or SpecState.Error or SpecState.Idle,
         _ => false
     };
 
@@ -153,8 +233,10 @@
             else if (_step == 1)
                 await ProviderService.UpdateOnboardingAsync(FirebaseUid, 2, timeZone: _timeZone);
             else if (_step == 2)
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, 3, currency: _currency);
+            else if (_step == 3)
             {
-                await ProviderService.UpdateOnboardingAsync(FirebaseUid, TotalSteps, currency: _currency);
+                await ProviderService.UpdateOnboardingAsync(FirebaseUid, TotalSteps);
                 await OnComplete.InvokeAsync();
                 return;
             }
@@ -166,9 +248,23 @@
         }
     }
 
+    private async Task DetectSpecs()
+    {
+        _specState = SpecState.Detecting;
+        try
+        {
+            _detectedSpecs = await MachineService.GetSpecsAsync();
+            _specState = SpecState.Done;
+        }
+        catch
+        {
+            _specState = SpecState.Error;
+        }
+    }
+
     private void GoBack()
     {
-        if (_step > 0) _step--;
+        if (_step > 0 && _specState != SpecState.Detecting) _step--;
     }
 
     // ── Data ──────────────────────────────────────────────────
@@ -376,5 +472,64 @@
     .ob-btn--locked {
         background: transparent; border-color: var(--ob-border);
         color: var(--ob-muted); cursor: not-allowed; box-shadow: none;
+    }
+
+    /* ── Spec detection step ──────────────────────────────── */
+    .ob-spec-prompt {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 16px; padding: 32px 0;
+    }
+    .ob-spec-big-icon {
+        font-size: 2.8rem; color: var(--ob-muted);
+    }
+    .ob-spec-big-icon--error { color: #f87171; }
+    .ob-spec-prompt-text {
+        font-size: .8rem; color: var(--ob-muted); text-align: center; margin: 0;
+    }
+    .ob-spec-error-text { color: #f87171; }
+    .ob-spec-spinner {
+        width: 2.4rem; height: 2.4rem;
+        color: var(--ob-green);
+    }
+    .ob-btn--scan {
+        padding: 9px 24px; border-radius: 5px;
+        font-family: var(--ob-font); font-size: .72rem;
+        font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+        cursor: pointer;
+        background: transparent;
+        border: 1px solid rgba(0,229,160,.5);
+        color: var(--ob-green);
+        transition: all .2s;
+    }
+    .ob-btn--scan:hover {
+        background: rgba(0,229,160,.08);
+        border-color: var(--ob-green);
+        box-shadow: 0 0 12px rgba(0,229,160,.2);
+    }
+
+    .ob-spec-grid {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px;
+    }
+    .ob-spec-card {
+        display: flex; align-items: flex-start; gap: 12px;
+        background: var(--ob-card);
+        border: 1px solid var(--ob-border);
+        border-radius: var(--ob-radius);
+        padding: 14px;
+    }
+    .ob-spec-card-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 2px; }
+    .ob-spec-card-body {
+        display: flex; flex-direction: column; gap: 2px; min-width: 0;
+    }
+    .ob-spec-card-label {
+        font-size: .6rem; color: var(--ob-muted);
+        text-transform: uppercase; letter-spacing: .12em;
+    }
+    .ob-spec-card-value {
+        font-size: .8rem; font-weight: 600; color: var(--ob-text);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ob-spec-card-sub {
+        font-size: .65rem; color: var(--ob-muted);
     }
 </style>

@@ -3,9 +3,17 @@ namespace unicoreprovider.Services;
 public interface IMigrationService
 {
     /// <summary>
-    /// Executes the full 11-step migration state machine for the given request.
-    /// Updates VmMigrationRequest and VirtualMachine documents throughout.
-    /// On failure, cleans up any partial state and marks the request as "failed".
+    /// Source-side preparation: snapshots the running container, backs up user data
+    /// to GCS, stops the old container, then sets the request status to
+    /// "ready_for_restore" so the target provider can pick it up.
+    /// Must run on the source provider (which has local Docker access to the container).
+    /// </summary>
+    Task PrepareSourceForMigrationAsync(VmMigrationRequest request);
+
+    /// <summary>
+    /// Target-side restore: pulls the snapshot image, creates a new volume, restores
+    /// user data from GCS, starts a new container, and wires up monitoring.
+    /// Expects the request status to already be "ready_for_restore".
     /// </summary>
     Task ProcessMigrationRequestAsync(VmMigrationRequest request);
 
