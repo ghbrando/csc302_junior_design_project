@@ -6,6 +6,9 @@ LABEL description="Base image for UniCore consumer VMs with pre-installed tools"
 # Avoid interactive prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
 
+# FRP version baked into the image — bump here when upgrading.
+ARG FRP_VERSION=0.61.0
+
 # Install required system packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
@@ -19,7 +22,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     apt-transport-https \
     procps \
+    python3-pip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install google-cloud-storage Python package for backup sync
+RUN pip3 install --no-cache-dir --break-system-packages google-cloud-storage
 
 # Install Google Cloud CLI
 RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
@@ -28,6 +35,14 @@ RUN curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
     > /etc/apt/sources.list.d/google-cloud-sdk.list \
     && apt-get update && apt-get install -y --no-install-recommends google-cloud-cli \
     && rm -rf /var/lib/apt/lists/*
+
+# Download and install FRP client binary
+RUN curl -sL -o /tmp/frp.tar.gz \
+    "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_amd64.tar.gz" \
+    && tar -xzf /tmp/frp.tar.gz -C /tmp \
+    && mv /tmp/frp_${FRP_VERSION}_linux_amd64/frpc /usr/local/bin/frpc \
+    && chmod 755 /usr/local/bin/frpc \
+    && rm -rf /tmp/frp*
 
 # Configure SSH
 RUN mkdir -p /var/run/sshd \

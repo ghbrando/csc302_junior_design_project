@@ -143,132 +143,31 @@ public class DockerService : IDockerService, IDisposable
             // Volume already exists, which is fine
         }
 
-        // Load GCP VM agent key from environment (for container GCS sync)
+        // All heavy dependencies (openssh, FRP binary, python3-pip, google-cloud-storage)
+        // are pre-baked into the container image. The startup script reads these env vars
+        // to configure the dynamic, per-container bits (relay, credentials, backups).
         var gcpKeyJson = Environment.GetEnvironmentVariable("GCP_VM_AGENT_KEY") ?? "";
         var gcpKeyBase64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(gcpKeyJson));
-
-        // Determine the consumer context for GCS path
         var consumerContext = consumerUid ?? "shared";
+        var gcsPath = $"consumers/{consumerContext}/{vmId}/home/";
 
-        const string frpVersion = "0.61.0";
-        var frpTar = $"/tmp/frp_{frpVersion}_linux_amd64.tar.gz";
-        var frpBin = $"/tmp/frp_{frpVersion}_linux_amd64/frpc";
-        var frpCfg = "/tmp/frpc.toml";
-        var frpUrl = $"https://github.com/fatedier/frp/releases/download/v{frpVersion}/frp_{frpVersion}_linux_amd64.tar.gz";
+        var envVars = new List<string>
+        {
+            $"CONSUMER_PASSWORD=consumer123",
+            $"FRP_SERVER_ADDR={_relayAddr}",
+            $"FRP_SERVER_PORT={_relayServerPort}",
+            $"FRP_AUTH_TOKEN={_relayToken}",
+            $"FRP_PROXY_NAME={name}",
+            $"FRP_REMOTE_PORT={relayPort}",
+            $"GCP_KEY_BASE64={gcpKeyBase64}",
+            $"GCS_PATH={gcsPath}",
+        };
 
-        // Writes frpc.toml line by line using echo, then starts frpc in the background.
-        // Wrapped in () || true so that SSH still starts even if the relay setup fails.
-        // loginFailExit = false tells frpc to keep retrying if the initial login fails
-        // (e.g. token mismatch, relay temporarily unavailable) instead of exiting immediately.
-        var frpSetup =
-            $"(curl -sL -o {frpTar} {frpUrl} && " +
-            $"tar -xzf {frpTar} -C /tmp && " +
-            $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
-            $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
-            $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
-            $"echo 'loginFailExit = false' >> {frpCfg} && " +
-            $"echo '' >> {frpCfg} && " +
-            $"echo '[[proxies]]' >> {frpCfg} && " +
-            $"echo 'name = \"{name}\"' >> {frpCfg} && " +
-            $"echo 'type = \"tcp\"' >> {frpCfg} && " +
-            $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
-            $"echo 'localPort = 22' >> {frpCfg} && " +
-            $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
-            $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
-
-        // Append a second [[proxies]] block for the HTTP service tunnel when a service relay port is provided
         if (serviceRelayPort.HasValue)
         {
-            frpSetup =
-                $"(curl -sL -o {frpTar} {frpUrl} && " +
-                $"tar -xzf {frpTar} -C /tmp && " +
-                $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
-                $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
-                $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
-                $"echo 'loginFailExit = false' >> {frpCfg} && " +
-                $"echo '' >> {frpCfg} && " +
-                $"echo '[[proxies]]' >> {frpCfg} && " +
-                $"echo 'name = \"{name}\"' >> {frpCfg} && " +
-                $"echo 'type = \"tcp\"' >> {frpCfg} && " +
-                $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
-                $"echo 'localPort = 22' >> {frpCfg} && " +
-                $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
-                $"echo '' >> {frpCfg} && " +
-                $"echo '[[proxies]]' >> {frpCfg} && " +
-                $"echo 'name = \"{name}-svc\"' >> {frpCfg} && " +
-                $"echo 'type = \"tcp\"' >> {frpCfg} && " +
-                $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
-                $"echo 'localPort = 8080' >> {frpCfg} && " +
-                $"echo 'remotePort = {serviceRelayPort.Value}' >> {frpCfg} && " +
-                $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
+            envVars.Add($"FRP_SERVICE_PROXY_NAME={name}-svc");
+            envVars.Add($"FRP_SERVICE_REMOTE_PORT={serviceRelayPort.Value}");
         }
-
-        // GCP key setup: decode base64 to get valid JSON, write to /tmp/gcp-key.json with restricted permissions
-        var gcpKeySetup = $"echo '{gcpKeyBase64}' | base64 -d > /tmp/gcp-key.json && chmod 600 /tmp/gcp-key.json && ";
-
-        // Google Cloud SDK setup and cron job for GCS sync using Python
-        var gcsPath = $"consumers/{consumerContext}/{vmId}/home/";
-        var pythonScript = new System.Text.StringBuilder()
-            .AppendLine("#!/usr/bin/env python3")
-            .AppendLine("import os, sys, logging")
-            .AppendLine("from pathlib import Path")
-            .AppendLine("from google.cloud import storage")
-            .AppendLine("from google.oauth2 import service_account")
-            .AppendLine("log_dir = Path('/var/log/unicore')")
-            .AppendLine("log_dir.mkdir(parents=True, exist_ok=True)")
-            .AppendLine("logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s', handlers=[logging.FileHandler(log_dir / 'backup.log'), logging.StreamHandler(sys.stdout)])")
-            .AppendLine("logger = logging.getLogger(__name__)")
-            .AppendLine("try:")
-            .AppendLine("  creds = service_account.Credentials.from_service_account_file('/tmp/gcp-key.json')")
-            .AppendLine("  client = storage.Client(credentials=creds, project=creds.project_id)")
-            .AppendLine("  bucket = client.bucket('unicore-vm-volumes')")
-            .AppendLine("  local_dir = Path('/home/consumer')")
-            .AppendLine("  if not local_dir.exists():")
-            .AppendLine("    sys.exit(0)")
-            .AppendLine("  synced = 0")
-            .AppendLine("  for local_file in local_dir.rglob('*'):")
-            .AppendLine("    if local_file.is_file():")
-            .AppendLine($"      blob_path = '{gcsPath}' + local_file.relative_to(local_dir.parent).as_posix()")
-            .AppendLine("      try:")
-            .AppendLine("        bucket.blob(blob_path).upload_from_filename(str(local_file))")
-            .AppendLine("        synced += 1")
-            .AppendLine("      except Exception as e:")
-            .AppendLine("        logger.warning(f'Failed to upload: {e}')")
-            .AppendLine("  logger.info(f'Synced {synced} files to gs://unicore-vm-volumes')")
-            .AppendLine("except Exception as e:")
-            .AppendLine("  logger.error(f'Sync failed: {e}')")
-            .AppendLine("  sys.exit(1)")
-            .ToString();
-
-        // Normalize to Unix line endings for the container
-        var pythonScriptUnix = pythonScript.Replace("\r\n", "\n");
-
-        var gcsSetup =
-            "apt-get install -y cron curl python3-pip > /dev/null 2>&1 && " +
-            "pip3 install --quiet google-cloud-storage > /dev/null 2>&1 && " +
-            "mkdir -p /var/log/unicore && " +
-            $"cat > /usr/local/bin/unicore-backup.py << 'ENDPY'\n{pythonScriptUnix}ENDPY\n" +
-            "chmod 755 /usr/local/bin/unicore-backup.py && " +
-            "echo '*/5 * * * * root /usr/local/bin/unicore-backup.py >> /var/log/unicore/backup.log 2>&1' > /etc/cron.d/unicore-backup-volume && " +
-            "chmod 0644 /etc/cron.d/unicore-backup-volume && " +
-            "/etc/init.d/cron start > /dev/null 2>&1 && ";
-
-        var cmd = new List<string>
-        {
-            "/bin/sh",
-            "-c",
-            "apt-get update && apt-get install -y openssh-server curl sudo > /dev/null 2>&1 && " +
-            "mkdir -p /run/sshd && " +
-            "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
-            "echo 'consumer:consumer123' | chpasswd && " +
-            "echo 'consumer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && " +
-            "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
-            gcpKeySetup +
-            gcsSetup +
-            "chown -R consumer:consumer /home/consumer && " +
-            frpSetup + " && " +
-            "/usr/sbin/sshd -D"
-        };
 
         // Ensure an isolated bridge network exists for this consumer.
         // Containers from different consumers cannot reach each other at
@@ -280,7 +179,7 @@ public class DockerService : IDockerService, IDisposable
         {
             Image = image,
             Name = name,
-            Cmd = cmd,
+            Env = envVars,
             ExposedPorts = new Dictionary<string, EmptyStruct>
             {
                 { "22/tcp", default }  // Expose SSH port
