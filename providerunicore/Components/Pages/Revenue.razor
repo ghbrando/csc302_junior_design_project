@@ -9,6 +9,7 @@
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @implements IDisposable
 @inject FirestoreDb firestoreDb
+@inject IPaymentMethodService PaymentMethodService
 
 
 <PageTitle>Revenue Tracker</PageTitle>
@@ -29,7 +30,8 @@
             <p class="mb-0 mt-1" style="font-size: 0.8rem; color: var(--uc-text-secondary);">Monitor earnings and
                 request payouts</p>
             </div>
-            <button class="btn btn-payout rounded-1">
+            <button class="btn btn-payout rounded-1" @onclick="OpenPayoutModalAsync"
+                    disabled="@(_availableBalance <= 0)">
                 <i class="bi bi-wallet2 me-2"></i> REQUEST PAYOUT
             </button>
         </div>
@@ -63,6 +65,102 @@
                 <PayoutHistory Payouts="@Payouts" CurrencySymbol="@CurrencySymbol" />
             </div>
         </div>
+
+        @* Payout Modal *@
+        @if (_showPayoutModal)
+        {
+            <div class="modal-backdrop" @onclick="() => _showPayoutModal = false">
+                <div class="modal-box" @onclick:stopPropagation="true">
+                    <h6 class="modal-title">REQUEST PAYOUT</h6>
+
+                    <div class="modal-field">
+                        <label class="modal-label">Amount</label>
+                        <div class="modal-input-prefix">
+                            <span>$</span>
+                            <input type="number" @bind="_payoutAmount" min="0.01" max="@_availableBalance" step="0.01"
+                                style="background:transparent;border:none;color:var(--uc-text-white);font-size:0.95rem;width:100%;outline:none;" />
+                        </div>
+                        <p style="font-size:0.7rem;color:var(--uc-text-muted);margin-top:4px;">
+                            Available: @FormatCurrency(_availableBalance)
+                        </p>
+                    </div>
+
+                    <div class="modal-field">
+                        <label class="modal-label">Payment Method</label>
+                        @if (!_paymentMethods.Any())
+                        {
+                            <p style="font-size:0.8rem;color:#ff6b6b;">
+                                No payment methods on file. Add one in Settings first.
+                            </p>
+                        }
+                        else
+                        {
+                            <select @bind="_selectedMethodId" class="modal-select">
+                                @foreach (var m in _paymentMethods)
+                                {
+                                    <option value="@m.Id">@m.DisplayLabel — @m.AccountHolderName @(m.IsPrimary ? "(Primary)" : "")</option>
+                                }
+                            </select>
+                        }
+                    </div>
+
+                    @if (!string.IsNullOrEmpty(_payoutError))
+                    {
+                        <p style="font-size:0.75rem;color:#ff6b6b;margin-bottom:8px;">@_payoutError</p>
+                    }
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button class="btn-modal-cancel" @onclick="() => _showPayoutModal = false">Cancel</button>
+                        <button class="btn-modal-confirm" @onclick="ConfirmPayoutAsync"
+                                disabled="@(!_paymentMethods.Any() || _payoutAmount <= 0)">
+                            Confirm Payout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <style>
+            .modal-backdrop {
+                position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+                display: flex; align-items: center; justify-content: center; z-index: 2000;
+            }
+            .modal-box {
+                background: var(--uc-bg-card); border: 1px solid var(--uc-border);
+                border-radius: var(--uc-radius); padding: 1.5rem; width: 100%; max-width: 420px;
+            }
+            .modal-title {
+                font-size: 0.75rem; font-weight: 700; letter-spacing: 1.2px;
+                color: var(--uc-text-muted); margin-bottom: 1.25rem;
+            }
+            .modal-field { margin-bottom: 1rem; }
+            .modal-label {
+                font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em;
+                color: var(--uc-text-muted); display: block; margin-bottom: 6px;
+            }
+            .modal-input-prefix {
+                display: flex; align-items: center; gap: 6px;
+                background: var(--uc-bg-body); border: 1px solid var(--uc-border);
+                border-radius: var(--uc-radius); padding: 6px 10px;
+                color: var(--uc-text-muted); font-size: 0.95rem;
+            }
+            .modal-select {
+                width: 100%; background: var(--uc-bg-body); border: 1px solid var(--uc-border);
+                border-radius: var(--uc-radius); color: var(--uc-text-white);
+                font-size: 0.85rem; padding: 6px 10px;
+            }
+            .btn-modal-cancel {
+                background: transparent; border: 1px solid var(--uc-border);
+                color: var(--uc-text-muted); font-size: 0.75rem; padding: 6px 16px;
+                border-radius: var(--uc-radius); cursor: pointer;
+            }
+            .btn-modal-confirm {
+                background: var(--uc-green); color: #000; border: none;
+                font-size: 0.75rem; font-weight: 700; padding: 6px 16px;
+                border-radius: var(--uc-radius); cursor: pointer;
+            }
+            .btn-modal-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+        </style>
     </div>
 
     <style>
@@ -236,6 +334,60 @@
         }
 
         await InvokeAsync(StateHasChanged);
+    }
+
+    // State
+    private bool _showPayoutModal;
+    private double _payoutAmount;
+    private string _selectedMethodId = "";
+    private string _payoutError = "";
+    private List<PaymentMethod> _paymentMethods = new();
+
+    private async Task OpenPayoutModalAsync()
+    {
+        _payoutError = "";
+        _payoutAmount = Math.Round(_availableBalance, 2);
+        _paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        var primary = _paymentMethods.FirstOrDefault(m => m.IsPrimary) ?? _paymentMethods.FirstOrDefault();
+        _selectedMethodId = primary?.Id ?? "";
+        _showPayoutModal = true;
+    }
+
+    private async Task ConfirmPayoutAsync()
+    {
+        _payoutError = "";
+
+        if (_payoutAmount <= 0 || _payoutAmount > _availableBalance)
+        {
+            _payoutError = "Invalid amount.";
+            return;
+        }
+        if (string.IsNullOrEmpty(_selectedMethodId))
+        {
+            _payoutError = "Please select a payment method.";
+            return;
+        }
+
+        try
+        {
+            var method = _paymentMethods.First(m => m.Id == _selectedMethodId);
+            var payoutDoc = new Dictionary<string, object>
+            {
+                { "provider_uid",  AuthState.FirebaseUid },
+                { "amount",        _payoutAmount },
+                { "timestamp",     Timestamp.GetCurrentTimestamp() },
+                { "status",        "Pending" },
+                { "method",        method.DisplayLabel }
+            };
+
+            await firestoreDb.Collection("payouts").AddAsync(payoutDoc);
+            _showPayoutModal = false;
+            await FetchPayoutHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            _payoutError = $"Error: {ex.Message}";
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

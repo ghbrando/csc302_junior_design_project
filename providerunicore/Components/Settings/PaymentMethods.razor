@@ -1,125 +1,162 @@
 @namespace unicoreprovider.Components
-<div class="payment-list">
-    @foreach (var method in Methods)
+@using unicore.shared.Models
+
+<div>
+    @* Existing methods list *@
+    @if (!Methods.Any())
     {
-        <div class="payment-row">
-            <div class="payment-left">
-                <div class="bank-icon">
-                    <span>BANK</span>
-                </div>
+        <p style="font-size: 0.8rem; color: var(--uc-text-muted);">No payment methods added yet.</p>
+    }
+    else
+    {
+        @foreach (var m in Methods)
+        {
+            <div class="d-flex align-items-center justify-content-between py-2"
+                 style="border-bottom: 1px solid var(--uc-border);">
                 <div>
-                    <div class="payment-name">@method.Name</div>
-                    <div class="payment-sub">@method.SubLabel</div>
+                    <span style="font-size: 0.85rem; color: var(--uc-text-white);">@m.DisplayLabel</span>
+                    <span style="font-size: 0.7rem; color: var(--uc-text-muted); margin-left: 8px;">
+                        @m.AccountHolderName
+                    </span>
+                    @if (m.IsPrimary)
+                    {
+                        <span class="badge-primary-method ms-2">PRIMARY</span>
+                    }
+                </div>
+                <div class="d-flex gap-2">
+                    @if (!m.IsPrimary)
+                    {
+                        <button class="btn-method-action" @onclick="() => OnSetPrimary.InvokeAsync(m.Id)">
+                            Set Primary
+                        </button>
+                    }
+                    <button class="btn-method-action btn-method-delete" @onclick="() => OnDelete.InvokeAsync(m.Id)">
+                        <i class="bi bi-trash"></i>
+                    </button>
                 </div>
             </div>
-            <button class="btn-edit">EDIT</button>
+        }
+    }
+
+    @* Add new method form *@
+    @if (_showForm)
+    {
+        <div class="mt-3 p-3" style="border: 1px solid var(--uc-border); border-radius: var(--uc-radius);">
+            <div class="mb-2">
+                <label class="settings-input-label">Account Holder Name</label>
+                <input class="settings-input" @bind="_newName" placeholder="John Smith" />
+            </div>
+            <div class="mb-2">
+                <label class="settings-input-label">Account Number</label>
+                <input class="settings-input" @bind="_newAccountNumber" placeholder="000123456789" />
+            </div>
+            <div class="mb-3">
+                <label class="settings-input-label">Routing Number</label>
+                <input class="settings-input" @bind="_newRoutingNumber" placeholder="021000021" />
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn-method-save" @onclick="SubmitAsync">Save</button>
+                <button class="btn-method-action" @onclick="() => _showForm = false">Cancel</button>
+            </div>
+            @if (!string.IsNullOrEmpty(_formError))
+            {
+                <p style="font-size: 0.75rem; color: #ff6b6b; margin-top: 8px;">@_formError</p>
+            }
         </div>
     }
-    <button class="btn-add-method">
-        <i class="bi bi-plus"></i> ADD PAYMENT METHOD
-    </button>
+    else
+    {
+        <button class="btn-method-action mt-3" @onclick="() => _showForm = true">
+            <i class="bi bi-plus me-1"></i> Add Bank Account
+        </button>
+    }
 </div>
 
-@code {
-    public class PaymentMethod
-    {
-        public string Name { get; set; } = "";
-        public string SubLabel { get; set; } = "";
-    }
-
-    [Parameter] public List<PaymentMethod> Methods { get; set; } = new();
-}
-
 <style>
-    .payment-list {
-        display: flex;
-        flex-direction: column;
-        gap: 0.8rem;
+    .badge-primary-method {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: rgba(16, 185, 129, 0.15);
+        color: var(--uc-green);
+        border: 1px solid rgba(16, 185, 129, 0.3);
     }
-
-    .payment-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        background: var(--uc-bg-elevated);
-        border: 1px solid var(--uc-border);
-        border-radius: var(--uc-radius);
-        padding: 0.9rem 1.2rem;
-    }
-
-    .payment-left {
-        display: flex;
-        align-items: center;
-        gap: 0.9rem;
-    }
-
-    .bank-icon {
-        width: 40px;
-        height: 40px;
-        background: var(--uc-purple);
-        border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.55rem;
-        font-weight: 800;
-        letter-spacing: 0.05em;
-        color: white;
-        font-family: var(--uc-font-mono);
-    }
-
-    .payment-name {
-        font-size: 0.9rem;
-        font-weight: 500;
-        color: var(--uc-text-white);
-    }
-
-    .payment-sub {
-        font-size: 0.72rem;
-        color: var(--uc-text-secondary);
-        font-family: var(--uc-font-mono);
-        margin-top: 0.15rem;
-    }
-
-    .btn-edit {
+    .btn-method-action {
         background: transparent;
-        border: 1px solid var(--uc-border-light);
-        color: var(--uc-text-primary);
+        border: 1px solid var(--uc-border);
+        color: var(--uc-text-muted);
+        font-size: 0.7rem;
+        padding: 4px 10px;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .btn-method-action:hover { border-color: var(--uc-green); color: var(--uc-green); }
+    .btn-method-delete:hover { border-color: #ff6b6b; color: #ff6b6b; }
+    .btn-method-save {
+        background: var(--uc-green);
+        color: #000;
+        border: none;
         font-size: 0.7rem;
         font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 0.35rem 0.9rem;
+        padding: 4px 14px;
         border-radius: var(--uc-radius);
         cursor: pointer;
-        transition: border-color 0.2s;
-        font-family: var(--uc-font-mono);
     }
-
-    .btn-edit:hover {
-        border-color: var(--uc-text-primary);
+    .settings-input-label {
+        font-size: 0.7rem;
+        color: var(--uc-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        display: block;
+        margin-bottom: 4px;
     }
-
-    .btn-add-method {
+    .settings-input {
         width: 100%;
-        background: transparent;
+        background: var(--uc-bg-body);
         border: 1px solid var(--uc-border);
         border-radius: var(--uc-radius);
-        color: var(--uc-blue);
-        font-size: 0.78rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 0.9rem;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 0.4rem;
-        transition: border-color 0.2s, background 0.2s;
-        font-family: var(--uc-font-mono);
-    }
-
-    .btn-add-method:hover {
-        background: rgba(59, 130, 246, 0.06);
-        border-color: var(--uc-blue);
+        color: var(--uc-text-white);
+        font-size: 0.85rem;
+        padding: 6px 10px;
     }
 </style>
+
+@code {
+    [Parameter] public List<PaymentMethod> Methods { get; set; } = new();
+    [Parameter] public EventCallback<PaymentMethod> OnAdd { get; set; }
+    [Parameter] public EventCallback<string> OnSetPrimary { get; set; }
+    [Parameter] public EventCallback<string> OnDelete { get; set; }
+
+    private bool _showForm;
+    private string _newName = "";
+    private string _newAccountNumber = "";
+    private string _newRoutingNumber = "";
+    private string _formError = "";
+
+    private async Task SubmitAsync()
+    {
+        _formError = "";
+        if (string.IsNullOrWhiteSpace(_newName) ||
+            string.IsNullOrWhiteSpace(_newAccountNumber) ||
+            string.IsNullOrWhiteSpace(_newRoutingNumber))
+        {
+            _formError = "All fields are required.";
+            return;
+        }
+
+        await OnAdd.InvokeAsync(new PaymentMethod
+        {
+            AccountHolderName = _newName.Trim(),
+            AccountNumber = _newAccountNumber.Trim(),
+            RoutingNumber = _newRoutingNumber.Trim()
+        });
+
+        _newName = "";
+        _newAccountNumber = "";
+        _newRoutingNumber = "";
+        _showForm = false;
+    }
+}

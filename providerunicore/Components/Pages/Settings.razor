@@ -8,6 +8,7 @@
 @inject IFirebaseAuthService FirebaseAuthService
 @inject IMachineService MachineService
 @inject IProviderService ProviderService
+@inject IPaymentMethodService PaymentMethodService
 
 <PageTitle>Settings</PageTitle>
 
@@ -260,7 +261,11 @@
             <!-- Payment Methods -->
             <SettingsSection Title="PAYMENT METHODS" Subtitle="Manage payout destinations" Icon="bi-credit-card"
                              IconColor="var(--uc-amber)" IconBg="rgba(255,171,0,0.15)">
-                <PaymentMethods Methods="@paymentMethods" />
+                <PaymentMethods
+                            Methods="@paymentMethods"
+                            OnAdd="HandleAddPaymentMethodAsync"
+                            OnSetPrimary="HandleSetPrimaryAsync"
+                            OnDelete="HandleDeletePaymentMethodAsync" />
             </SettingsSection>
 
             <!-- Regional Settings -->
@@ -531,6 +536,8 @@
             _loading = false;
             StateHasChanged();
         }
+        var methods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        paymentMethods = methods;
     }
 
 
@@ -550,10 +557,30 @@
     private string currency = "USD";
 
     // Payment methods
-    private List<PaymentMethods.PaymentMethod> paymentMethods = new()
-{
-new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
-};
+    private List<PaymentMethod> paymentMethods = new();
+
+    // Add these handlers to pass into the PaymentMethods component:
+    private async Task HandleAddPaymentMethodAsync(PaymentMethod method)
+    {
+        await PaymentMethodService.AddAsync(AuthState.FirebaseUid, method);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
+
+    private async Task HandleSetPrimaryAsync(string methodId)
+    {
+        await PaymentMethodService.SetPrimaryAsync(AuthState.FirebaseUid, methodId);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
+
+    private async Task HandleDeletePaymentMethodAsync(string methodId)
+    {
+        await PaymentMethodService.DeleteAsync(AuthState.FirebaseUid, methodId);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
+
     private bool _loading;
     private bool _saving;
     private string _statusMessage = "";
