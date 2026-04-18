@@ -125,6 +125,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<VolumeBackupServic
 builder.Services.AddSingleton<SnapshotService>();
 builder.Services.AddSingleton<ISnapshotService>(sp => sp.GetRequiredService<SnapshotService>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SnapshotService>());
+builder.Services.AddHostedService<VmCleanupService>();
 builder.Services.AddScoped<IMigrationService, MigrationService>();
 
 

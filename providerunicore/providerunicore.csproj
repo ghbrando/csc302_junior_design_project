@@ -18,6 +18,7 @@
   <ItemGroup>
     <PackageReference Include="Docker.DotNet" Version="3.125.15" />
     <PackageReference Include="FirebaseAdmin" Version="3.*" />
+    <PackageReference Include="Google.Cloud.ArtifactRegistry.V1" Version="2.15.0" />
     <PackageReference Include="Google.Cloud.Firestore" Version="4.1.0" />
     <PackageReference Include="Google.Cloud.SecretManager.V1" Version="2.*" />
     <PackageReference Include="Google.Cloud.Storage.V1" Version="4.14.0" />

@@ -296,7 +296,8 @@
 
             _stoppedVms = _allVms
                 .Where(vm => vm.Status is not ("Running" or "Provisioning")
-                           && vm.MigrationStatus != "Migrated")
+                           && vm.MigrationStatus != "Migrated"
+                           && !vm.DeletionRequested)
                 .Select(MapStopped)
                 .ToList();
 
