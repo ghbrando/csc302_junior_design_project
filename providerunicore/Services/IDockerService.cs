@@ -88,4 +88,17 @@ public interface IDockerService
     /// Uses the GCP service account credentials if available.
     /// </summary>
     Task PullImageAsync(string imageTag, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns true if the Docker daemon is running in rootless mode.
+    /// Used at startup to warn Linux providers without VM-level isolation.
+    /// </summary>
+    Task<bool> IsRootlessAsync();
+
+    /// <summary>
+    /// Returns true if a container with the given ID currently exists in Docker.
+    /// Used during startup reconciliation to detect orphaned VMs whose containers
+    /// were stopped while the provider was offline.
+    /// </summary>
+    Task<bool> ContainerExistsAsync(string containerId, CancellationToken ct = default);
 }

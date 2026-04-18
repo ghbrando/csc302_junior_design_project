@@ -135,6 +135,12 @@ public class VirtualMachine
     [FirestoreProperty("original_vm_id")]
     public string? OriginalVmId { get; set; }
 
+    [FirestoreProperty("deletion_requested")]
+    public bool DeletionRequested { get; set; } = false;
+
+    [FirestoreProperty("deletion_status")]
+    public string? DeletionStatus { get; set; }
+
     // Service exposure via Caddy + FRP TCP tunnel
     // The container-internal port the consumer's web server listens on (default 8080)
     [FirestoreProperty("service_port")]

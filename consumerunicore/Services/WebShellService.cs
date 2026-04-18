@@ -35,7 +35,7 @@ public class WebShellService : IWebShellService
         if (!string.Equals(vm.Client, userUid, StringComparison.Ordinal))
             return (null, "You are not authorized to access this VM.");
 
-        var (host, port) = ResolveTarget(vm);
+        var (host, port, fallbackHost, fallbackPort) = ResolveTarget(vm);
         if (host == null)
             return (null, "No SSH endpoint is available for this VM. Check that SshPort or RelayPort is set.");
 
@@ -44,25 +44,42 @@ public class WebShellService : IWebShellService
         if (authMethods.Length == 0)
             return (null, "No SSH authentication method is configured on the server.");
 
-        return (new WebShellConnectionInfo(vm.VmId, vm.Name, host, port, username, authMethods), null);
+        return (new WebShellConnectionInfo(vm.VmId, vm.Name, host, port, username, authMethods, fallbackHost, fallbackPort), null);
     }
 
-    private (string? host, int port) ResolveTarget(VirtualMachine vm)
+    private (string? host, int port, string? fallbackHost, int? fallbackPort) ResolveTarget(VirtualMachine vm)
     {
+        string? primaryHost = null;
+        int primaryPort = 0;
+        string? fallbackHost = null;
+        int? fallbackPort = null;
+
         // Prefer the FRP relay when available — works for both local and remote connections.
         var relayHost = _config["FrpRelay:ServerAddr"] ?? _config["WebShell:RelayHost"];
         if (!string.IsNullOrWhiteSpace(relayHost) && vm.RelayPort.HasValue)
-            return (relayHost, vm.RelayPort.Value);
+        {
+            primaryHost = relayHost;
+            primaryPort = vm.RelayPort.Value;
+        }
 
-        // Fallback: connect directly to the provider host on the Docker-mapped SSH port.
-        // Only works when the consumer is on the same machine as the provider.
+        // Local Docker-mapped SSH port — used as fallback when the relay is
+        // unavailable, or as primary when no relay config exists.
         if (vm.SshPort.HasValue)
         {
             var localHost = _config["WebShell:ProviderHost"] ?? "localhost";
-            return (localHost, vm.SshPort.Value);
+            if (primaryHost != null)
+            {
+                fallbackHost = localHost;
+                fallbackPort = vm.SshPort.Value;
+            }
+            else
+            {
+                primaryHost = localHost;
+                primaryPort = vm.SshPort.Value;
+            }
         }
 
-        return (null, 0);
+        return (primaryHost, primaryPort, fallbackHost, fallbackPort);
     }
 
     private AuthenticationMethod[] BuildAuthMethods(string username)

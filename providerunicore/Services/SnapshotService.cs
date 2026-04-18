@@ -1,5 +1,7 @@
+using Docker.DotNet;
 using Google.Cloud.Firestore;
 using System.Collections.Concurrent;
+using System.Net;
 using System.Threading.Channels;
 
 namespace unicoreprovider.Services;
@@ -12,6 +14,7 @@ public class SnapshotService : BackgroundService, ISnapshotService
     private readonly FirestoreDb _firestoreDb;
     private readonly IDockerService _dockerService;
     private readonly IConfiguration _configuration;
+    private readonly IAuditService _audit;
     private readonly ILogger<SnapshotService> _logger;
 
     private readonly Channel<string> _onDemandQueue = Channel.CreateUnbounded<string>();
@@ -21,11 +24,13 @@ public class SnapshotService : BackgroundService, ISnapshotService
         FirestoreDb firestoreDb,
         IDockerService dockerService,
         IConfiguration configuration,
+        IAuditService audit,
         ILogger<SnapshotService> logger)
     {
         _firestoreDb = firestoreDb;
         _dockerService = dockerService;
         _configuration = configuration;
+        _audit = audit;
         _logger = logger;
     }
 
@@ -171,15 +176,30 @@ public class SnapshotService : BackgroundService, ISnapshotService
                 ["last_snapshot_at"] = DateTime.UtcNow,
                 ["snapshot_image"] = imageTag
             });
+
+            // Audit: provider took a snapshot of a consumer VM.
+            _audit.Log(vm.ProviderId, "snapshot_taken",
+                vmId: vm.VmId, consumerUid: vm.Client,
+                detail: $"image={imageTag}");
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Snapshot failed for VM {VmId}", vm.VmId);
 
-            await vmRef.UpdateAsync(new Dictionary<string, object>
+            var updates = new Dictionary<string, object>
             {
                 ["snapshot_status"] = "Error"
-            });
+            };
+
+            // If the container no longer exists the VM is orphaned — mark it Failed so it
+            // is removed from the "Running" list and the scheduler stops attempting it.
+            if (IsContainerNotFound(ex))
+            {
+                _logger.LogWarning("Container for VM {VmId} no longer exists; marking VM as Failed.", vm.VmId);
+                updates["status"] = "Failed";
+            }
+
+            await vmRef.UpdateAsync(updates);
         }
     }
 
@@ -200,6 +220,17 @@ public class SnapshotService : BackgroundService, ISnapshotService
             throw new InvalidOperationException($"Invalid image tag: {imageTag}");
 
         return (imageTag[..lastColon], imageTag[(lastColon + 1)..]);
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="ex"/> (possibly wrapped by ExecuteWithRetryAsync)
+    /// originates from a Docker 404 — i.e. the target container no longer exists.
+    /// </summary>
+    private static bool IsContainerNotFound(Exception ex)
+    {
+        var inner = ex.InnerException ?? ex;
+        return inner is DockerApiException dockerEx &&
+               dockerEx.StatusCode == HttpStatusCode.NotFound;
     }
 
     private static async Task ExecuteWithRetryAsync(Func<Task> operation, string operationName, int maxAttempts = 3)

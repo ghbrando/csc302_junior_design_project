@@ -3,9 +3,8 @@
 @rendermode RenderMode.InteractiveServer
 
 <div class="landing-logo">
-    <div class="landing-logo-badge">
-        <img src="../unicore-logo.png" alt="Unicore Logo" class="landing-logo-image" />
-    </div>
+    <img src="/provider_icon.png" alt="Unicore Logo" class="landing-logo-image" />
+    <div class="landing-logo-title">UNICORE</div>
 </div>
 
 <div class="select-label mb-4">SELECT ACCOUNT TYPE</div>
@@ -53,28 +52,20 @@
         flex-direction: column;
         align-items: center;
         text-align: center;
-    }
-
-    .landing-logo-badge {
-        width: 220px;
-        height: 220px;
-        border-radius: 50%;
-        background: var(--uc-logo-badge-bg);
-        border: 1px solid var(--uc-logo-badge-border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 20px 55px rgba(0, 0, 0, 0.36);
+        gap: 16px;
     }
 
     .landing-logo-image {
-        width: 180px;
-        height: auto;
+        width: 140px;
+        height: 140px;
+        object-fit: contain;
     }
 
-    body.light-mode .landing-logo-badge {
-        background: #000000 !important;
-        border-color: rgba(255, 255, 255, 0.4) !important;
+    .landing-logo-title {
+        font-size: 2rem;
+        font-weight: 700;
+        letter-spacing: 4px;
+        color: var(--uc-text-white);
     }
 
     .logo-mark {

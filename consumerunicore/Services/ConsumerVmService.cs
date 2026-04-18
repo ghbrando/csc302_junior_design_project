@@ -58,6 +58,13 @@ public class ConsumerVmService : IConsumerVmService
 
     public async Task DeleteVmAsync(string vmId)
     {
-        await _vmRepository.DeleteAsync(vmId);
+        var vm = await _vmRepository.GetByIdAsync(vmId)
+            ?? throw new Exception($"VM {vmId} not found");
+
+        vm.DeletionRequested = true;
+        vm.DeletionStatus = "Requested";
+        vm.Status = "Deleting";
+
+        await _vmRepository.UpdateAsync(vmId, vm);
     }
 }

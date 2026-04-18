@@ -11,7 +11,9 @@ public sealed record WebShellConnectionInfo(
     string Host,
     int Port,
     string Username,
-    AuthenticationMethod[] AuthMethods
+    AuthenticationMethod[] AuthMethods,
+    string? FallbackHost = null,
+    int? FallbackPort = null
 );
 
 public interface IWebShellService

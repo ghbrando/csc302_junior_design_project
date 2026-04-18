@@ -14,11 +14,64 @@ public class DockerService : IDockerService, IDisposable
     private readonly string _relayToken;
     private readonly INotificationService _notificationService;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IAuditService _audit;
+
+    // Capabilities that have known container-escape or host-attack potential.
+    // Dropped on every consumer VM regardless of image or consumer request.
+    // Normal VM workloads (SSH, apt, web servers, compilers) don't need any of these.
+    private static readonly string[] DroppedCapabilities =
+    [
+        // --- Remove from Docker defaults ---
+        "NET_RAW",          // raw sockets → ARP spoofing, packet injection
+        "MKNOD",            // create device files → potential escape vector
+        // AUDIT_WRITE kept — required by PAM for sshd authentication logging.
+        // Dropping it causes sshd to abort connections immediately after handshake.
+        "SETFCAP",          // set file capabilities on arbitrary files
+        "SETPCAP",          // manipulate process capability bounding sets
+        // --- Belt-and-suspenders: not in defaults but block explicitly ---
+        "SYS_ADMIN",        // mount filesystems, kernel params — near root
+        "NET_ADMIN",        // reconfigure host network interfaces
+        "SYS_PTRACE",       // attach debugger to host processes
+        "SYS_MODULE",       // load / unload kernel modules
+        "SYS_RAWIO",        // raw I/O to hardware
+        "SYS_BOOT",         // reboot or shutdown the host
+        "MAC_ADMIN",        // change mandatory access control policy
+        "MAC_OVERRIDE",     // override MAC labels
+        "LINUX_IMMUTABLE",  // set immutable / append-only file flags
+        "SYS_TIME",         // change the host system clock
+    ];
+
+    // /proc and /sys paths hidden from consumers to prevent host information
+    // leakage and hardware manipulation.
+    private static readonly string[] MaskedKernelPaths =
+    [
+        "/proc/acpi",
+        "/proc/kcore",       // direct read window into physical host memory
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap",
+    ];
+
+    private static readonly string[] ReadonlyKernelPaths =
+    [
+        "/proc/asound",
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger",
+    ];
 
     public DockerService(
         IConfiguration config,
         INotificationService notificationService,
         IServiceScopeFactory scopeFactory,
+        IAuditService audit,
         ILogger<DockerService> logger)
     {
         _logger = logger;
@@ -27,6 +80,7 @@ public class DockerService : IDockerService, IDisposable
         _relayToken = config["FrpRelay:AuthToken"] ?? "unicore-relay-secret";
         _notificationService = notificationService;
         _scopeFactory = scopeFactory;
+        _audit = audit;
     }
 
     // Endpoints tried in order on Windows. Named pipe = Docker Desktop or native
@@ -104,12 +158,15 @@ public class DockerService : IDockerService, IDisposable
 
         // Writes frpc.toml line by line using echo, then starts frpc in the background.
         // Wrapped in () || true so that SSH still starts even if the relay setup fails.
+        // loginFailExit = false tells frpc to keep retrying if the initial login fails
+        // (e.g. token mismatch, relay temporarily unavailable) instead of exiting immediately.
         var frpSetup =
             $"(curl -sL -o {frpTar} {frpUrl} && " +
             $"tar -xzf {frpTar} -C /tmp && " +
             $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
             $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
             $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+            $"echo 'loginFailExit = false' >> {frpCfg} && " +
             $"echo '' >> {frpCfg} && " +
             $"echo '[[proxies]]' >> {frpCfg} && " +
             $"echo 'name = \"{name}\"' >> {frpCfg} && " +
@@ -128,6 +185,7 @@ public class DockerService : IDockerService, IDisposable
                 $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
                 $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
                 $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+                $"echo 'loginFailExit = false' >> {frpCfg} && " +
                 $"echo '' >> {frpCfg} && " +
                 $"echo '[[proxies]]' >> {frpCfg} && " +
                 $"echo 'name = \"{name}\"' >> {frpCfg} && " +
@@ -186,8 +244,8 @@ public class DockerService : IDockerService, IDisposable
         var pythonScriptUnix = pythonScript.Replace("\r\n", "\n");
 
         var gcsSetup =
-            "apt-get install -y cron curl python3-pip > /dev/null 2>&1 && " +
-            "pip3 install --quiet google-cloud-storage > /dev/null 2>&1 && " +
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true install -y cron curl python3-pip && " +
+            "pip3 install google-cloud-storage && " +
             "mkdir -p /var/log/unicore && " +
             $"cat > /usr/local/bin/unicore-backup.py << 'ENDPY'\n{pythonScriptUnix}ENDPY\n" +
             "chmod 755 /usr/local/bin/unicore-backup.py && " +
@@ -199,7 +257,11 @@ public class DockerService : IDockerService, IDisposable
         {
             "/bin/sh",
             "-c",
-            "apt-get update && apt-get install -y openssh-server curl sudo > /dev/null 2>&1 && " +
+            // ForceIPv4 + retries: Canonical mirrors intermittently drop connections
+            // over IPv6 / NAT'd Docker bridges on Windows; without this, apt-get
+            // update fails silently and sshd never starts.
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true update && " +
+            "apt-get -o Acquire::Retries=3 -o Acquire::ForceIPv4=true install -y openssh-server curl sudo && " +
             "mkdir -p /run/sshd && " +
             "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
             "echo 'consumer:consumer123' | chpasswd && " +
@@ -211,6 +273,13 @@ public class DockerService : IDockerService, IDisposable
             frpSetup + " && " +
             "/usr/sbin/sshd -D"
         };
+
+        // Containers use Docker's default bridge. Custom per-consumer bridges were
+        // tried for network-layer isolation between consumers, but Docker Desktop on
+        // Windows (WSL2) doesn't fully wire up MASQUERADE for custom bridges, causing
+        // egress to parts of Canonical's archive CDN to fail and breaking apt-get at
+        // VM-start time. Isolation against inter-consumer traffic belongs in the
+        // pre-baked image / host firewall layer instead.
 
         var response = await client.Containers.CreateContainerAsync(new CreateContainerParameters
         {
@@ -233,15 +302,29 @@ public class DockerService : IDockerService, IDisposable
                         }
                     }
                 },
-                Binds = new[] { $"{volumeName}:/home/consumer" },  // Mount the named volume
-                NanoCPUs = (long)(cpuCores * 1_000_000_000L),
-                Memory = (long)(ramGB * 1024L * 1024L * 1024L),
-                MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
-                PidsLimit = 512   // allow cron, sshd children, frpc, and gsutil to coexist
+                Binds        = new[] { $"{volumeName}:/home/consumer" },
+                NanoCPUs     = (long)(cpuCores * 1_000_000_000L),
+                Memory       = (long)(ramGB * 1024L * 1024L * 1024L),
+                MemorySwap   = (long)(ramGB * 1024L * 1024L * 1024L),
+                PidsLimit    = 512,
+                NetworkMode  = "bridge",
+
+                // Drop capabilities with known escape or host-attack potential.
+                // Normal consumer workloads (SSH, apt, web servers) are unaffected.
+                CapDrop      = DroppedCapabilities,
+
+                // Hide / lock kernel paths that leak host info or allow manipulation.
+                MaskedPaths  = MaskedKernelPaths,
+                ReadonlyPaths = ReadonlyKernelPaths,
             }
         });
 
         await client.Containers.StartContainerAsync(response.ID, new ContainerStartParameters());
+
+        // Audit: record that this provider started a consumer VM.
+        if (!string.IsNullOrWhiteSpace(providerUid))
+            _audit.Log(providerUid, "vm_started", vmId: vmId, consumerUid: consumerUid,
+                detail: $"image={image} cpu={cpuCores} ram={ramGB}GB");
 
         var canSendStartNotification = await IsNotificationEnabledAsync(
             providerUid,
@@ -336,6 +419,13 @@ public class DockerService : IDockerService, IDisposable
                 // Volume already removed, which is fine
             }
         }
+
+        // Clean up the consumer's isolated network if no containers remain on it.
+        await TryCleanUpConsumerNetworkAsync(client, containerId);
+
+        // Audit: record that this provider stopped a consumer VM.
+        if (!string.IsNullOrWhiteSpace(providerUid))
+            _audit.Log(providerUid, "vm_stopped", vmId: vmId, detail: $"container={containerId}");
 
         var canSendStoppedNotification = await IsNotificationEnabledAsync(
             providerUid,
@@ -688,6 +778,104 @@ public class DockerService : IDockerService, IDisposable
             authConfig,
             new Progress<JSONMessage>(),
             ct);
+    }
+
+    public async Task<bool> IsRootlessAsync()
+    {
+        var client = await GetClientAsync();
+        var info = await client.System.GetSystemInfoAsync();
+        return info.SecurityOptions?.Any(
+            opt => opt.Contains("rootless", StringComparison.OrdinalIgnoreCase)) ?? false;
+    }
+
+    // ── Network helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Creates an isolated bridge network for a consumer if one does not already exist.
+    /// Each consumer's containers share one network; containers from different consumers
+    /// cannot route traffic to each other even when collocated on the same provider host.
+    /// </summary>
+    private async Task EnsureConsumerNetworkAsync(DockerClient client, string networkName,
+        CancellationToken ct = default)
+    {
+        var existing = await client.Networks.ListNetworksAsync(new NetworksListParameters
+        {
+            Filters = new Dictionary<string, IDictionary<string, bool>>
+            {
+                ["name"] = new Dictionary<string, bool> { [networkName] = true }
+            }
+        }, ct);
+
+        // ListNetworks with a name filter returns prefix matches; verify exact name.
+        if (existing.Any(n => n.Name == networkName))
+            return;
+
+        await client.Networks.CreateNetworkAsync(new NetworksCreateParameters
+        {
+            Name   = networkName,
+            Driver = "bridge",
+            Labels = new Dictionary<string, string>
+            {
+                ["unicore.managed"]  = "true",
+                ["unicore.consumer"] = networkName,
+            }
+        }, ct);
+
+        _logger.LogInformation("[Security] Created isolated network {Network}", networkName);
+    }
+
+    /// <summary>
+    /// Removes a consumer network if it has no remaining containers attached.
+    /// Called after a container is stopped so networks are not leaked indefinitely.
+    /// Swallows all exceptions — this is best-effort cleanup.
+    /// </summary>
+    private async Task TryCleanUpConsumerNetworkAsync(DockerClient client, string removedContainerId)
+    {
+        try
+        {
+            // Find unicore-managed networks that were connected to this container.
+            var networks = await client.Networks.ListNetworksAsync(new NetworksListParameters
+            {
+                Filters = new Dictionary<string, IDictionary<string, bool>>
+                {
+                    ["label"] = new Dictionary<string, bool> { ["unicore.managed=true"] = true }
+                }
+            });
+
+            foreach (var net in networks)
+            {
+                // Skip networks that still have containers attached.
+                var detail = await client.Networks.InspectNetworkAsync(net.ID);
+                var remaining = detail.Containers?
+                    .Keys
+                    .Where(id => !id.StartsWith(removedContainerId, StringComparison.OrdinalIgnoreCase))
+                    .ToList() ?? [];
+
+                if (remaining.Count == 0)
+                {
+                    await client.Networks.DeleteNetworkAsync(net.ID);
+                    _logger.LogInformation("[Security] Removed empty consumer network {Network}", net.Name);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "[Security] Non-fatal: could not clean up consumer network after container {Id}", removedContainerId);
+        }
+    }
+
+    public async Task<bool> ContainerExistsAsync(string containerId, CancellationToken ct = default)
+    {
+        try
+        {
+            var client = await GetClientAsync();
+            await client.Containers.InspectContainerAsync(containerId, ct);
+            return true;
+        }
+        catch (DockerApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
     }
 
     public void Dispose() => _cachedClient?.Dispose();

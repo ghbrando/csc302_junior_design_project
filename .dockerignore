@@ -1,12 +1,50 @@
-**/bin
-**/obj
-**/.vs
-**/.vscode
-**/.idea
-**/node_modules
-**/.git
-**/.github
-**/*.md
-**/.DS_Store
-**/Thumbs.db
-**/figma design
+# Docker build context exclusions. Mirrors .gcloudignore so local `docker build`
+# stays fast too.
+
+.git/
+.github/
+.vs/
+.vscode/
+.claude/
+.sfdx/
+
+**/bin/
+**/obj/
+**/publish/
+**/*.dll
+**/*.pdb
+**/*.exe
+**/*.nupkg
+
+**/venv/
+**/__pycache__/
+**/*.pyc
+
+**/node_modules/
+
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# FirebaseAuthService falls back to ADC when the JSON is absent, so the Cloud Run
+# runtime SA handles auth in prod.
+**/appsettings.Development.json
+**/firebase-service-account*.json
+**/firebase-adminsdk*.json
+caddy-dns-sa.json
+.env
+
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+docs/
+agent_docs/
+CLAUDE.md
+SSOT.md
+README.md
+
+infrastructure/
+scripts/
+seed/
