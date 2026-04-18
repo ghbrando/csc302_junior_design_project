@@ -22,6 +22,24 @@
             var el = document.getElementById(id);
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
+        window.toggleNav = function (btn) {
+            var nav = document.getElementById('primary-nav');
+            if (!nav) return;
+            var open = nav.classList.toggle('open');
+            btn.classList.toggle('open', open);
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            document.body.classList.toggle('nav-open', open);
+        };
+        window.closeNav = function () {
+            var nav = document.getElementById('primary-nav');
+            var btn = document.querySelector('.nav-toggle');
+            if (nav) nav.classList.remove('open');
+            if (btn) {
+                btn.classList.remove('open');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+            document.body.classList.remove('nav-open');
+        };
     </script>
 </body>
 
