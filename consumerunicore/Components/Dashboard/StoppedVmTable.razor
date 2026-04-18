@@ -20,13 +20,35 @@
             <span class="cost-text">@vm.TotalCost</span>
             <span><span class="stopped-badge">STOPPED</span></span>
             <span>
-                <button class="delete-btn" @onclick="@(() => HandleDelete(vm.VmId))" title="Delete VM">
+                <button class="delete-btn" @onclick="@(() => OpenDeleteModal(vm))" title="Delete VM">
                     <i class="bi bi-trash"></i>
                 </button>
             </span>
         </div>
     }
 </div>
+
+@if (_vmPendingDelete is not null)
+{
+    <div class="del-backdrop" @onclick="CloseDeleteModal">
+        <div class="del-modal" @onclick:stopPropagation="true">
+            <div class="del-header">
+                <i class="bi bi-exclamation-triangle del-icon"></i>
+                <span class="del-title">Delete VM</span>
+            </div>
+            <p class="del-body">
+                Delete VM <span class="del-vm-name">'@_vmPendingDelete.Name'</span>? This action permanently erases all
+                files, GCS backups, and snapshots. <strong>This cannot be undone.</strong>
+            </p>
+            <div class="del-actions">
+                <button class="del-btn-cancel" @onclick="CloseDeleteModal" disabled="@_deleting">Cancel</button>
+                <button class="del-btn-danger" @onclick="ConfirmDeleteAsync" disabled="@_deleting">
+                    <i class="bi bi-trash"></i> Delete VM
+                </button>
+            </div>
+        </div>
+    </div>
+}
 
 @code {
     public class StoppedVm
@@ -42,11 +64,35 @@
     [Parameter] public List<StoppedVm> Vms { get; set; } = new();
     [Parameter] public EventCallback<string> OnDelete { get; set; }
 
-    private async Task HandleDelete(string vmId)
+    private StoppedVm? _vmPendingDelete;
+    private bool _deleting;
+
+    private void OpenDeleteModal(StoppedVm vm)
     {
-        if (OnDelete.HasDelegate)
+        _vmPendingDelete = vm;
+        _deleting = false;
+    }
+
+    private void CloseDeleteModal()
+    {
+        if (_deleting) return;
+        _vmPendingDelete = null;
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_vmPendingDelete is null || _deleting) return;
+
+        _deleting = true;
+        try
         {
-            await OnDelete.InvokeAsync(vmId);
+            if (OnDelete.HasDelegate)
+                await OnDelete.InvokeAsync(_vmPendingDelete.VmId);
+        }
+        finally
+        {
+            _deleting = false;
+            _vmPendingDelete = null;
         }
     }
 }
@@ -126,5 +172,106 @@
 
     .delete-btn:active {
         transform: scale(0.95);
+    }
+
+    .del-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        z-index: 1100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .del-modal {
+        background: var(--uc-bg-card);
+        border: 1px solid var(--uc-border);
+        border-radius: var(--uc-radius);
+        padding: 1.75rem;
+        width: 100%;
+        max-width: 440px;
+    }
+
+    .del-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 1rem;
+    }
+
+    .del-icon {
+        color: var(--uc-red);
+        font-size: 1.1rem;
+    }
+
+    .del-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--uc-text-white);
+    }
+
+    .del-body {
+        font-size: 0.85rem;
+        color: var(--uc-text-secondary);
+        line-height: 1.55;
+        margin: 0 0 1.25rem;
+    }
+
+    .del-body strong {
+        color: var(--uc-text-white);
+    }
+
+    .del-vm-name {
+        font-family: var(--uc-font-mono);
+        color: var(--uc-text-white);
+        font-weight: 600;
+    }
+
+    .del-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.6rem;
+    }
+
+    .del-btn-cancel {
+        background: transparent;
+        border: 1px solid var(--uc-border-light);
+        color: var(--uc-text-secondary);
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        transition: border-color 0.2s;
+    }
+
+    .del-btn-cancel:hover:not(:disabled) {
+        border-color: var(--uc-text-muted);
+    }
+
+    .del-btn-danger {
+        background: rgba(239, 68, 68, 0.18);
+        border: 1px solid rgba(239, 68, 68, 0.5);
+        color: #ff6b6b;
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 0.5rem 1.1rem;
+        border-radius: var(--uc-radius);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        transition: background 0.2s;
+    }
+
+    .del-btn-danger:hover:not(:disabled) {
+        background: rgba(239, 68, 68, 0.32);
+    }
+
+    .del-btn-cancel:disabled,
+    .del-btn-danger:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
     }
 </style>

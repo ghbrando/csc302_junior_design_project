@@ -8,9 +8,8 @@
 <nav class="sidebar d-flex flex-column">
     <!-- Removed default bottom margin from logo container -->
     <div class="sidebar-brand pb-0">
-        <div class="sidebar-logo-badge">
-            <img src="/unicore-logo.png" alt="Unicore Logo" class="sidebar-logo-image" />
-        </div>
+        <img src="/consumer_icon.png" alt="Unicore Logo" class="sidebar-logo-image" />
+        <span class="brand-text">UNICORE</span>
     </div>
 
     <!-- Removed default top margin and padding from the list -->
@@ -114,31 +113,14 @@
         gap: 10px;
         padding: 1.5rem 1.25rem;
         margin-bottom: 30px;
-        background: var(--uc-logo-strip-bg);
+        background: var(--uc-bg-sidebar);
         border-bottom: 1px solid var(--uc-border);
     }
 
-    .sidebar-logo-badge {
-        width: 118px;
-        height: 118px;
-        border-radius: 50%;
-        background: var(--uc-logo-badge-bg);
-        border: 1px solid var(--uc-logo-badge-border);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-    }
-
     .sidebar-logo-image {
-        width: 96px;
-        height: auto;
-    }
-
-    body.light-mode .sidebar-logo-badge {
-        background: #000000 !important;
-        border-color: rgba(255, 255, 255, 0.4) !important;
-        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
     }
 
     .brand-icon {
