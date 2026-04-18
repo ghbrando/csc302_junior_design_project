@@ -1,0 +1,61 @@
+# Controls what `gcloud builds submit` uploads as source.
+# Without this file, gcloud falls back to .gitignore, which misses venv/, bin/, obj/, etc.
+
+.git/
+.github/
+.vs/
+.vscode/
+.claude/
+.sfdx/
+
+# Build artifacts
+**/bin/
+**/obj/
+**/publish/
+**/*.dll
+**/*.pdb
+**/*.exe
+**/*.nupkg
+
+# Python virtualenv in providerunicore
+**/venv/
+**/__pycache__/
+**/*.pyc
+
+# Node
+**/node_modules/
+
+# User/IDE
+*.user
+*.userosscache
+*.suo
+*.sln.docstates
+
+# Dev-only config and secrets
+# FirebaseAuthService falls back to Application Default Credentials when the JSON
+# is absent, so the Cloud Run runtime SA handles auth in prod.
+**/appsettings.Development.json
+**/firebase-service-account*.json
+**/firebase-adminsdk*.json
+caddy-dns-sa.json
+.env
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Docs / agent context (not needed for builds)
+docs/
+agent_docs/
+CLAUDE.md
+SSOT.md
+README.md
+
+# Other apps not built by this Dockerfile
+providerunicore/
+heartbeatservice/
+landingpage/
+infrastructure/
+scripts/
+seed/

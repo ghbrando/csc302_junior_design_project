@@ -17,12 +17,23 @@ public class FirebaseAuthService : IFirebaseAuthService
     {
         _httpFactory = httpFactory;
         _webApiKey = config["Firebase:WebApiKey"] ?? throw new InvalidOperationException("Firebase:WebApiKey is not configured.");
+        var projectId = config["Firebase:ProjectId"] ?? throw new InvalidOperationException("Firebase:ProjectId is not configured.");
 
         if (FirebaseApp.DefaultInstance == null)
         {
+            // Local dev: load the service account JSON if present.
+            // Cloud Run (and any other GCP runtime): fall back to Application Default
+            // Credentials, which resolves to the runtime service account. ADC does not
+            // carry a project ID like the SA JSON does, so set it explicitly.
+            const string localKeyPath = "firebase-service-account.json";
+            var credential = File.Exists(localKeyPath)
+                ? GoogleCredential.FromFile(localKeyPath)
+                : GoogleCredential.GetApplicationDefault();
+
             FirebaseApp.Create(new AppOptions
             {
-                Credential = CredentialFactory.FromFile<ServiceAccountCredential>("firebase-service-account.json").ToGoogleCredential()
+                Credential = credential,
+                ProjectId = projectId,
             });
         }
     }

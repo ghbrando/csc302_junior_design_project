@@ -11,6 +11,7 @@ substitutions:
   _REGION: us-central1
   _ARTIFACT_REPO: unicore-repo
   _SERVICE: consumerunicore
+  _SERVICE_ACCOUNT: consumerunicore-runtime@unicore-junior-design.iam.gserviceaccount.com
 
 steps:
   - id: build
@@ -42,6 +43,8 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:${BUILD_ID}
       - --region=${_REGION}
       - --allow-unauthenticated
+      - --service-account=${_SERVICE_ACCOUNT}
+      - --min-instances=1
 
 images:
   - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:${BUILD_ID}
