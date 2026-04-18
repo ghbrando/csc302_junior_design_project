@@ -1,0 +1,51 @@
+# Build and deploy consumerunicore to Cloud Run.
+#
+# Run from the repo root (Dockerfile copies sibling unicore.shared/):
+#   gcloud builds submit --config=consumerunicore/cloudbuild.yaml .
+#
+# Override defaults if needed:
+#   gcloud builds submit --config=consumerunicore/cloudbuild.yaml \
+#     --substitutions=_REGION=us-central1,_ARTIFACT_REPO=unicore,_SERVICE=consumerunicore .
+
+substitutions:
+  _REGION: us-central1
+  _ARTIFACT_REPO: unicore-repo
+  _SERVICE: consumerunicore
+
+steps:
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:${BUILD_ID}
+      - -t
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:latest
+      - -f
+      - consumerunicore/Dockerfile
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:${BUILD_ID}
+      - --region=${_REGION}
+      - --allow-unauthenticated
+
+images:
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:${BUILD_ID}
+  - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_ARTIFACT_REPO}/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
