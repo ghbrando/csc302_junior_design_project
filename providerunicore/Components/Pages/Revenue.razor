@@ -209,11 +209,12 @@
         _vms = snapshot.Documents.Select(d => d.ConvertTo<VirtualMachine>()).ToList();
         RecalculateTotals();
 
-        var cutoff = DateTime.UtcNow.Date.AddDays(-6);
+        var providerToday = ToProviderDate(DateTime.UtcNow).Date;
+        var cutoff = providerToday.AddDays(-6);
 
         var grouped = _vms
-            .Where(vm => vm.StartedAt != null && vm.StartedAt.Value.Date >= cutoff)
-            .GroupBy(vm => vm.StartedAt.Value.Date)
+            .Where(vm => vm.StartedAt != null && ToProviderDate(vm.StartedAt.Value).Date >= cutoff)
+            .GroupBy(vm => ToProviderDate(vm.StartedAt.Value).Date)
             .Select(g => new RevenueDataPoint {
                 Date = g.Key,
                 Amount = (decimal)g.Sum(vm => CalculateProviderShare(vm))
@@ -222,7 +223,7 @@
             .ToList();
 
         RevenueData = Enumerable.Range(0, 7)
-            .Select(i => DateTime.UtcNow.Date.AddDays(-6 + i))
+            .Select(i => providerToday.AddDays(-6 + i))
             .GroupJoin(
                 grouped,
                 date => date,
@@ -414,6 +415,40 @@
     {
         decimal floored = Math.Floor((decimal)amount * 100) / 100;
         return $"{CurrencySymbol}{floored:F2}";
+    }
+
+    private TimeZoneInfo GetProviderTimeZone()
+    {
+        try
+        {
+            var tz = CurrentProvider?.TimeZone ?? "UTC";
+
+            if (tz.StartsWith("UTC") && tz.Length > 3)
+            {
+                var offsetStr = tz.Substring(3); // "-08:00" or "+05:30"
+                bool negative = offsetStr.StartsWith("-");
+                
+                if (TimeSpan.TryParse(offsetStr.TrimStart('+').TrimStart('-'), out var offset))
+                {
+                    if (negative) offset = offset.Negate();
+                    return TimeZoneInfo.CreateCustomTimeZone(tz, offset, tz, tz);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Timezone parse error: {ex.Message}");
+        }
+
+        return TimeZoneInfo.Utc;
+    }
+
+    private DateTime ToProviderDate(DateTime utcTime)
+    {
+        return TimeZoneInfo.ConvertTimeFromUtc(
+            DateTime.SpecifyKind(utcTime, DateTimeKind.Utc),
+            GetProviderTimeZone()
+        );
     }
 
     public void Dispose()
