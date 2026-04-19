@@ -6,6 +6,10 @@
 @inject IFirebaseAuthService FirebaseAuthService
 @rendermode @(new InteractiveServerRenderMode(prerender: false))
 @inherits unicoreconsumer.Services.AuthorizedPageBase
+@using unicoreconsumer.Services
+@using unicore.shared.Models
+@using Google.Cloud.Firestore
+@inject IPaymentMethodService PaymentMethodService
 
 <div class="settings-page">
 
@@ -41,7 +45,11 @@
     <!-- Payment Methods -->
     <SettingsSection Title="PAYMENT METHODS"    Subtitle="Manage payout destinations"        Icon="bi-credit-card"
                      IconColor="var(--uc-amber)"        IconBg="rgba(255,171,0,0.15)">
-        <PaymentMethods Methods="@paymentMethods" />
+        <PaymentMethods
+                    Methods="@paymentMethods"
+                    OnAdd="HandleAddPaymentMethodAsync"
+                    OnSetPrimary="HandleSetPrimaryAsync"
+                    OnDelete="HandleDeletePaymentMethodAsync" />
     </SettingsSection>
 
     <!-- Regional Settings -->
@@ -104,10 +112,28 @@
     }
 
     // Payment methods
-    private List<PaymentMethods.PaymentMethod> paymentMethods = new()
+    private List<PaymentMethod> paymentMethods = new();
+
+    private async Task HandleAddPaymentMethodAsync(PaymentMethod method)
     {
-        new() { Name = "Chase Bank ****1234", SubLabel = "Primary payout method" }
-    };
+        await PaymentMethodService.AddAsync(AuthState.FirebaseUid, method);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
+
+    private async Task HandleSetPrimaryAsync(string methodId)
+    {
+        await PaymentMethodService.SetPrimaryAsync(AuthState.FirebaseUid, methodId);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
+
+    private async Task HandleDeletePaymentMethodAsync(string methodId)
+    {
+        await PaymentMethodService.DeleteAsync(AuthState.FirebaseUid, methodId);
+        paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        StateHasChanged();
+    }
 
     private bool _loading;
     private bool _saving;
@@ -154,8 +180,13 @@
 
     private async Task LoadProfileAsync()
     {
-        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid) || _profileLoaded)
-            return;
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid)) return;
+
+        // Always reload payment methods
+        var methods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        paymentMethods = methods;
+
+        if (_profileLoaded) return;
 
         _loading = true;
         _statusMessage = "";

@@ -44,6 +44,7 @@ builder.Services.AddFirestoreRepository<VmMigrationRequest>(
 builder.Services.AddScoped<IMatchmakingService, MatchmakingService>();
 builder.Services.AddScoped<IMigrationRequestService, MigrationRequestService>();
 builder.Services.AddScoped<IWebShellService, WebShellService>();
+builder.Services.AddScoped<IPaymentMethodService, PaymentMethodService>();
 // Register ConsumerVmService through HttpClientFactory so it gets configured client
 // instead of a plain scoped registration which would bypass the typed client.
 // (previously caused BaseAddress to be missing.)
