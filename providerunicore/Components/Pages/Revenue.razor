@@ -10,6 +10,7 @@
 @implements IDisposable
 @inject FirestoreDb firestoreDb
 @inject IPaymentMethodService PaymentMethodService
+@using unicore.shared.Models
 
 
 <PageTitle>Revenue Tracker</PageTitle>
@@ -77,7 +78,12 @@
                         <label class="modal-label">Amount</label>
                         <div class="modal-input-prefix">
                             <span>$</span>
-                            <input type="number" @bind="_payoutAmount" min="0.01" max="@_availableBalance" step="0.01"
+                            <input type="number" 
+                                value="@_payoutAmount.ToString("F2")"
+                                @onchange="e => _payoutAmount = double.TryParse(e.Value?.ToString(), out var v) ? v : 0"
+                                min="0.01" 
+                                max="@((double)(Math.Floor((decimal)_availableBalance * 100) / 100))"
+                                step="0.01"
                                 style="background:transparent;border:none;color:var(--uc-text-white);font-size:0.95rem;width:100%;outline:none;" />
                         </div>
                         <p style="font-size:0.7rem;color:var(--uc-text-muted);margin-top:4px;">
@@ -346,7 +352,7 @@
     private async Task OpenPayoutModalAsync()
     {
         _payoutError = "";
-        _payoutAmount = Math.Round(_availableBalance, 2);
+        decimal available = Math.Floor((decimal)_availableBalance * 100) / 100;
         _paymentMethods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
         var primary = _paymentMethods.FirstOrDefault(m => m.IsPrimary) ?? _paymentMethods.FirstOrDefault();
         _selectedMethodId = primary?.Id ?? "";
@@ -357,9 +363,12 @@
     {
         _payoutError = "";
 
-        if (_payoutAmount <= 0 || _payoutAmount > _availableBalance)
+        decimal maxPayable = Math.Floor((decimal)_availableBalance * 100) / 100;
+        decimal requested = Math.Round((decimal)_payoutAmount, 2);
+
+        if (requested < 0.01m || requested > maxPayable)
         {
-            _payoutError = "Invalid amount.";
+            _payoutError = $"Amount must be between $0.01 and ${maxPayable:F2}.";
             return;
         }
         if (string.IsNullOrEmpty(_selectedMethodId))
@@ -401,7 +410,11 @@
         _ => "$"
     };
 
-    private string FormatCurrency(double amount) => $"{CurrencySymbol}{amount:F2}";
+    private string FormatCurrency(double amount)
+    {
+        decimal floored = Math.Floor((decimal)amount * 100) / 100;
+        return $"{CurrencySymbol}{floored:F2}";
+    }
 
     public void Dispose()
     {

@@ -9,6 +9,7 @@
 @inject IMachineService MachineService
 @inject IProviderService ProviderService
 @inject IPaymentMethodService PaymentMethodService
+@using unicore.shared.Models
 
 <PageTitle>Settings</PageTitle>
 
@@ -498,8 +499,12 @@
 
     private async Task LoadProfileAsync()
     {
-        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid) || _profileLoaded)
-            return;
+        if (string.IsNullOrWhiteSpace(AuthState.FirebaseUid)) return;
+
+        var methods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
+        paymentMethods = methods;
+
+        if (_profileLoaded) return;
 
         _loading = true;
         _statusMessage = "";
@@ -536,10 +541,7 @@
             _loading = false;
             StateHasChanged();
         }
-        var methods = await PaymentMethodService.GetAllAsync(AuthState.FirebaseUid);
-        paymentMethods = methods;
     }
-
 
     // Profile
     private string fullName = "";

@@ -9,7 +9,7 @@
     }
     else
     {
-        @foreach (var m in Methods)
+        @foreach (var m in Methods.OrderByDescending(m => m.IsPrimary))
         {
             <div class="d-flex align-items-center justify-content-between py-2"
                  style="border-bottom: 1px solid var(--uc-border);">
