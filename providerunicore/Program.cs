@@ -7,6 +7,7 @@ using unicoreprovider.Services;
 using providerunicore.Services;
 using System.Runtime.InteropServices;
 
+
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Add services to the container.
@@ -127,6 +128,7 @@ builder.Services.AddSingleton<ISnapshotService>(sp => sp.GetRequiredService<Snap
 builder.Services.AddHostedService(sp => sp.GetRequiredService<SnapshotService>());
 builder.Services.AddHostedService<VmCleanupService>();
 builder.Services.AddScoped<IMigrationService, MigrationService>();
+builder.Services.AddScoped<IPaymentMethodService, PaymentMethodService>();
 
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
