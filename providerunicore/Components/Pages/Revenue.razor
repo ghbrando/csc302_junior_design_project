@@ -252,7 +252,8 @@
         if (_vms != null && _vms.Any())
         {
             double grossEarnings = _vms.Sum(vm => CalculateProviderShare(vm));
-            _availableBalance = Math.Max(0, grossEarnings - _pendingPayouts);
+            double alreadyPaidOut = _pendingPayouts + _totalEarnings;
+            _availableBalance = Math.Max(0, grossEarnings - alreadyPaidOut);
         }
     }
 
