@@ -78,6 +78,8 @@ public class DockerService : IDockerService, IDisposable
         var client = await GetClientAsync();
         await PullImageIfMissingAsync(client, image);
 
+        static string TomlEscape(string value) => value.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
         // Create or reuse volume for persistent storage
         string volumeName = existingVolumeName ?? $"unicore-vol-{vmId}";
         try
@@ -99,24 +101,30 @@ public class DockerService : IDockerService, IDisposable
         const string frpVersion = "0.61.0";
         var frpTar = $"/tmp/frp_{frpVersion}_linux_amd64.tar.gz";
         var frpBin = $"/tmp/frp_{frpVersion}_linux_amd64/frpc";
-        var frpCfg = "/tmp/frpc.toml";
+        var frpCfg = "/etc/frpc/frpc.toml";
         var frpUrl = $"https://github.com/fatedier/frp/releases/download/v{frpVersion}/frp_{frpVersion}_linux_amd64.tar.gz";
+
+        var relayAddrToml = TomlEscape(_relayAddr);
+        var relayTokenToml = TomlEscape(_relayToken);
+        var vmNameToml = TomlEscape(name);
 
         // Writes frpc.toml line by line using echo, then starts frpc in the background.
         // Wrapped in () || true so that SSH still starts even if the relay setup fails.
         var frpSetup =
             $"(curl -sL -o {frpTar} {frpUrl} && " +
             $"tar -xzf {frpTar} -C /tmp && " +
-            $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
+            $"mkdir -p /etc/frpc && chmod 700 /etc/frpc && " +
+            $"echo 'serverAddr = \"{relayAddrToml}\"' > {frpCfg} && " +
             $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
-            $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+            $"echo 'auth.token = \"{relayTokenToml}\"' >> {frpCfg} && " +
             $"echo '' >> {frpCfg} && " +
             $"echo '[[proxies]]' >> {frpCfg} && " +
-            $"echo 'name = \"{name}\"' >> {frpCfg} && " +
+            $"echo 'name = \"{vmNameToml}\"' >> {frpCfg} && " +
             $"echo 'type = \"tcp\"' >> {frpCfg} && " +
             $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
             $"echo 'localPort = 22' >> {frpCfg} && " +
             $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
+            $"chmod 600 {frpCfg} && " +
             $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
 
         // Append a second [[proxies]] block for the HTTP service tunnel when a service relay port is provided
@@ -125,23 +133,25 @@ public class DockerService : IDockerService, IDisposable
             frpSetup =
                 $"(curl -sL -o {frpTar} {frpUrl} && " +
                 $"tar -xzf {frpTar} -C /tmp && " +
-                $"echo 'serverAddr = \"{_relayAddr}\"' > {frpCfg} && " +
+                $"mkdir -p /etc/frpc && chmod 700 /etc/frpc && " +
+                $"echo 'serverAddr = \"{relayAddrToml}\"' > {frpCfg} && " +
                 $"echo 'serverPort = {_relayServerPort}' >> {frpCfg} && " +
-                $"echo 'auth.token = \"{_relayToken}\"' >> {frpCfg} && " +
+                $"echo 'auth.token = \"{relayTokenToml}\"' >> {frpCfg} && " +
                 $"echo '' >> {frpCfg} && " +
                 $"echo '[[proxies]]' >> {frpCfg} && " +
-                $"echo 'name = \"{name}\"' >> {frpCfg} && " +
+                $"echo 'name = \"{vmNameToml}\"' >> {frpCfg} && " +
                 $"echo 'type = \"tcp\"' >> {frpCfg} && " +
                 $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
                 $"echo 'localPort = 22' >> {frpCfg} && " +
                 $"echo 'remotePort = {relayPort}' >> {frpCfg} && " +
                 $"echo '' >> {frpCfg} && " +
                 $"echo '[[proxies]]' >> {frpCfg} && " +
-                $"echo 'name = \"{name}-svc\"' >> {frpCfg} && " +
+                $"echo 'name = \"{vmNameToml}-svc\"' >> {frpCfg} && " +
                 $"echo 'type = \"tcp\"' >> {frpCfg} && " +
                 $"echo 'localIP = \"127.0.0.1\"' >> {frpCfg} && " +
                 $"echo 'localPort = 8080' >> {frpCfg} && " +
                 $"echo 'remotePort = {serviceRelayPort.Value}' >> {frpCfg} && " +
+                $"chmod 600 {frpCfg} && " +
                 $"{frpBin} -c {frpCfg} > /tmp/frpc.log 2>&1 &) || true";
         }
 
@@ -195,18 +205,105 @@ public class DockerService : IDockerService, IDisposable
             "chmod 0644 /etc/cron.d/unicore-backup-volume && " +
             "/etc/init.d/cron start > /dev/null 2>&1 && ";
 
+        var monitorScript = new System.Text.StringBuilder()
+            .AppendLine("# UniCore command monitor for interactive SSH shells")
+            .AppendLine("# First strike: warning. Second strike: terminate session.")
+            .AppendLine("if [[ $- != *i* ]]; then")
+            .AppendLine("  return")
+            .AppendLine("fi")
+            .AppendLine("UNICORE_SECURITY_LOG=\"/var/log/unicore/security.log\"")
+            .AppendLine("UNICORE_LAST_HISTNUM=\"\"")
+            .AppendLine("touch \"$UNICORE_SECURITY_LOG\" 2>/dev/null || true")
+            .AppendLine("__unicore_record_violation() {")
+            .AppendLine("  local cmd=\"$1\"")
+            .AppendLine("  local strikes=\"${UNICORE_SECURITY_STRIKES:-0}\"")
+            .AppendLine("  if ! [[ \"$strikes\" =~ ^[0-9]+$ ]]; then")
+            .AppendLine("    strikes=0")
+            .AppendLine("  fi")
+            .AppendLine("  strikes=$((strikes + 1))")
+            .AppendLine("  export UNICORE_SECURITY_STRIKES=\"$strikes\"")
+            .AppendLine("  printf '[%s] user=%s strikes=%s cmd=%q\\n' \"$(date -u +%FT%TZ)\" \"$USER\" \"$strikes\" \"$cmd\" >> \"$UNICORE_SECURITY_LOG\"")
+            .AppendLine("  if (( strikes == 1 )); then")
+            .AppendLine("    echo '[UniCore Security] Warning: risky command detected and logged. A repeated violation will terminate this SSH session.'")
+            .AppendLine("    return")
+            .AppendLine("  fi")
+            .AppendLine("  echo '[UniCore Security] Session terminated due to repeated risky commands.'")
+            .AppendLine("  sleep 1")
+            .AppendLine("  exit 1")
+            .AppendLine("}")
+            .AppendLine("__unicore_is_blocked_command() {")
+            .AppendLine("  local lowered=\"$1\"")
+            .AppendLine("  [[ \"$lowered\" == *shutdown* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *reboot* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *poweroff* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"halt\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"mkfs\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\":(){\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"nc -e\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"ncat --exec\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"socat\"* && \"$lowered\" == *\"exec\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"curl\"* && \"$lowered\" == *\"| sh\"* ]] && return 0")
+            .AppendLine("  [[ \"$lowered\" == *\"wget\"* && \"$lowered\" == *\"| sh\"* ]] && return 0")
+            .AppendLine("  return 1")
+            .AppendLine("}")
+            .AppendLine("__unicore_monitor_command() {")
+            .AppendLine("  [[ -n \"${UNICORE_MONITOR_GUARD:-}\" ]] && return")
+            .AppendLine("  export UNICORE_MONITOR_GUARD=1")
+            .AppendLine("  local hist_line hist_num cmd lowered")
+            .AppendLine("  hist_line=$(HISTTIMEFORMAT= history 1 2>/dev/null)")
+            .AppendLine("  hist_num=$(printf '%s' \"$hist_line\" | awk '{print $1}')")
+            .AppendLine("  cmd=$(printf '%s' \"$hist_line\" | sed -E 's/^[[:space:]]*[0-9]+[[:space:]]+//')")
+            .AppendLine("  if [[ -z \"$cmd\" || \"$hist_num\" == \"$UNICORE_LAST_HISTNUM\" ]]; then")
+            .AppendLine("    unset UNICORE_MONITOR_GUARD")
+            .AppendLine("    return")
+            .AppendLine("  fi")
+            .AppendLine("  UNICORE_LAST_HISTNUM=\"$hist_num\"")
+            .AppendLine("  lowered=$(printf '%s' \"$cmd\" | tr '[:upper:]' '[:lower:]')")
+            .AppendLine("  if __unicore_is_blocked_command \"$lowered\"; then")
+            .AppendLine("    __unicore_record_violation \"$cmd\"")
+            .AppendLine("  fi")
+            .AppendLine("  unset UNICORE_MONITOR_GUARD")
+            .AppendLine("}")
+            .AppendLine("__unicore_enable_monitor() {")
+            .AppendLine("  if [[ -n \"${PROMPT_COMMAND:-}\" ]]; then")
+            .AppendLine("    case \"$PROMPT_COMMAND\" in")
+            .AppendLine("      *__unicore_monitor_command*) ;;")
+            .AppendLine("      *) PROMPT_COMMAND=\"__unicore_monitor_command; ${PROMPT_COMMAND}\" ;;")
+            .AppendLine("    esac")
+            .AppendLine("  else")
+            .AppendLine("    PROMPT_COMMAND=\"__unicore_monitor_command\"")
+            .AppendLine("  fi")
+            .AppendLine("}")
+            .AppendLine("__unicore_enable_monitor")
+            .ToString();
+
+        var monitorScriptUnix = monitorScript.Replace("\r\n", "\n");
+
+        var securitySetup =
+            "mkdir -p /etc/unicore /var/log/unicore && " +
+            "touch /var/log/unicore/security.log && chmod 666 /var/log/unicore/security.log && " +
+            $"cat > /etc/profile.d/unicore-monitor.sh << 'ENDMON'\n{monitorScriptUnix}ENDMON\n" +
+            "chmod 644 /etc/profile.d/unicore-monitor.sh && " +
+            "grep -q 'source /etc/profile.d/unicore-monitor.sh' /home/consumer/.bashrc 2>/dev/null || echo '. /etc/profile.d/unicore-monitor.sh' >> /home/consumer/.bashrc && " +
+            "grep -q 'source /etc/profile.d/unicore-monitor.sh' /home/consumer/.profile 2>/dev/null || echo '. /etc/profile.d/unicore-monitor.sh' >> /home/consumer/.profile && " +
+            "grep -q 'source /etc/profile.d/unicore-monitor.sh' /etc/bash.bashrc 2>/dev/null || echo '. /etc/profile.d/unicore-monitor.sh' >> /etc/bash.bashrc && " +
+            "grep -q 'source /etc/profile.d/unicore-monitor.sh' /etc/profile 2>/dev/null || echo '. /etc/profile.d/unicore-monitor.sh' >> /etc/profile && " +
+            "cat > /etc/issue.net << 'ENDISSUE'\nAll activity in this container may be logged for security and abuse prevention. Misuse may result in session termination.\nENDISSUE\n" +
+            "grep -q '^Banner ' /etc/ssh/sshd_config || echo 'Banner /etc/issue.net' >> /etc/ssh/sshd_config && ";
+
         var cmd = new List<string>
         {
             "/bin/sh",
             "-c",
             "apt-get update && apt-get install -y openssh-server curl sudo > /dev/null 2>&1 && " +
             "mkdir -p /run/sshd && " +
-            "useradd -m -s /bin/bash consumer 2>/dev/null || true && " +
+            "(id -u consumer >/dev/null 2>&1 && usermod -s /bin/bash consumer) || useradd -m -s /bin/bash consumer && " +
             "echo 'consumer:consumer123' | chpasswd && " +
             "echo 'consumer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && " +
             "sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && " +
             gcpKeySetup +
             gcsSetup +
+            securitySetup +
             "chown -R consumer:consumer /home/consumer && " +
             frpSetup + " && " +
             "/usr/sbin/sshd -D"
@@ -237,7 +334,9 @@ public class DockerService : IDockerService, IDisposable
                 NanoCPUs = (long)(cpuCores * 1_000_000_000L),
                 Memory = (long)(ramGB * 1024L * 1024L * 1024L),
                 MemorySwap = (long)(ramGB * 1024L * 1024L * 1024L),  // equals Memory → no swap headroom
-                PidsLimit = 512   // allow cron, sshd children, frpc, and gsutil to coexist
+                PidsLimit = 512,  // allow cron, sshd children, frpc, and gsutil to coexist
+                Privileged = false,
+                SecurityOpt = new List<string> { "no-new-privileges:true" }
             }
         });
 
@@ -449,6 +548,34 @@ public class DockerService : IDockerService, IDisposable
 
         var hostRam = await GetHostRamBytesAsync();
         return (CalculateCpuPercent(stats), CalculateRamPercent(stats, hostRam));
+    }
+
+    public async Task<IReadOnlyList<string>> GetContainerSecurityLogLinesAsync(string containerId, int tailLines = 200)
+    {
+        var client = await GetClientAsync();
+        var safeTailLines = Math.Clamp(tailLines, 1, 1000);
+
+        var exec = await client.Exec.ExecCreateContainerAsync(containerId, new ContainerExecCreateParameters
+        {
+            AttachStdout = true,
+            AttachStderr = true,
+            Cmd = new List<string>
+            {
+                "sh",
+                "-c",
+                $"tail -n {safeTailLines} /var/log/unicore/security.log 2>/dev/null || true"
+            }
+        });
+
+        using var stream = await client.Exec.StartAndAttachContainerExecAsync(exec.ID, false);
+        var (stdout, _) = await stream.ReadOutputToEndAsync(CancellationToken.None);
+
+        if (string.IsNullOrWhiteSpace(stdout))
+            return Array.Empty<string>();
+
+        return stdout
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
     }
 
     public async Task PauseContainerAsync(string containerId)

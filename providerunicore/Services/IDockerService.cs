@@ -42,6 +42,12 @@ public interface IDockerService
     Task<(double CpuPercent, double RamPercent)> GetContainerStatsAsync(string containerId);
 
     /// <summary>
+    /// Reads recent security log lines from /var/log/unicore/security.log inside the container.
+    /// Returns an empty list when the file does not exist or no lines are available.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetContainerSecurityLogLinesAsync(string containerId, int tailLines = 200);
+
+    /// <summary>
     /// Pauses a running container without stopping it.
     /// </summary>
     Task PauseContainerAsync(string containerId);

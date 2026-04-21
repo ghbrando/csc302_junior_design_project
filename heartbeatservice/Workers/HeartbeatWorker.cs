@@ -191,13 +191,24 @@ public class HeartbeatWorker : BackgroundService
             stream.ReadTimeout = timeoutSeconds * 1000;
 
             var buffer = new byte[64];
-            int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+            var received = new StringBuilder();
 
-            if (bytesRead == 0)
+            while (received.Length < 64)
+            {
+                int bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, cts.Token);
+                if (bytesRead == 0)
+                    break;
+
+                received.Append(Encoding.ASCII.GetString(buffer, 0, bytesRead));
+
+                if (received.ToString().Contains('\n'))
+                    break;
+            }
+
+            if (received.Length == 0)
                 return false;
 
-            var banner = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-            return banner.StartsWith("SSH-", StringComparison.OrdinalIgnoreCase);
+            return received.ToString().StartsWith("SSH-", StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
